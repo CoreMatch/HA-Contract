@@ -1,0 +1,213 @@
+openapi: 3.1.0
+info:
+  title: HRPAuth Business API
+  version: 1.0.0
+  description: >
+    HA 业务接口统一规范。Yggdrasil 兼容接口不在本文件范围内。
+servers:
+  - url: /
+paths:
+  /status:
+    get:
+      summary: 获取服务状态
+      responses:
+        '200':
+          description: 成功
+  /login:
+    post:
+      summary: 密码登录
+      responses:
+        '200': { description: 成功 }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /loginbymt:
+    post:
+      summary: 管理员代登录
+      responses:
+        '200': { description: 成功 }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /register:
+    post:
+      summary: 注册
+      responses:
+        '200': { description: 成功 }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /logout:
+    get:
+      summary: 登出
+      responses:
+        '200': { description: 成功 }
+  /user:
+    post:
+      summary: 获取用户信息
+      responses:
+        '200': { description: 成功 }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /user/declare-email:
+    post:
+      summary: 声明邮箱
+      responses:
+        '200': { description: 成功 }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /user/mojang-bind-enable:
+    post:
+      summary: 开启 Mojang 绑定
+      responses:
+        '200': { description: 成功 }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /email-verification:
+    post:
+      summary: 邮箱验证动作入口
+      responses:
+        '200': { description: 成功 }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /totpgen:
+    get:
+      summary: 生成指定 secret 的当前 OTP
+      responses:
+        '200': { description: 成功 }
+        '400': { $ref: '#/components/responses/Error' }
+  /totp/setup:
+    post:
+      summary: 配置 TOTP
+      responses:
+        '200': { description: 成功 }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /totp/verify:
+    post:
+      summary: 校验 TOTP
+      responses:
+        '200': { description: 成功 }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /totp/hasbeenenabled:
+    post:
+      summary: 查询 TOTP 是否启用
+      responses:
+        '200': { description: 成功 }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /change-username:
+    post:
+      summary: 修改用户名
+      responses:
+        '200': { description: 成功 }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /change-profile-name:
+    post:
+      summary: 修改角色名
+      responses:
+        '200': { description: 成功 }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /generate-key:
+    post:
+      summary: 生成密钥对
+      responses:
+        '200': { description: 成功 }
+        '403': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /texture/upload:
+    post:
+      summary: 上传用户材质
+      responses:
+        '200': { description: 成功 }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /texture/delete:
+    post:
+      summary: 删除用户材质
+      responses:
+        '200': { description: 成功 }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /texture/get:
+    post:
+      summary: 获取用户材质
+      responses:
+        '200': { description: 成功 }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /captcha:
+    post:
+      summary: 生成验证码
+      responses:
+        '200': { description: 成功 }
+        '403': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /captcha/enabled:
+    get:
+      summary: 查询验证码开关
+      responses:
+        '200': { description: 成功 }
+  /captcha/image/{token}:
+    get:
+      summary: 获取验证码图片
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 图片字节流
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+components:
+  responses:
+    Error:
+      description: 标准错误响应
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+  schemas:
+    Meta:
+      type: object
+      required: [request_id]
+      properties:
+        request_id:
+          type: string
+    ErrorEnvelope:
+      type: object
+      required: [success, message, code, error, meta]
+      properties:
+        success:
+          type: boolean
+          const: false
+        message:
+          type: string
+        code:
+          type: string
+        error:
+          type: string
+          description: 兼容别名，值与 code 一致
+        meta:
+          $ref: '#/components/schemas/Meta'
