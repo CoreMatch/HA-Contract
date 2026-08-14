@@ -7,6 +7,7 @@ This project is the core contract and service collection of the HA system, inclu
 - [HRPAuth](./HRPAuth): Authentication service (Business API + Yggdrasil compatible)
 - [HASkinLib](./HASkinLib): Skin library service
 - [WinnerProxy](./WinnerProxy): Proxy service
+- [HASkinProxy](./HASkinProxy): Yggdrasil-to-CSL compatibility proxy
 - [HRPAuth-WebUI](./HRPAuth-WebUI): Frontend interface for the authentication service
 
 ## Documentation Center (Single Source of Truth)
@@ -23,6 +24,7 @@ To prevent documentation drift from the actual project, this project adopts a un
 
 ### Development and Internal Documentation
 - [HRPAuth Development Guide](./docs/dev/HRPAuth/): Includes configuration, data models, migrations, Token mechanisms, etc.
+- [HASkinProxy Development Guide](./docs/dev/HASkinProxy/): Technical details on the Yggdrasil-to-CSL proxy.
 
 ### External Reference Standards (Immutable)
 - [External API Standards](./docs/references/): Contains external protocol standards such as CustomSkinAPI, Yggdrasil API (authlib-injector), etc.

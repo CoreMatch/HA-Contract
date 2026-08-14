@@ -13,6 +13,7 @@ This project implements the following external standards. For detailed protocol 
 
 1. **Yggdrasil API / authlib-injector**: Implementation of the official Minecraft authentication protocol and its injector compatibility layer.
 2. **CustomSkinAPI**: Implementation of the skin library standard interface.
+3. **HASkinProxy (Protocol Translation)**: A dedicated service that bridges Yggdrasil API to CustomSkinAPI for CSL-compatible clients.
 
 ## Unified Constraints
 
