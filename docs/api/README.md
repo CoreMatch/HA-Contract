@@ -1,15 +1,18 @@
 # HA Business API Standard
 
-它是 HA 业务 API 的单一事实源。所有旧文档已废弃并归档。
-当前只覆盖：
+它是 HA 业务 API 的单一事实源，同时记录了本项目对外部协议的内部实现逻辑。
 
-- `HRPAuth` 业务接口
-- `HASkinLib` 业务接口
+## 文档定位
 
-不覆盖：
+- **本目录 (`docs/api/`, `docs/dev/`)**: 展示本项目**是如何内部实现**这些 API 的（包括路由映射、内部处理逻辑、业务扩展）。
+- **参考目录 ([`docs/references/`](../references/))**: 展示**协议标准本身**。本项目必须遵循这些标准。
 
-- `Yggdrasil` 兼容接口
-- `WinnerProxy` 代理逻辑
+## 外部协议遵循 (实现层)
+
+本项目实现了以下外部标准。详细的协议定义请参考 [docs/references/](../references/)。
+
+1. **Yggdrasil API / authlib-injector**: Minecraft 官方认证协议及其注入器兼容层实现。
+2. **CustomSkinAPI**: 皮肤库标准接口实现。
 
 ## 统一约束
 

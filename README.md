@@ -24,6 +24,10 @@
 ### 开发与内部文档
 - [HRPAuth 开发指南](./docs/dev/HRPAuth/): 包含配置、数据模型、迁移、Token 机制等。
 
+### 外部参考标准 (Immutable)
+- [外部 API 标准说明](./docs/references/): 包含 CustomSkinAPI、Yggdrasil API (authlib-injector) 等外部协议标准。
+- **注意**: 此目录下的文档属于外部标准，本项目仅负责遵循，**严禁修改**其内容。
+
 ## 归档说明
 
 旧的、已漂移的文档已全部移至 [archive/docs/](./archive/docs/) 目录，不再作为开发参考。
