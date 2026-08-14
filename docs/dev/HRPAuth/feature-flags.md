@@ -1,22 +1,22 @@
-# 功能开关（Feature Flags）
+# Feature Flags
 
-Yggdrasil 协议层的功能开关，对应 `yggdrasil.feature_flags.*` 配置项。
+Feature flags for the Yggdrasil protocol layer, corresponding to `yggdrasil.feature_flags.*` configuration items.
 
-> HRPAuth 自身的开关（`security.*`）见 [configuration.md](./configuration.md)。
+> For HRPAuth's own switches (`security.*`), see [configuration.md](./configuration.md).
 
-| 配置项 | 默认 | 说明 |
-|--------|------|------|
-| `non_email_login` | `true` | 允许 `POST /authserver/authenticate` 凭 **Minecraft 角色名** 登录（除邮箱外）。实现见 [`../services/auth_service.go::VerifyCredentials`](../services/auth_service.go)；当 `true` 时用户可输入 `email` 或 `profiles.name`。仅影响 Yggdrasil 端点，`POST /login`（本站）仍只接受邮箱 |
-| `legacy_skin_api` | `false` | 启用旧版皮肤 API（`/skins/MinecraftSkins/...`）。新版客户端不再使用 |
-| `no_mojang_namespace` | `false` | 不使用 Mojang 命名空间。开启后角色 properties 的 namespace 不带 `minecraft:` 前缀 |
-| `enable_mojang_anti_features` | `false` | 启用 Mojang 反作弊特性。具体行为由客户端解释 |
-| `enable_profile_key` | `false` | 启用资料密钥（Yggdrasil 1.1+）。Mojang 1.19+ 客户端会请求 `/player/certificates` 之类的新端点 |
-| `username_check` | `true` | 启用用户名检查（限制 Minecraft 角色名格式）。**强烈建议保持 `true`** |
-| `enable_ip_check` | `false` | 启用 IP 校验。开启后 `GET /sessionserver/session/minecraft/hasJoined` 会校验 `query.ip` 与会话记录中的 IP 是否一致，不一致则拒绝（返回 204） |
+| Configuration Item | Default | Description |
+|--------------------|---------|-------------|
+| `non_email_login` | `true` | Allows login via **Minecraft profile name** (in addition to email) at `POST /authserver/authenticate`. Implementation in [`../services/auth_service.go::VerifyCredentials`](../services/auth_service.go); when `true`, users can input `email` or `profiles.name`. Only affects Yggdrasil endpoints; `POST /login` (this site) still only accepts email. |
+| `legacy_skin_api` | `false` | Enables the legacy skin API (`/skins/MinecraftSkins/...`). No longer used by modern clients. |
+| `no_mojang_namespace` | `false` | Disables Mojang namespace. When enabled, the namespace of profile properties will not have the `minecraft:` prefix. |
+| `enable_mojang_anti_features` | `false` | Enables Mojang anti-cheat features. Specific behavior is interpreted by the client. |
+| `enable_profile_key` | `false` | Enables profile keys (Yggdrasil 1.1+). Mojang 1.19+ clients will request new endpoints like `/player/certificates`. |
+| `username_check` | `true` | Enables username checking (restricts Minecraft profile name format). **Highly recommended to keep `true`**. |
+| `enable_ip_check` | `false` | Enables IP validation. When enabled, `GET /sessionserver/session/minecraft/hasJoined` will check if `query.ip` matches the IP in the session record; if not, it will be rejected (returns 204). |
 
-## 在响应中的位置
+## Position in Responses
 
-`GET /`（Yggdrasil 元信息）的 `meta` 段会原样回传部分开关：
+Some flags are returned as-is in the `meta` section of `GET /` (Yggdrasil metadata):
 
 ```json
 {
@@ -34,4 +34,4 @@ Yggdrasil 协议层的功能开关，对应 `yggdrasil.feature_flags.*` 配置�
 }
 ```
 
-> 具体回传字段取决于实现，可在 [`controllers/yggdrasil_controller.go`](../../controllers/yggdrasil_controller.go) 中查看。
+> The specific returned fields depend on the implementation and can be viewed in [`controllers/yggdrasil_controller.go`](../../controllers/yggdrasil_controller.go).

@@ -1,56 +1,56 @@
 # Error Codes
 
-以下错误码为当前 HA 业务 API 的稳定注册表。后续新增错误码应先加这里，再进实现与 OpenAPI。
+The following error codes are the stable registry for current HA business APIs. New error codes should be added here first, then implemented in the code and OpenAPI specs.
 
-| Code | 含义 |
+| Code | Meaning |
 |---|---|
-| `invalid_json_body` | JSON 请求体无法解析 |
-| `invalid_request` | 通用参数错误 |
-| `invalid_email` | 邮箱格式或邮箱参数非法 |
-| `invalid_credentials` | 登录凭据错误 |
-| `invalid_auth_type_or_token` | `auth_type` 与 token 组合非法 |
-| `invalid_manage_token` | Manage Token 无效 |
-| `remember_token_required` | 缺少 Remember Token |
-| `invalid_remember_token` | Remember Token 无效 |
-| `manage_target_required` | Manage 路径缺少目标用户标识 |
-| `user_not_found` | 目标用户不存在 |
-| `username_too_short` | 用户名长度不足 |
-| `password_too_short` | 密码长度不足 |
-| `username_already_taken` | 用户名已被占用 |
-| `email_already_registered` | 邮箱已被注册 |
-| `invalid_mojang_uuid` | Mojang UUID 格式非法 |
-| `mojang_uuid_required_for_existing_user` | 既有用户缺少 `mojang_uuid` |
-| `username_already_bound` | 用户名已绑定，不能再抢占 |
-| `captcha_disabled` | 图形验证码未启用 |
-| `captcha_invalid` | 图形验证码无效或已过期 |
-| `verification_code_already_sent` | 验证码发送过于频繁 |
-| `verification_code_expired_or_missing` | 验证码已过期或不存在 |
-| `verification_code_invalid` | 验证码错误 |
-| `email_send_failed` | 邮件发送失败 |
-| `verification_status_update_failed` | 验证状态更新失败 |
-| `invalid_username` | 用户名不满足约束 |
-| `invalid_profile_name` | 角色名不满足约束 |
-| `username_conflict` | 用户名冲突 |
-| `profile_name_conflict` | 角色名冲突 |
-| `profile_not_found` | 角色不存在 |
-| `profile_access_denied` | 无权访问或修改角色 |
-| `totp_secret_required` | 缺少 TOTP secret |
-| `totp_not_configured` | TOTP 未配置 |
-| `invalid_passcode` | TOTP passcode 错误 |
-| `invalid_texture_type` | 材质类型非法 |
-| `texture_file_required` | 缺少材质文件 |
-| `invalid_texture_file` | 材质文件格式非法 |
-| `invalid_texture_model` | 材质模型非法 |
-| `texture_name_required` | 缺少材质名称 |
-| `invalid_texture_size` | 材质尺寸非法 |
-| `texture_upload_failed` | 材质上传失败 |
-| `texture_delete_failed` | 材质删除失败 |
-| `texture_read_failed` | 材质读取失败 |
-| `upload_request_too_large` | 上传请求过大 |
-| `upload_rate_limited` | 上传触发限流 |
-| `texture_not_found` | 材质文件不存在 |
-| `preview_not_found` | 预览文件不存在 |
-| `storage_not_configured` | 存储目录未配置 |
-| `keygen_disabled` | 密钥生成接口已禁用 |
-| `keygen_failed` | 密钥生成失败 |
-| `internal_error` | 未分类内部错误 |
+| `invalid_json_body` | JSON request body cannot be parsed |
+| `invalid_request` | General parameter error |
+| `invalid_email` | Invalid email format or email parameter |
+| `invalid_credentials` | Invalid login credentials |
+| `invalid_auth_type_or_token` | Invalid combination of `auth_type` and token |
+| `invalid_manage_token` | Invalid Manage Token |
+| `remember_token_required` | Remember Token missing |
+| `invalid_remember_token` | Invalid Remember Token |
+| `manage_target_required` | Missing target user identifier in manage path |
+| `user_not_found` | Target user does not exist |
+| `username_too_short` | Username is too short |
+| `password_too_short` | Password is too short |
+| `username_already_taken` | Username is already taken |
+| `email_already_registered` | Email is already registered |
+| `invalid_mojang_uuid` | Invalid Mojang UUID format |
+| `mojang_uuid_required_for_existing_user` | `mojang_uuid` missing for existing user |
+| `username_already_bound` | Username is already bound and cannot be claimed |
+| `captcha_disabled` | Graphical captcha is disabled |
+| `captcha_invalid` | Graphical captcha is invalid or expired |
+| `verification_code_already_sent` | Verification code sent too frequently |
+| `verification_code_expired_or_missing` | Verification code expired or missing |
+| `verification_code_invalid` | Incorrect verification code |
+| `email_send_failed` | Email sending failed |
+| `verification_status_update_failed` | Failed to update verification status |
+| `invalid_username` | Username does not meet constraints |
+| `invalid_profile_name` | Profile name does not meet constraints |
+| `username_conflict` | Username conflict |
+| `profile_name_conflict` | Profile name conflict |
+| `profile_not_found` | Profile does not exist |
+| `profile_access_denied` | No permission to access or modify profile |
+| `totp_secret_required` | TOTP secret missing |
+| `totp_not_configured` | TOTP not configured |
+| `invalid_passcode` | Incorrect TOTP passcode |
+| `invalid_texture_type` | Invalid texture type |
+| `texture_file_required` | Texture file missing |
+| `invalid_texture_file` | Invalid texture file format |
+| `invalid_texture_model` | Invalid texture model |
+| `texture_name_required` | Texture name missing |
+| `invalid_texture_size` | Invalid texture size |
+| `texture_upload_failed` | Texture upload failed |
+| `texture_delete_failed` | Texture deletion failed |
+| `texture_read_failed` | Texture read failed |
+| `upload_request_too_large` | Upload request is too large |
+| `upload_rate_limited` | Upload rate limited |
+| `texture_not_found` | Texture file does not exist |
+| `preview_not_found` | Preview file does not exist |
+| `storage_not_configured` | Storage directory not configured |
+| `keygen_disabled` | Key generation endpoint is disabled |
+| `keygen_failed` | Key generation failed |
+| `internal_error` | Unclassified internal error |

@@ -1,24 +1,24 @@
 # HA Business API Standard
 
-它是 HA 业务 API 的单一事实源，同时记录了本项目对外部协议的内部实现逻辑。
+This is the single source of truth for the HA Business API, and it also records the internal implementation logic of this project for external protocols.
 
-## 文档定位
+## Documentation Positioning
 
-- **本目录 (`docs/api/`, `docs/dev/`)**: 展示本项目**是如何内部实现**这些 API 的（包括路由映射、内部处理逻辑、业务扩展）。
-- **参考目录 ([`docs/references/`](../references/))**: 展示**协议标准本身**。本项目必须遵循这些标准。
+- **This Directory (`docs/api/`, `docs/dev/`)**: Shows **how this project internally implements** these APIs (including route mapping, internal processing logic, and business extensions).
+- **Reference Directory ([`docs/references/`](../references/))**: Shows the **protocol standards themselves**. This project must comply with these standards.
 
-## 外部协议遵循 (实现层)
+## External Protocol Compliance (Implementation Layer)
 
-本项目实现了以下外部标准。详细的协议定义请参考 [docs/references/](../references/)。
+This project implements the following external standards. For detailed protocol definitions, please refer to [docs/references/](../references/).
 
-1. **Yggdrasil API / authlib-injector**: Minecraft 官方认证协议及其注入器兼容层实现。
-2. **CustomSkinAPI**: 皮肤库标准接口实现。
+1. **Yggdrasil API / authlib-injector**: Implementation of the official Minecraft authentication protocol and its injector compatibility layer.
+2. **CustomSkinAPI**: Implementation of the skin library standard interface.
 
-## 统一约束
+## Unified Constraints
 
-1. OpenAPI 是路径与响应结构的源头。
-2. 错误码使用稳定的 `lower_snake_case`。
-3. 业务错误统一返回：
+1. OpenAPI is the source for paths and response structures.
+2. Error codes use stable `lower_snake_case`.
+3. Business errors return a unified format:
 
 ```json
 {
@@ -32,13 +32,13 @@
 }
 ```
 
-说明：
+Explanation:
 
-- `code` 是规范字段。
-- `error` 是兼容别名，便于保留已有调用方。
-- `request_id` 用于排查日志与用户反馈。
+- `code` is the standard field.
+- `error` is a compatible alias, making it easier to maintain existing callers.
+- `request_id` is used for troubleshooting logs and user feedback.
 
-4. 业务成功响应统一返回：
+4. Business success responses return a unified format:
 
 ```json
 {
@@ -53,20 +53,20 @@
 }
 ```
 
-过渡期内，部分成功字段会保留顶层镜像，避免旧前端立即失效；新增调用方一律读取 `data`。
+During the transition period, some success fields will be mirrored at the top level to avoid immediate failure of old frontends; new callers should always read from `data`.
 
-## 文件说明
+## File Descriptions
 
-- `openapi/hrpauth-business.yaml`: HRPAuth 业务接口规范
-- `openapi/haskinlib-business.yaml`: HASkinLib 业务接口规范
-- `error-codes.md`: 统一错误码注册表
+- `openapi/hrpauth-business.yaml`: HRPAuth Business API specification
+- `openapi/haskinlib-business.yaml`: HASkinLib Business API specification
+- `error-codes.md`: Unified error code registry
 
-## 防漂移
+## Anti-Drift
 
-提交前运行：
+Run before submission:
 
 ```bash
 ./scripts/check-business-api-drift.sh
 ```
 
-它会检查业务路由是否全部出现在 OpenAPI 规范中。
+It checks whether all business routes appear in the OpenAPI specification.

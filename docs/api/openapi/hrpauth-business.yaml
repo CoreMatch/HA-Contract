@@ -3,133 +3,133 @@ info:
   title: HRPAuth Business API
   version: 1.0.0
   description: >
-    HA 业务接口统一规范。Yggdrasil 兼容接口不在本文件范围内。
+    Unified specification for HA business interfaces. Yggdrasil compatible interfaces are outside the scope of this file.
 servers:
   - url: /
 paths:
   /status:
     get:
-      summary: 获取服务状态
+      summary: Get service status
       responses:
         '200':
-          description: 成功
+          description: Success
   /login:
     post:
-      summary: 密码登录
+      summary: Password login
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
   /loginbymt:
     post:
-      summary: 管理员代登录
+      summary: Administrator proxy login
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
   /register:
     post:
-      summary: 注册
+      summary: Register
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
   /logout:
     get:
-      summary: 登出
+      summary: Logout
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
   /user:
     post:
-      summary: 获取用户信息
+      summary: Get user information
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
   /user/declare-email:
     post:
-      summary: 声明邮箱
+      summary: Declare email
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
   /user/mojang-bind-enable:
     post:
-      summary: 开启 Mojang 绑定
+      summary: Enable Mojang binding
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
   /email-verification:
     post:
-      summary: 邮箱验证动作入口
+      summary: Entry point for email verification actions
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '429': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
   /totpgen:
     get:
-      summary: 生成指定 secret 的当前 OTP
+      summary: Generate current OTP for a specified secret
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
   /totp/setup:
     post:
-      summary: 配置 TOTP
+      summary: Setup TOTP
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
   /totp/verify:
     post:
-      summary: 校验 TOTP
+      summary: Verify TOTP
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
   /totp/hasbeenenabled:
     post:
-      summary: 查询 TOTP 是否启用
+      summary: Query whether TOTP is enabled
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
   /change-username:
     post:
-      summary: 修改用户名
+      summary: Change username
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
   /change-profile-name:
     post:
-      summary: 修改角色名
+      summary: Change profile name
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
   /generate-key:
     post:
-      summary: 生成密钥对
+      summary: Generate key pair
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '403': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
   /texture/upload:
     post:
-      summary: 上传用户材质
+      summary: Upload user texture
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
@@ -137,9 +137,9 @@ paths:
         '500': { $ref: '#/components/responses/Error' }
   /texture/delete:
     post:
-      summary: 删除用户材质
+      summary: Delete user texture
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
@@ -147,28 +147,28 @@ paths:
         '500': { $ref: '#/components/responses/Error' }
   /texture/get:
     post:
-      summary: 获取用户材质
+      summary: Get user texture
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
   /captcha:
     post:
-      summary: 生成验证码
+      summary: Generate captcha
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '403': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
   /captcha/enabled:
     get:
-      summary: 查询验证码开关
+      summary: Query captcha switch
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
   /captcha/image/{token}:
     get:
-      summary: 获取验证码图片
+      summary: Get captcha image
       parameters:
         - in: path
           name: token
@@ -177,13 +177,13 @@ paths:
             type: string
       responses:
         '200':
-          description: 图片字节流
+          description: Image byte stream
         '400': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
 components:
   responses:
     Error:
-      description: 标准错误响应
+      description: Standard error response
       content:
         application/json:
           schema:
@@ -208,6 +208,6 @@ components:
           type: string
         error:
           type: string
-          description: 兼容别名，值与 code 一致
+          description: Compatible alias, value matches code
         meta:
           $ref: '#/components/schemas/Meta'

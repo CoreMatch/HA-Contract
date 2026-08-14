@@ -1,181 +1,181 @@
-# Token 体系
+# Token System
 
-本文档梳理项目内涉及的全部 Token 及其生命周期。**这是本项目最复杂的部分**，强烈建议任何接入方都先读完。
+This document clarifies all Tokens and their lifecycles involved in the project. **This is the most complex part of the project**, and it is strongly recommended that any integrator read it in full.
 
-> 本文档合并了原 `API_DOC.md` 中 "Token 体系总览" 与 "Token 状态机与生命周期" 两节。
+> This document merges the sections "Token System Overview" and "Token State Machine and Lifecycle" from the original `API_DOC.md`.
 
-## 目录
+## Contents
 
-1. [Token 总览](#1-token-总览) — 各种 Token 的字段名、长度、用途
-2. [状态机](#2-状态机) — `tokens.state` 的三种状态及转移规则
-3. [`/authenticate` 幂等与踢人](#3-authenticate-幂等与踢人)
-4. [`/refresh` 抢回与踢人](#4-refresh-抢回与踢人)
-5. [各端点对 `temporarily_invalid` 的处理](#5-各端点对-temporarily_invalid-的处理)
-6. [后台清理任务](#6-后台清理任务)
-
----
-
-## 1. Token 总览
-
-| Token 名称 | 字段名（请求/响应） | 长度 | 用途 | 颁发端点（响应字段） | 使用端点（请求字段） |
-|-----------|--------------------|------|------|--------------------|--------------------|
-| **Remember Token**（本站会话令牌） | `remember_token` / `remtoken` / `rt` / 登录响应的 `token` | 32 字节随机串 | 本站业务系统的登录会话凭证 | `POST /login`（响应 `token`） | `GET /logout`、`POST /user`、`POST /change-username`、`POST /change-profile-name`、`POST /totp/setup`、`POST /totp/hasbeenenabled`；`POST /totp/verify` 成功后会在响应中回传该 token（`rt` 字段） |
-| **Manage Token（M-T）**（运维超级 remtoken） | 任意 remtoken 字段名 | 32 字节随机串（`utils.GenerateRandomToken(32)`） | 由 `config.yaml` 中 `manage.token` 持久化；可作为任意用户的 remtoken，但调用方必须额外声明 `auth_type: "manage"` 并提供 `uid` 或 `email` 指定目标用户 | 首次启动时由 [`controllers/startup_controller.go`](../controllers/startup_controller.go) 的 `generateManageToken` 随机生成 | 与 Remember Token 相同的所有站点端点；`isManage` 分支会跳过 `WHERE remember_token=?` 校验 |
-| **Yggdrasil Access Token** | `accessToken` | 随机串（`utils.GenerateAccessToken`） | Yggdrasil API 的访问令牌，由 Minecraft 客户端在加入服务器时携带 | `POST /authserver/authenticate`、`POST /authserver/refresh` | `POST /authserver/refresh`、`POST /authserver/validate`、`POST /authserver/invalidate`、`POST /sessionserver/session/minecraft/join`、`PUT/DELETE /api/user/profile/:uuid/:textureType`（通过 `Authorization: Bearer <accessToken>` 请求头传递） |
-| **Yggdrasil Client Token** | `clientToken` | 随机串（`utils.GenerateClientToken`，可由客户端自传） | Yggdrasil API 的客户端标识，必须与 AccessToken 配对使用 | `POST /authserver/authenticate`（请求可传 / 响应回传） | `POST /authserver/authenticate`、`POST /authserver/refresh`、`POST /authserver/validate`、`POST /authserver/invalidate` |
-| **Email Verification Code**（邮箱验证码） | `code` | 6 位数字 | 校验用户邮箱所有权，存于 Redis，10 分钟有效 | `POST /email-verification`（`action=send-verification-code`，通过邮件发送） | `POST /email-verification`（`action=verify-code`） |
-| **Captcha Token**（图形验证码标识） | `token` / `image_url` | 20 字符随机串 | 标识一次图形验证码会话 | `POST /captcha`（响应 `token` + `image_url`） | `POST /register`（`captcha_token` 字段，仅在 `enable_captcha=true` 时必填） |
-| **Captcha Code**（图形验证码答案） | `captcha_code` | 5 位字符（字母+数字，已剔除 `0/O/1/I/L`） | 用户在图上识别后回填的答案 | 由 `POST /captcha` 颁发的图片 | `POST /register`（`captcha_code` 字段） |
-| **TOTP Secret** | `totpkey`（响应）/ `secret`（`/totpgen` 查询参数） | 32 字节 Base32 串 | 用户与服务器共享的 TOTP 种子密钥 | `POST /totp/setup`（响应 `totpkey`） | `GET /totpgen?secret=<totpkey>`（调试接口） |
-| **TOTP Passcode** | `passcode` | 6 位数字 | 一次性 6 位动态口令 | `GET /totpgen?secret=<totpkey>`（响应明文） | `POST /totp/verify` |
-
-> ⚠️ **重要区分**：
-> 1. `Remember Token`（本站）≠ `Yggdrasil Access Token`（Minecraft）。两者完全独立。
-> 2. `remember_token` / `remtoken` / `rt` 是同一类 Token 的不同字段名，含义相同。
-> 3. 邮箱验证码（`code`）和 TOTP Passcode（`passcode`）都是 6 位数字，但用途完全不同。
-> 4. **Manage Token（M-T）** 存于 `config.yaml`，**不是用户级 remember_token**。使用 M-T 调任何需要 remtoken 的端点时，**必须**额外声明 `auth_type: "manage"` 并传 `uid` 或 `email` 指定目标用户；否则后端返回 `Manage Token 需要指定 uid 或 email`。
-
-### auth_type 声明（Token 类型判别）
-
-每个接受 remtoken 的站点端点都支持**可选的 `auth_type` 字段**（JSON / 查询参数 / 表单均可，按 `remember_token` 相同的收集顺序识别）。它显式声明提交的 token 归属：
-
-| `auth_type` 值 | 后端处理 |
-|---------------|---------|
-| 缺省 / `remember` | **默认**。按 Remember Token 处理：`WHERE remember_token = ?` 查库定位用户 |
-| `manage` | 按 Manage Token 处理：token 必须等于 `config.AppConfig.Manage.Token`，且必须再提供 `uid` 或 `email` 指定目标用户 |
-
-判别逻辑集中在 [`controllers/auth_controller.go`](../controllers/auth_controller.go) 的 `isManageRequest`：声明 `manage` 且 token 与配置 M-T 相符 → `isManage=true`；否则（未知值，或 `manage` 但 token 不符）→ 直接拒绝。**后端不再**通过"token 恰好等于 M-T"自动升级为运维模式——未声明 `auth_type` 时，即使 token 恰好等于 M-T，也一律走 remember-token 数据库校验（查无此行则报"用户不存在或token无效"）。
+1. [Token Overview](#1-token-overview) — Field names, lengths, and purposes of various Tokens
+2. [State Machine](#2-state-machine) — The three states of `tokens.state` and transition rules
+3. [`/authenticate` Idempotency and Kicking](#3-authenticate-idempotency-and-kicking)
+4. [`/refresh` Reclaiming and Kicking](#4-refresh-reclaiming-and-kicking)
+5. [Handling of `temporarily_invalid` by Endpoints](#5-handling-of-temporarily_invalid-by-endpoints)
+6. [Background Cleanup Tasks](#6-background-cleanup-tasks)
 
 ---
 
-## 2. 状态机
+## 1. Token Overview
 
-`tokens.state` 字段对应 `models.Token.State` 枚举，共 **3 个值**。
+| Token Name | Field Name (Request/Response) | Length | Purpose | Issuing Endpoint (Response Field) | Usage Endpoint (Request Field) |
+|------------|-------------------------------|--------|---------|-----------------------------------|-------------------------------|
+| **Remember Token** (Site Session Token) | `remember_token` / `remtoken` / `rt` / `token` in login response | 32-byte random string | Login session credential for this site's business system | `POST /login` (response `token`) | `GET /logout`, `POST /user`, `POST /change-username`, `POST /change-profile-name`, `POST /totp/setup`, `POST /totp/hasbeenenabled`; returned in response after successful `POST /totp/verify` (`rt` field) |
+| **Manage Token (M-T)** (Operator Super remtoken) | Any remtoken field name | 32-byte random string (`utils.GenerateRandomToken(32)`) | Persisted in `config.yaml` as `manage.token`; acts as a remtoken for any user, but callers must declare `auth_type: "manage"` and provide `uid` or `email` | Randomly generated by `generateManageToken` in [`controllers/startup_controller.go`](../controllers/startup_controller.go) on first startup | All site endpoints that accept Remember Token; the `isManage` branch skips `WHERE remember_token=?` validation |
+| **Yggdrasil Access Token** | `accessToken` | Random string (`utils.GenerateAccessToken`) | Access token for Yggdrasil API, carried by Minecraft client when joining a server | `POST /authserver/authenticate`, `POST /authserver/refresh` | `POST /authserver/refresh`, `POST /authserver/validate`, `POST /authserver/invalidate`, `POST /sessionserver/session/minecraft/join`, `PUT/DELETE /api/user/profile/:uuid/:textureType` (via `Authorization: Bearer <accessToken>` header) |
+| **Yggdrasil Client Token** | `clientToken` | Random string (`utils.GenerateClientToken`, can be provided by client) | Client identifier for Yggdrasil API, must be paired with AccessToken | `POST /authserver/authenticate` (request can pass / response returns) | `POST /authserver/authenticate`, `POST /authserver/refresh`, `POST /authserver/validate`, `POST /authserver/invalidate` |
+| **Email Verification Code** | `code` | 6-digit number | Verifies user email ownership, stored in Redis, valid for 10 minutes | `POST /email-verification` (`action=send-verification-code`, sent via email) | `POST /email-verification` (`action=verify-code`) |
+| **Captcha Token** (Graphical Captcha ID) | `token` / `image_url` | 20-character random string | Identifies a graphical captcha session | `POST /captcha` (response `token` + `image_url`) | `POST /register` (`captcha_token` field, required only when `enable_captcha=true`) |
+| **Captcha Code** (Graphical Captcha Answer) | `captcha_code` | 5-character string (alphanumeric, excluding `0/O/1/I/L`) | Answer filled in by the user after identifying it on the image | Image issued by `POST /captcha` | `POST /register` (`captcha_code` field) |
+| **TOTP Secret** | `totpkey` (response) / `secret` (`/totpgen` query param) | 32-byte Base32 string | Shared TOTP seed key between user and server | `POST /totp/setup` (response `totpkey`) | `GET /totpgen?secret=<totpkey>` (debug interface) |
+| **TOTP Passcode** | `passcode` | 6-digit number | One-time 6-digit dynamic passcode | `GET /totpgen?secret=<totpkey>` (response plaintext) | `POST /totp/verify` |
 
-| 状态 | 含义 | 哪些端点接受 |
-|------|------|-------------|
-| `valid` | 完全有效 | 全部 |
-| `temporarily_invalid` | 被另一个 client 踢下；只能 `/refresh` 抢回，`/validate` `/join` 全部拒绝 | 仅 `/authserver/refresh` |
-| `invalid` | 永久失效 | 无 |
+> ⚠️ **Important Distinctions**:
+> 1. `Remember Token` (Site) ≠ `Yggdrasil Access Token` (Minecraft). The two are completely independent.
+> 2. `remember_token`, `remtoken`, and `rt` are different field names for the same type of Token; they have the same meaning.
+> 3. Email Verification Code (`code`) and TOTP Passcode (`passcode`) are both 6-digit numbers but serve completely different purposes.
+> 4. **Manage Token (M-T)** is stored in `config.yaml` and is **not a user-level remember_token**. When using M-T to call any endpoint requiring a remtoken, you **must** additionally declare `auth_type: "manage"` and pass `uid` or `email` to specify the target user; otherwise, the backend returns `Manage Token requires uid or email`.
 
-### 状态转移图
+### auth_type Declaration (Token Type Identification)
+
+Every site endpoint that accepts a remtoken supports an **optional `auth_type` field** (JSON / query parameter / form, identified in the same order as `remember_token`). It explicitly declares the ownership of the submitted token:
+
+| `auth_type` Value | Backend Processing |
+|-------------------|-------------------|
+| Default / `remember` | **Default**. Treated as Remember Token: Query database `WHERE remember_token = ?` to locate user. |
+| `manage` | Treated as Manage Token: Token must equal `config.AppConfig.Manage.Token`, and `uid` or `email` must be provided to specify the target user. |
+
+The identification logic is centralized in `isManageRequest` in [`controllers/auth_controller.go`](../controllers/auth_controller.go): If `manage` is declared and the token matches the configured M-T → `isManage=true`; otherwise (unknown value, or `manage` but token doesn't match) → immediate refusal. **The backend no longer** automatically upgrades to operator mode just because the "token happens to equal M-T" — when `auth_type` is not declared, even if the token happens to equal M-T, it will always go through remember-token database validation (if no such row is found, it reports "user does not exist or token invalid").
+
+---
+
+## 2. State Machine
+
+The `tokens.state` field corresponds to the `models.Token.State` enum, with **3 possible values**.
+
+| State | Meaning | Which Endpoints Accept |
+|-------|---------|------------------------|
+| `valid` | Fully valid | All |
+| `temporarily_invalid` | Kicked by another client; can only be reclaimed via `/refresh`, `/validate` and `/join` are all rejected | Only `/authserver/refresh` |
+| `invalid` | Permanently invalid | None |
+
+### State Transition Diagram
 
 ```
-                                /authenticate（同 clientToken）
+                                /authenticate (same clientToken)
    ┌─────────────────────────────── valid ◄─────────────────────────────┐
    │                                  ▲                                 │
    │                                  │                                 │
-   │ /authenticate（不同 clientToken）│ /refresh 成功                   │
-   │ /refresh 后踢其他 client         │                                 │
+   │ /authenticate (diff clientToken) │ /refresh success                │
+   │ /refresh kicks other clients      │                                 │
    ▼                                  │                                 │
- temporarily_invalid ─────────────── /refresh 抢回 ────► 新行 valid     │
+ temporarily_invalid ─────────────── /refresh reclaim ────► New row valid   │
                                                                         │
    ▼   ▼   ▼                                                           │
- invalid (由 /invalidate /signout /expiry 检查置位，cleanup 物理删除) ───┘
+ invalid (set by /invalidate /signout /expiry check, physical delete by cleanup) ───┘
                                                                         │
                                             (cleanup) ────► DELETE FROM tokens
 ```
 
-### 状态置位时机
+### State Setting Timing
 
-| 状态 | 何时被置位 |
-|------|-----------|
-| `valid` | `/authenticate` 成功插入新行；`/refresh` 成功插入新行；`/refresh` 抢回后旧行 → `invalid`（不是 `temporarily_invalid`） |
-| `temporarily_invalid` | `/authenticate` 时不同 `clientToken` 把该用户**其他 client** 的 `valid` 行踢到此状态；`/refresh` 成功后把**其他 client** 的 `valid` 行踢到此状态 |
-| `invalid` | `/invalidate` 主动调用；`/signout` 吊销该用户所有 token；`/authserver/refresh` 中旧 accessToken → `invalid`；`expiry` 检查命中 |
+| State | When it is set |
+|-------|----------------|
+| `valid` | Successful insertion of a new row by `/authenticate`; successful insertion of a new row by `/refresh`; old row → `invalid` (not `temporarily_invalid`) after `/refresh` reclaim. |
+| `temporarily_invalid` | During `/authenticate`, a different `clientToken` kicks **other client** `valid` rows of the user to this state; after successful `/refresh`, **other client** `valid` rows are kicked to this state. |
+| `invalid` | Active call to `/invalidate`; `/signout` revokes all tokens for the user; old accessToken → `invalid` during `/authserver/refresh`; hit by `expiry` check. |
 
 ---
 
-## 3. `/authenticate` 幂等与踢人
+## 3. `/authenticate` Idempotency and Kicking
 
-### 复用旧行（同 `clientToken`）
+### Reusing Old Rows (Same `clientToken`)
 
-`/authserver/authenticate` 在以下**三条同时满足**时复用旧行（不插入新行）：
+`/authserver/authenticate` reuses an old row (no new row inserted) when the following **three conditions are simultaneously met**:
 
-1. 数据库存在一行 `state='valid'` 且 `issued_at + expires_in_days*86400000 > now()`
-2. 该行 `user_id` 与本次登录用户一致
-3. 该行 `client_token` 与本次请求 `clientToken` 一致
+1. A row exists in the database with `state='valid'` and `issued_at + expires_in_days*86400000 > now()`.
+2. The `user_id` of that row matches the user logging in.
+3. The `client_token` of that row matches the `clientToken` of the current request.
 
-复用行为：
+Reuse behavior:
 
-- 响应 `accessToken` 直接返回旧值
-- 旧行 `issued_at` 拨到 `now()`，有效期顺延 `expires_in_days`（默认 15 天）
-- `selectedProfile` 沿用旧行绑定的 profile
+- The `accessToken` in the response returns the old value directly.
+- The `issued_at` of the old row is updated to `now()`, and the validity is extended by `expires_in_days` (default 15 days).
+- `selectedProfile` uses the profile bound to the old row.
 
-### 互踢（不同 `clientToken`）
+### Mutual Kicking (Different `clientToken`)
 
-不满足复用条件时（不同 `clientToken` / 无有效行 / 上一行已过期）：
+When reuse conditions are not met (different `clientToken` / no valid row / previous row expired):
 
-- 事务性 UPDATE：该用户所有 `state='valid' AND client_token != ?` 的行 → `temporarily_invalid`
-- 插入新行 `state='valid'`
+- Transactional UPDATE: All rows for this user with `state='valid' AND client_token != ?` → `temporarily_invalid`.
+- Insert a new row with `state='valid'`.
 
-### 时序示例
+### Timeline Example
 
 ```text
-T0  客户端 A 用 clientToken=C-A 登录 → 插入 row#1 {access=tok1, client=C-A, state=valid}
-T1  客户端 A 重启后再用 clientToken=C-A 登录
-    → GetValidTokenByClientToken(U, C-A) 命中 row#1
-    → 响应 accessToken=tok1（不是新生成的）
+T0  Client A logs in with clientToken=C-A → Inserts row#1 {access=tok1, client=C-A, state=valid}
+T1  Client A logs in again with clientToken=C-A after restart
+    → GetValidTokenByClientToken(U, C-A) hits row#1
+    → Response accessToken=tok1 (not newly generated)
     → UPDATE row#1 SET issued_at=now() WHERE access_token=tok1
-    → 数据库无新增行
+    → No new row added to database
 
-T2  客户端 B 用 clientToken=C-B 登录（row#1 仍是 valid）
-    → GetValidTokenByClientToken(U, C-B) 返回 nil
+T2  Client B logs in with clientToken=C-B (row#1 is still valid)
+    → GetValidTokenByClientToken(U, C-B) returns nil
     → UPDATE tokens SET state='temporarily_invalid'
-        WHERE user_id=U AND client_token != C-B AND state='valid'   ← row#1 被踢
+        WHERE user_id=U AND client_token != C-B AND state='valid'   ← row#1 is kicked
     → INSERT row#2 {access=tok2, client=C-B, state=valid}
-    → 响应 accessToken=tok2
+    → Response accessToken=tok2
 ```
 
-之后 A 想上线会被 `/validate` 与 `/join` 拒绝（`temporarily_invalid`），但 A 可调 `/refresh` 抢回——见下条。
+Later, if A wants to go online, it will be rejected by `/validate` and `/join` (`temporarily_invalid`), but A can call `/refresh` to reclaim — see below.
 
 ---
 
-## 4. `/refresh` 抢回与踢人
+## 4. `/refresh` Reclaiming and Kicking
 
-被踢到 `temporarily_invalid` 的 client 仍可调用 `/authserver/refresh` 取回控制权：
+A client kicked to `temporarily_invalid` can still call `/authserver/refresh` to regain control:
 
-- `ValidateTokenForRefresh` 接受 `state IN ('valid', 'temporarily_invalid')`
-- 旧 accessToken → `state='invalid'`
-- 当前用户**其他** client 的 `state='valid'` 行 → `temporarily_invalid`
-- 签发新 accessToken → `state='valid'`
+- `ValidateTokenForRefresh` accepts `state IN ('valid', 'temporarily_invalid')`.
+- Old accessToken → `state='invalid'`.
+- **Other** client `state='valid'` rows for the current user → `temporarily_invalid`.
+- Issue new accessToken → `state='valid'`.
 
-> 注意：与 `/authenticate` 不同，`/refresh` 时**调用方**的旧行直接进入 `invalid`（不是 `temporarily_invalid`），因为同 client 的旧 token 不再需要"暂存"。
+> Note: Unlike `/authenticate`, during `/refresh`, the **caller's** old row goes directly to `invalid` (not `temporarily_invalid`), because the old token for the same client no longer needs to be "temporarily stored".
 
-### 时序示例
+### Timeline Example
 
 ```text
 T3  POST /authserver/refresh {accessToken: tok1, clientToken: C-A}
-    → ValidateTokenForRefresh(tok1, C-A) 命中 row#1（state=temporarily_invalid 仍通过）
+    → ValidateTokenForRefresh(tok1, C-A) hits row#1 (state=temporarily_invalid still passes)
     → InvalidateToken(tok1)                  → row#1 state=invalid
     → MarkOtherClientTokensTemporarilyInvalid(U, C-A)
         → row#2 (client=C-B, state=valid)   → state=temporarily_invalid
     → INSERT row#3 {access=tok3, client=C-A, state=valid}
-    → 响应 accessToken=tok3
+    → Response accessToken=tok3
 ```
 
-B 这时也会被 `/validate` `/join` 拒绝，但保留 `/refresh` 抢回的能力。
+B will now also be rejected by `/validate` and `/join`, but retains the ability to reclaim via `/refresh`.
 
 ---
 
-## 5. 各端点对 `temporarily_invalid` 的处理
+## 5. Handling of `temporarily_invalid` by Endpoints
 
-| 端点 | 接受的 `state` | `temporarily_invalid` 的行为 |
-|------|---------------|------------------------------|
+| Endpoint | Accepted `state` | Behavior for `temporarily_invalid` |
+|----------|------------------|------------------------------------|
 | `POST /authserver/validate` | `valid` | 403 ForbiddenOperationException |
 | `POST /sessionserver/session/minecraft/join` | `valid` | 403 ForbiddenOperationException |
-| `POST /authserver/refresh` | `valid`, `temporarily_invalid` | 成功，触发"抢回"流程 |
-| `POST /authserver/invalidate` | `valid` | 403（已被踢的 token 不能 invalidate） |
-| `POST /authserver/signout` | 凭 username/password，与 token 状态无关 | 吊销该用户所有 token（含 valid / temporarily_invalid / invalid） |
+| `POST /authserver/refresh` | `valid`, `temporarily_invalid` | Success, triggers "reclaim" process |
+| `POST /authserver/invalidate` | `valid` | 403 (kicked tokens cannot be invalidated) |
+| `POST /authserver/signout` | Based on username/password, unrelated to token state | Revokes all tokens for the user (including valid / temporarily_invalid / invalid) |
 
 ---
 
-## 6. 后台清理任务
+## 6. Background Cleanup Tasks
 
-`main.go` 启动时 + 每 1 小时触发一次 [`controllers/token_cleanup_controller.go`](../controllers/token_cleanup_controller.go) 的 `runOnce`，逻辑见 [`services/auth_service.go`](../services/auth_service.go)：
+`runOnce` in [`controllers/token_cleanup_controller.go`](../controllers/token_cleanup_controller.go) is triggered at `main.go` startup + every 1 hour. Logic in [`services/auth_service.go`](../services/auth_service.go):
 
-- DELETE `state='invalid'` 的行
-- DELETE `issued_at + expires_in_days*86400000 < now()` 的行（涵盖 valid / temporarily_invalid 的过期行）
-- 删除数量写入日志：`[TokenCleanup] removed N expired/invalid tokens`
+- DELETE rows where `state='invalid'`.
+- DELETE rows where `issued_at + expires_in_days*86400000 < now()` (covers expired valid / temporarily_invalid rows).
+- Deletion count is logged: `[TokenCleanup] removed N expired/invalid tokens`.
 
-> **为什么不直接 DELETE `valid` 的过期行？** 因为 GORM 软删除 + 状态机配合更安全：先置 `invalid`，下一次 cleanup 才物理删除，这样审计、并发竞态下都不会出错。
+> **Why not directly DELETE expired `valid` rows?** Because GORM soft delete + state machine coordination is safer: set to `invalid` first, then physically delete during the next cleanup. This ensures no errors during auditing or concurrent race conditions.

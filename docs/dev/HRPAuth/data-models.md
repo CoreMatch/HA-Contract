@@ -1,129 +1,129 @@
-# 数据模型
+# Data Models
 
-> 详细实现： [`models/models.go`](../../models/models.go)
+> Detailed implementation: [`models/models.go`](../../models/models.go)
 
-本项目使用 GORM 维护以下数据模型。
+This project uses GORM to maintain the following data models.
 
-## 模型总览
+## Model Overview
 
-| 模型 | 表名 | 描述 |
-|------|------|------|
-| [User](#user) | `users` | 用户信息 |
-| [Profile](#profile) | `profiles` | Minecraft 角色资料 |
-| [ProfileProperty](#profileproperty) | `profile_properties` | 角色属性（如纹理） |
-| [Token](#token) | `tokens` | Yggdrasil 认证令牌 |
-| [Session](#session) | `sessions` | 服务器会话 |
+| Model | Table Name | Description |
+|-------|------------|-------------|
+| [User](#user) | `users` | User information |
+| [Profile](#profile) | `profiles` | Minecraft profile data |
+| [ProfileProperty](#profileproperty) | `profile_properties` | Profile properties (e.g., textures) |
+| [Token](#token) | `tokens` | Yggdrasil authentication tokens |
+| [Session](#session) | `sessions` | Server sessions |
 
 ## User
 
-表名：`users`
+Table name: `users`
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `uid` | uint | 主键，**非自增**，由后端 `MAX(uid)+1` 分配 |
-| `uuid` | string(32) | Yggdrasil UUID（与 Yggdrasil `selectedProfile.id` 对应） |
-| `email` | string(255) | 邮箱（**无数据库层唯一约束**，业务层判重）|
-| `avatar` | string(255) | 头像 URL（当前未启用） |
-| `username` | string(255) | 用户名（**无数据库层唯一约束**，业务层判重）|
-| `password` | string(255) | bcrypt 哈希（`NOT NULL`）|
-| `ip` | string(255) | 最近一次登录 IP |
-| `permission` | int | 权限位（默认 0）|
-| `last_sign_at` | datetime | 最近活动（**业务/清理用**，代注册清理 routine 用此字段判断活跃度）|
-| `register_at` | datetime | 注册时间（**业务/清理用**，代注册清理 routine 用此字段判断账号年龄）|
-| `verified` | tinyint(1) | 邮箱是否已验证（默认 0）|
-| `remember_token` | string(100) | 本站业务系统会话令牌 |
-| `regip` | string(40) | 注册时 IP |
-| `totp` | string(32) | TOTP 共享密钥（Base32）|
-| `cbh` | tinyint(1) | **Created By Human**：1 = WebUI 注册或已认领的代注册；0 = WinnerProxy 代注册未认领（默认 1）|
-| `mbe` | tinyint(1) | **Mojang Bind Enabled**：1 = 允许同名 Mojang 玩家通过 M.T. `/register` 绑定；0 = HA 优先拒绝（默认 0）|
-| `mojang_uuid` | string(32) | 绑定的 Mojang UUID（无连字符小写 hex，`NULL`=未绑；`UNIQUE` 索引 `uk_users_mojang_uuid`）|
+| Field | Type | Description |
+|-------|------|-------------|
+| `uid` | uint | Primary key, **non-auto-increment**, allocated by backend `MAX(uid)+1` |
+| `uuid` | string(32) | Yggdrasil UUID (corresponds to Yggdrasil `selectedProfile.id`) |
+| `email` | string(255) | Email (**no database-level unique constraint**, deduplicated at business layer) |
+| `avatar` | string(255) | Avatar URL (currently not enabled) |
+| `username` | string(255) | Username (**no database-level unique constraint**, deduplicated at business layer) |
+| `password` | string(255) | bcrypt hash (`NOT NULL`) |
+| `ip` | string(255) | Most recent login IP |
+| `permission` | int | Permission bits (default 0) |
+| `last_sign_at` | datetime | Last activity (**for business/cleanup use**, used by proxy registration cleanup routine to judge activity) |
+| `register_at` | datetime | Registration time (**for business/cleanup use**, used by proxy registration cleanup routine to judge account age) |
+| `verified` | tinyint(1) | Whether email is verified (default 0) |
+| `remember_token` | string(100) | Session token for this site's business system |
+| `regip` | string(40) | IP at registration |
+| `totp` | string(32) | TOTP shared secret (Base32) |
+| `cbh` | tinyint(1) | **Created By Human**: 1 = WebUI registration or claimed proxy registration; 0 = Unclaimed WinnerProxy proxy registration (default 1) |
+| `mbe` | tinyint(1) | **Mojang Bind Enabled**: 1 = Allow Mojang players with same name to bind via M.T. `/register`; 0 = HA priority refusal (default 0) |
+| `mojang_uuid` | string(32) | Bound Mojang UUID (lowercase hex without hyphens, `NULL`=unbound; `UNIQUE` index `uk_users_mojang_uuid`) |
 
-## 字段语义
+## Field Semantics
 
-### `cbh`（Created By Human）
+### `cbh` (Created By Human)
 
-- **取值**：`1`（默认）= 人类创建（WebUI 注册或已认领的代注册用户）；`0` = 由 WinnerProxy 代注册且**未被认领**的机器人用户。
-- **写入规则**：
-  - WebUI `/register`（含开启 captcha）→ 总是 `1`。
-  - M.T. `/register`：
-    - 命中已存在用户（幂等 / `mbe=1` bind）→ **不改** `cbh`（保留原值）。
-    - 新建用户且传 `mojang_uuid` → `0`（代注册）。
-    - 新建用户且未传 `mojang_uuid` → `1`（与 WebUI 等同）。
-- **清理依据**：`cbh=0` 且 `register_at` / `last_sign_at` 均超过 30 天的用户由 `BotUserCleanupController` 删除（见 `references/HA-ROADMAP.md` §4）。
-- **认领机制**：代注册用户后续通过 WebUI 注册并 bind 时，`cbh` 是否翻转为 1 由业务层决定；当前实现为保持原值。
+- **Values**: `1` (default) = Created by human (WebUI registration or claimed proxy registration); `0` = Robot user created by WinnerProxy proxy registration and **not yet claimed**.
+- **Write Rules**:
+  - WebUI `/register` (including captcha enabled) → always `1`.
+  - M.T. `/register`:
+    - Hit existing user (idempotent / `mbe=1` bind) → **do not change** `cbh` (keep original value).
+    - New user with `mojang_uuid` provided → `0` (proxy registration).
+    - New user without `mojang_uuid` provided → `1` (equivalent to WebUI).
+- **Cleanup Basis**: Users with `cbh=0` and both `register_at` / `last_sign_at` exceeding 30 days are deleted by `BotUserCleanupController` (see `references/HA-ROADMAP.md` §4).
+- **Claiming Mechanism**: Whether `cbh` flips to 1 when a proxy-registered user subsequently registers and binds via WebUI is decided by the business layer; the current implementation keeps the original value.
 
 ### `mojang_uuid`
 
-- **格式**：32 位小写 hex（去掉连字符的 UUID），与 Yggdrasil `selectedProfile.id` 同构。
-- **约束**：`UNIQUE` 索引 `uk_users_mojang_uuid`（`NULL` 不参与唯一约束，因此未绑定用户可多个并存）。
-- **写入来源**：
-  - M.T. `/register` 决策树 1（按 `mojang_uuid` 命中）→ 幂等返回。
-  - M.T. `/register` 决策树 2.a `mbe=1` → bind 时写入。
-  - **不**通过 WebUI `/register` 写入。
-- **与 `users.uuid` 关系**：`users.uuid` 是该用户在 HA / Yggdrasil 体系中的内部 UUID（与 Mojang 无关）；`mojang_uuid` 是绑定的 Mojang 正版 UUID。两者可共存不同。
+- **Format**: 32-bit lowercase hex (UUID without hyphens), isomorphic with Yggdrasil `selectedProfile.id`.
+- **Constraint**: `UNIQUE` index `uk_users_mojang_uuid` (`NULL` does not participate in unique constraint, so multiple unbound users can exist).
+- **Write Sources**:
+  - M.T. `/register` decision tree 1 (hit by `mojang_uuid`) → idempotent return.
+  - M.T. `/register` decision tree 2.a `mbe=1` → written during bind.
+  - **Not** written via WebUI `/register`.
+- **Relationship with `users.uuid`**: `users.uuid` is the internal UUID for the user within the HA / Yggdrasil system (unrelated to Mojang); `mojang_uuid` is the bound Mojang authentic UUID. Both can coexist and be different.
 
-### `mbe`（Mojang Bind Enabled）
+### `mbe` (Mojang Bind Enabled)
 
-- **取值**：`0`（默认）= 禁止同名 Mojang 玩家通过 M.T. `/register` 绑定（**HA 优先**，Mojang 玩家收到 409 被踢）；`1` = 允许绑定。
-- **写入端点**：
-  - `POST /user/mojang-bind-enable` → 玩家自开（Remember Token）或运维代开（Manage Token + `uid`/`email`）。
-- **仅在 M.T. `/register` 决策树 2.a 中生效**：命中同名 WebUI 用户且其 `mojang_uuid IS NULL` 时检查。
-- **一旦 `mojang_uuid` 被写入，`mbe` 的语义即消失**（后续同名 Mojang 玩家不会触发 2.a）；但 `mbe` 字段不被自动重置，便于查询授权状态。
+- **Values**: `0` (default) = Prohibit Mojang players with the same name from binding via M.T. `/register` (**HA priority**, Mojang players receive 409 and are kicked); `1` = Allow binding.
+- **Write Endpoint**:
+  - `POST /user/mojang-bind-enable` → Player self-enable (Remember Token) or operator enable (Manage Token + `uid`/`email`).
+- **Only effective in M.T. `/register` decision tree 2.a**: Checked when a same-name WebUI user is hit and their `mojang_uuid IS NULL`.
+- **Once `mojang_uuid` is written, the semantics of `mbe` disappear** (subsequent same-name Mojang players will not trigger 2.a); however, the `mbe` field is not automatically reset, making it easy to query authorization status.
 
 ## Profile
 
-表名：`profiles`
+Table name: `profiles`
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | string | UUID（主键） |
-| `user_id` | uint | 所属用户 ID（外键） |
-| `name` | string | Minecraft 角色名（唯一） |
-| `created_at` / `updated_at` | datetime | GORM 自动维护 |
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | UUID (primary key) |
+| `user_id` | uint | Owner user ID (foreign key) |
+| `name` | string | Minecraft profile name (unique) |
+| `created_at` / `updated_at` | datetime | Automatically maintained by GORM |
 
-> 一个 User 可以有多个 Profile（多角色），但当前注册流程只创建第一个。如需多角色，调用 Yggdrasil `/api/profiles/minecraft` 之外的扩展接口。
+> A User can have multiple Profiles (multiple characters), but the current registration process only creates the first one. For multiple characters, call extension interfaces outside of Yggdrasil `/api/profiles/minecraft`.
 
 ## ProfileProperty
 
-表名：`profile_properties`
+Table name: `profile_properties`
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | uint | 主键 |
-| `profile_id` | string | 角色 UUID（外键） |
-| `name` | string | 属性名（如 `textures`） |
-| `value` | string | 属性值（base64 编码的 JSON） |
-| `signature` | string | 用私钥对 `value` 的 RSA 签名（可空）|
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | uint | Primary key |
+| `profile_id` | string | Profile UUID (foreign key) |
+| `name` | string | Property name (e.g., `textures`) |
+| `value` | string | Property value (base64 encoded JSON) |
+| `signature` | string | RSA signature of `value` using private key (nullable) |
 
 ## Token
 
-表名：`tokens`
+Table name: `tokens`
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | uint | 主键 |
-| `user_id` | uint | 用户 ID |
-| `access_token` | string | Yggdrasil Access Token（唯一） |
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | uint | Primary key |
+| `user_id` | uint | User ID |
+| `access_token` | string | Yggdrasil Access Token (unique) |
 | `client_token` | string | Yggdrasil Client Token |
-| `state` | string | 状态：`valid` / `temporarily_invalid` / `invalid` |
-| `profile_id` | string | 关联的角色 UUID（外键，可空） |
-| `issued_at` | int64 | Unix 毫秒时间戳 |
-| `expires_in_days` | int | 有效期天数（默认 15） |
-| `created_at` | datetime | 创建时间（`DEFAULT CURRENT_TIMESTAMP`）|
+| `state` | string | State: `valid` / `temporarily_invalid` / `invalid` |
+| `profile_id` | string | Associated Profile UUID (foreign key, nullable) |
+| `issued_at` | int64 | Unix millisecond timestamp |
+| `expires_in_days` | int | Validity in days (default 15) |
+| `created_at` | datetime | Creation time (`DEFAULT CURRENT_TIMESTAMP`) |
 
-> 详细状态机见 [tokens.md](./tokens.md)。
+> See [tokens.md](./tokens.md) for detailed state machine.
 
 ## Session
 
-表名：`sessions`
+Table name: `sessions`
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | uint | 主键 |
-| `server_id` | string | Minecraft 服务端传入的 serverId |
-| `profile_id` | string | 关联的角色 UUID |
-| `ip` | string | 客户端 IP（可选） |
-| `created_at` | datetime | 创建时间（`DEFAULT CURRENT_TIMESTAMP`）|
-| `expires_at` | datetime | 过期时间 |
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | uint | Primary key |
+| `server_id` | string | serverId passed by Minecraft server |
+| `profile_id` | string | Associated Profile UUID |
+| `ip` | string | Client IP (optional) |
+| `created_at` | datetime | Creation time (`DEFAULT CURRENT_TIMESTAMP`) |
+| `expires_at` | datetime | Expiration time |
 
-> Session 由 `POST /sessionserver/session/minecraft/join` 写入，由 `GET /sessionserver/session/minecraft/hasJoined` 读取。
+> Sessions are written by `POST /sessionserver/session/minecraft/join` and read by `GET /sessionserver/session/minecraft/hasJoined`.

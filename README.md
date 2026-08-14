@@ -1,33 +1,37 @@
 # HA-Contract
 
-本项目是 HA 系统的核心契约与服务集合，包含了认证服务、皮肤库服务以及代理服务。
+This project is the core contract and service collection of the HA system, including authentication services, skin library services, and proxy services.
 
-## 项目结构
+## Project Structure
 
-- [HRPAuth](./HRPAuth): 认证服务 (业务接口 + Yggdrasil 兼容)
-- [HASkinLib](./HASkinLib): 皮肤库服务
-- [WinnerProxy](./WinnerProxy): 代理服务
-- [HRPAuth-WebUI](./HRPAuth-WebUI): 认证服务前端界面
+- [HRPAuth](./HRPAuth): Authentication service (Business API + Yggdrasil compatible)
+- [HASkinLib](./HASkinLib): Skin library service
+- [WinnerProxy](./WinnerProxy): Proxy service
+- [HRPAuth-WebUI](./HRPAuth-WebUI): Frontend interface for the authentication service
 
-## 文档中心 (单一事实源)
+## Documentation Center (Single Source of Truth)
 
-为了防止文档与实际项目偏移，本项目采用统一的 API 标准和文档管理机制：
+To prevent documentation drift from the actual project, this project adopts a unified API standard and documentation management mechanism:
 
-### API 规范
-- [API 标准说明](./docs/api/README.md): 包含统一响应格式、分页规范、基础路径等。
-- [错误码定义](./docs/api/error-codes.md): 全局统一的错误码注册表。
+### API Specification
+- [API Standard Description](./docs/api/README.md): Contains unified response formats, pagination specifications, base paths, etc.
+- [Error Code Definitions](./docs/api/error-codes.md): Globally unified error code registry.
 
-### 接口定义 (OpenAPI)
-- [HRPAuth 业务接口](./docs/api/openapi/hrpauth-business.yaml)
-- [HASkinLib 业务接口](./docs/api/openapi/haskinlib-business.yaml)
+### Interface Definitions (OpenAPI)
+- [HRPAuth Business API](./docs/api/openapi/hrpauth-business.yaml)
+- [HASkinLib Business API](./docs/api/openapi/haskinlib-business.yaml)
 
-### 开发与内部文档
-- [HRPAuth 开发指南](./docs/dev/HRPAuth/): 包含配置、数据模型、迁移、Token 机制等。
+### Development and Internal Documentation
+- [HRPAuth Development Guide](./docs/dev/HRPAuth/): Includes configuration, data models, migrations, Token mechanisms, etc.
 
-### 外部参考标准 (Immutable)
-- [外部 API 标准说明](./docs/references/): 包含 CustomSkinAPI、Yggdrasil API (authlib-injector) 等外部协议标准。
-- **注意**: 此目录下的文档属于外部标准，本项目仅负责遵循，**严禁修改**其内容。
+### External Reference Standards (Immutable)
+- [External API Standards](./docs/references/): Contains external protocol standards such as CustomSkinAPI, Yggdrasil API (authlib-injector), etc.
+- **Note**: Documents in this directory belong to external standards. This project is only responsible for compliance; **modifying their content is strictly prohibited**.
 
-## 归档说明
+## Archive Note
 
-旧的、已漂移的文档已全部移至 [archive/docs/](./archive/docs/) 目录，不再作为开发参考。
+Old and drifted documents have been moved to the [archive/docs/](./archive/docs/) directory and are no longer used as development references.
+
+## Documentation Convention
+
+**All documentation in this project must be written in English.** This applies to both existing and future documents.

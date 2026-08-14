@@ -2,21 +2,21 @@ openapi: 3.1.0
 info:
   title: HASkinLib Business API
   version: 1.0.0
-  description: HASkinLib 业务接口统一规范。
+  description: Unified specification for HASkinLib business interfaces.
 servers:
   - url: /
 paths:
   /example:
     get:
-      summary: 示例接口
+      summary: Example interface
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
   /texture/upload:
     post:
-      summary: 上传材质并生成预览
+      summary: Upload texture and generate preview
       responses:
-        '200': { description: 更新既有记录成功 }
-        '201': { description: 新建记录成功 }
+        '200': { description: Successfully updated existing record }
+        '201': { description: Successfully created new record }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
@@ -25,14 +25,14 @@ paths:
         '500': { $ref: '#/components/responses/Error' }
   /texture/listpreview:
     get:
-      summary: 获取预览列表
+      summary: Get preview list
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
   /texture/preview/{preview_file}:
     get:
-      summary: 获取预览文件
+      summary: Get preview file
       parameters:
         - in: path
           name: preview_file
@@ -41,13 +41,13 @@ paths:
             type: string
       responses:
         '200':
-          description: webp 文件
+          description: webp file
         '400': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
   /texture/pull/{hash}:
     get:
-      summary: 拉取原始材质文件
+      summary: Pull original texture file
       parameters:
         - in: path
           name: hash
@@ -56,20 +56,20 @@ paths:
             type: string
       responses:
         '200':
-          description: png 文件
+          description: png file
         '400': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
   /profile/textures:
     get:
-      summary: 获取当前用户材质列表
+      summary: Get current user's texture list
       responses:
-        '200': { description: 成功 }
+        '200': { description: Success }
         '401': { $ref: '#/components/responses/Error' }
 components:
   responses:
     Error:
-      description: 标准错误响应
+      description: Standard error response
       content:
         application/json:
           schema:
