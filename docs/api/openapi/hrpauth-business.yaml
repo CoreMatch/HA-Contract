@@ -15,41 +15,76 @@ paths:
           description: Success
   /login:
     post:
-      summary: Password login
+      summary: Deprecated legacy login endpoint
+      deprecated: true
       responses:
-        '200': { description: Success }
-        '400': { $ref: '#/components/responses/Error' }
-        '401': { $ref: '#/components/responses/Error' }
+        '410': { $ref: '#/components/responses/Error' }
   /loginbymt:
     post:
-      summary: Administrator proxy login
+      summary: Deprecated legacy Manage Token login endpoint
+      deprecated: true
+      responses:
+        '410': { $ref: '#/components/responses/Error' }
+  /oauth/login-ticket:
+    post:
+      summary: Verify password and issue a short-lived login ticket or first-party tokens
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
-        '404': { $ref: '#/components/responses/Error' }
-  /register:
-    post:
-      summary: Register
+  /oauth/authorize:
+    get:
+      summary: Validate authorization request for authorization_code + PKCE
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
+  /oauth/authorize/decision:
+    post:
+      summary: Complete interactive authorization and issue authorization code
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /oauth/token:
+    post:
+      summary: OAuth2 token endpoint
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /oauth/revoke:
+    post:
+      summary: Revoke OAuth2 access token
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /register:
+    post:
+      summary: Register user or proxy-register via Bearer service token
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
   /logout:
     get:
-      summary: Logout
+      summary: Revoke current Bearer access token
       responses:
         '200': { description: Success }
+        '401': { $ref: '#/components/responses/Error' }
   /user:
     post:
-      summary: Get user information
+      summary: Get user information via Bearer token
       responses:
         '200': { description: Success }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
   /user/declare-email:
     post:
-      summary: Declare email
+      summary: Declare email via Bearer service token
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -58,7 +93,7 @@ paths:
         '409': { $ref: '#/components/responses/Error' }
   /user/mojang-bind-enable:
     post:
-      summary: Enable Mojang binding
+      summary: Enable Mojang binding via Bearer token
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -81,28 +116,28 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
   /totp/setup:
     post:
-      summary: Setup TOTP
+      summary: Setup TOTP via Bearer token
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
   /totp/verify:
     post:
-      summary: Verify TOTP
+      summary: Verify TOTP with login_ticket and issue first-party OAuth2 tokens
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
   /totp/hasbeenenabled:
     post:
-      summary: Query whether TOTP is enabled
+      summary: Query whether TOTP is enabled via Bearer token
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
   /change-username:
     post:
-      summary: Change username
+      summary: Change username via Bearer token
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -111,7 +146,7 @@ paths:
         '409': { $ref: '#/components/responses/Error' }
   /change-profile-name:
     post:
-      summary: Change profile name
+      summary: Change profile name via Bearer token
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -127,7 +162,7 @@ paths:
         '500': { $ref: '#/components/responses/Error' }
   /texture/upload:
     post:
-      summary: Upload user texture
+      summary: Upload user texture via Bearer token
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -137,7 +172,7 @@ paths:
         '500': { $ref: '#/components/responses/Error' }
   /texture/delete:
     post:
-      summary: Delete user texture
+      summary: Delete user texture via Bearer token
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -147,7 +182,7 @@ paths:
         '500': { $ref: '#/components/responses/Error' }
   /texture/get:
     post:
-      summary: Get user texture
+      summary: Get user texture via Bearer token
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }

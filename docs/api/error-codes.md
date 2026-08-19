@@ -8,11 +8,11 @@ The following error codes are the stable registry for current HA business APIs. 
 | `invalid_request` | General parameter error |
 | `invalid_email` | Invalid email format or email parameter |
 | `invalid_credentials` | Invalid login credentials |
-| `invalid_auth_type_or_token` | Invalid combination of `auth_type` and token |
-| `invalid_manage_token` | Invalid Manage Token |
-| `remember_token_required` | Remember Token missing |
-| `invalid_remember_token` | Invalid Remember Token |
-| `manage_target_required` | Missing target user identifier in manage path |
+| `invalid_auth_type_or_token` | Legacy invalid combination of `auth_type` and token |
+| `invalid_manage_token` | Legacy invalid Manage Token |
+| `remember_token_required` | Legacy Remember Token missing |
+| `invalid_remember_token` | Legacy invalid Remember Token |
+| `manage_target_required` | Missing target user identifier for delegated/service operation |
 | `user_not_found` | Target user does not exist |
 | `username_too_short` | Username is too short |
 | `password_too_short` | Password is too short |
@@ -53,4 +53,17 @@ The following error codes are the stable registry for current HA business APIs. 
 | `storage_not_configured` | Storage directory not configured |
 | `keygen_disabled` | Key generation endpoint is disabled |
 | `keygen_failed` | Key generation failed |
+| `oauth_invalid_client` | Invalid OAuth2 client credentials |
+| `oauth_invalid_grant` | Invalid, expired, or revoked OAuth2 grant/token |
+| `oauth_invalid_scope` | Requested OAuth2 scope is not allowed |
+| `oauth_unauthorized_client` | Client is not allowed to use this grant type |
+| `oauth_invalid_redirect_uri` | Redirect URI is invalid or not whitelisted |
+| `oauth_unsupported_grant_type` | Unsupported OAuth2 grant type |
+| `oauth_invalid_code_challenge` | Invalid or missing PKCE code challenge |
+| `oauth_insufficient_scope` | Token does not carry the required scope |
+| `oauth_access_denied` | Access denied by OAuth2 authorization policy |
+| `oauth_login_required` | Missing Bearer access token |
+| `login_ticket_required` | Missing login ticket |
+| `invalid_login_ticket` | Login ticket is invalid or expired |
+| `endpoint_deprecated` | Endpoint has been removed from active auth flow |
 | `internal_error` | Unclassified internal error |

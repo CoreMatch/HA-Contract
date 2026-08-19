@@ -11,6 +11,10 @@ This project uses GORM to maintain the following data models.
 | [User](#user) | `users` | User information |
 | [Profile](#profile) | `profiles` | Minecraft profile data |
 | [ProfileProperty](#profileproperty) | `profile_properties` | Profile properties (e.g., textures) |
+| [OAuth2Client](#oauth2client) | `oauth2_clients` | Site-side OAuth2 clients |
+| [OAuth2AccessToken](#oauth2accesstoken) | `oauth2_access_tokens` | Site-side OAuth2 access tokens |
+| [OAuth2RefreshToken](#oauth2refreshtoken) | `oauth2_refresh_tokens` | Site-side OAuth2 refresh tokens |
+| [OAuth2AuthorizationCode](#oauth2authorizationcode) | `oauth2_authorization_codes` | Site-side authorization codes |
 | [Token](#token) | `tokens` | Yggdrasil authentication tokens |
 | [Session](#session) | `sessions` | Server sessions |
 
@@ -31,7 +35,7 @@ Table name: `users`
 | `last_sign_at` | datetime | Last activity (**for business/cleanup use**, used by proxy registration cleanup routine to judge activity) |
 | `register_at` | datetime | Registration time (**for business/cleanup use**, used by proxy registration cleanup routine to judge account age) |
 | `verified` | tinyint(1) | Whether email is verified (default 0) |
-| `remember_token` | string(100) | Session token for this site's business system |
+| `remember_token` | string(100) | Legacy site session token field, retained only for backward compatibility |
 | `regip` | string(40) | IP at registration |
 | `totp` | string(32) | TOTP shared secret (Base32) |
 | `cbh` | tinyint(1) | **Created By Human**: 1 = WebUI registration or claimed proxy registration; 0 = Unclaimed WinnerProxy proxy registration (default 1) |
@@ -45,7 +49,7 @@ Table name: `users`
 - **Values**: `1` (default) = Created by human (WebUI registration or claimed proxy registration); `0` = Robot user created by WinnerProxy proxy registration and **not yet claimed**.
 - **Write Rules**:
   - WebUI `/register` (including captcha enabled) → always `1`.
-  - M.T. `/register`:
+  - Service proxy `/register`:
     - Hit existing user (idempotent / `mbe=1` bind) → **do not change** `cbh` (keep original value).
     - New user with `mojang_uuid` provided → `0` (proxy registration).
     - New user without `mojang_uuid` provided → `1` (equivalent to WebUI).
@@ -57,17 +61,17 @@ Table name: `users`
 - **Format**: 32-bit lowercase hex (UUID without hyphens), isomorphic with Yggdrasil `selectedProfile.id`.
 - **Constraint**: `UNIQUE` index `uk_users_mojang_uuid` (`NULL` does not participate in unique constraint, so multiple unbound users can exist).
 - **Write Sources**:
-  - M.T. `/register` decision tree 1 (hit by `mojang_uuid`) → idempotent return.
-  - M.T. `/register` decision tree 2.a `mbe=1` → written during bind.
+  - Service proxy `/register` decision tree 1 (hit by `mojang_uuid`) → idempotent return.
+  - Service proxy `/register` decision tree 2.a `mbe=1` → written during bind.
   - **Not** written via WebUI `/register`.
 - **Relationship with `users.uuid`**: `users.uuid` is the internal UUID for the user within the HA / Yggdrasil system (unrelated to Mojang); `mojang_uuid` is the bound Mojang authentic UUID. Both can coexist and be different.
 
 ### `mbe` (Mojang Bind Enabled)
 
-- **Values**: `0` (default) = Prohibit Mojang players with the same name from binding via M.T. `/register` (**HA priority**, Mojang players receive 409 and are kicked); `1` = Allow binding.
+- **Values**: `0` (default) = Prohibit Mojang players with the same name from binding via service proxy `/register` (**HA priority**, Mojang players receive 409 and are kicked); `1` = Allow binding.
 - **Write Endpoint**:
-  - `POST /user/mojang-bind-enable` → Player self-enable (Remember Token) or operator enable (Manage Token + `uid`/`email`).
-- **Only effective in M.T. `/register` decision tree 2.a**: Checked when a same-name WebUI user is hit and their `mojang_uuid IS NULL`.
+  - `POST /user/mojang-bind-enable` → Player self-enable (Bearer user token) or service enable (Bearer service token + `uid`/`email`).
+- **Only effective in service proxy `/register` decision tree 2.a**: Checked when a same-name WebUI user is hit and their `mojang_uuid IS NULL`.
 - **Once `mojang_uuid` is written, the semantics of `mbe` disappear** (subsequent same-name Mojang players will not trigger 2.a); however, the `mbe` field is not automatically reset, making it easy to query authorization status.
 
 ## Profile
