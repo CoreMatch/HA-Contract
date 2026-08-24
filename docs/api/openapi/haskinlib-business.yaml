@@ -14,6 +14,8 @@ paths:
   /texture/upload:
     post:
       summary: Upload texture and generate preview
+      security:
+        - BearerAuth: []
       responses:
         '200': { description: Successfully updated existing record }
         '201': { description: Successfully created new record }
@@ -63,10 +65,16 @@ paths:
   /profile/textures:
     get:
       summary: Get current user's texture list
+      security:
+        - BearerAuth: []
       responses:
         '200': { description: Success }
         '401': { $ref: '#/components/responses/Error' }
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
   responses:
     Error:
       description: Standard error response

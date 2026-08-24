@@ -11,6 +11,7 @@
 | [GET /totpgen](#get-totpgen-secrettoken) | `GET` | **TOTP Secret**（通过 `?secret=` 传入） |
 | [POST /totp/setup](#post-totpsetup) | `POST` | **Remember Token** |
 | [POST /totp/verify](#post-totpverify) | `POST` | **TOTP Passcode**（6 位数字） |
+| [POST /totp/toggle](#post-totptoggle) | `POST` | **Remember Token** |
 | [POST /totp/hasbeenenabled](#post-totphasbeenenabled) | `POST` | **Remember Token** |
 
 > ⚠️ `/totpgen` 是**后端调试接口**，仅用于根据 TOTP Secret 直接生成动态口令。**生产前端不要调用**此接口 —— 用户应从已安装的 Authenticator 应用读取 6 位动态口令。
@@ -115,6 +116,7 @@ GET /totpgen?secret=<Base32 TOTP Secret>
 ### 副作用
 
 - 写入 `users.totp` 字段
+- **自动开启 2FA**：设置成功后，`users.2FA` 字段将被自动设为 `1`。
 - **注意：本接口不要求用户验证一次 passcode**，因此服务端单方面"认为"已开启；如需"二次确认"流程，前端应在拿到 `totpkey` 后立刻让用户输入一次 passcode 并调 `/totp/verify`。
 
 ### 前端处理
@@ -122,6 +124,43 @@ GET /totpgen?secret=<Base32 TOTP Secret>
 1. 拿到 `totpkey` 后，在 UI 上展示为 Base32 字符串 + 二维码（前端用 qrcode.js 等库将 `otpauth://totp/...` 编码为二维码）
 2. 用户用 Authenticator 扫码添加账号
 3. 引导用户输入 Authenticator 显示的 6 位动态口令，调 `/totp/verify` 完成绑定
+
+---
+
+## POST /totp/toggle
+
+开启或关闭双因素认证。
+
+### 鉴权
+
+**Remember Token**（通过请求体 `rt` 字段提交）
+
+### 请求体
+
+```json
+{
+  "enabled": true
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `enabled` | boolean | 是 | `true` 开启，`false` 关闭 |
+
+### 成功响应
+
+```json
+{
+  "success": true,
+  "enabled": true
+}
+```
+
+### 失败响应
+
+| HTTP | message | 触发场景 |
+|------|---------|----------|
+| 400 | `TOTP not configured, cannot enable 2FA` | 尝试开启 2FA 但用户尚未配置 TOTP 密钥 |
 
 ---
 
@@ -211,7 +250,7 @@ GET /totpgen?secret=<Base32 TOTP Secret>
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `enabled` | int | `1` = 已开启 TOTP（`users.totp` 列非空）；`0` = 未开启（`users.totp` 列为空） |
+| `enabled` | int | `1` = 已开启双因素认证（`users.totp` 非空且 `users.2FA` 为 1）；`0` = 未开启 |
 
 ### 失败响应
 

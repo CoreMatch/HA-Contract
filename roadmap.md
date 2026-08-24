@@ -10,7 +10,7 @@ The ecosystem is currently transitioning from legacy `remember_token` authentica
 | :--- | :--- | :--- | :--- |
 | **HRPAuth** | Provider | **Completed** | Core OAuth2 flow and endpoints are implemented. |
 | **HASkinLib** | Client/Consumer | **Pending** | Must replace `remember_token` with Bearer Token validation. |
-| **WinnerProxy** | Client/Admin | **Pending** | Must migrate from M.T. (Manage Token) to OAuth2 `client_credentials`. |
+| **WinnerProxy** | Client/Admin | **Completed** | Migrated from M.T. (Manage Token) to OAuth2 `client_credentials`. |
 | **HASkinProxy** | Consumer | **Stable** | Minimal impact; continue using Yggdrasil for profile conversion. |
 
 ---
@@ -37,3 +37,4 @@ The ecosystem is currently transitioning from legacy `remember_token` authentica
 | **All** | Documentation Centralization | 2026-08-23 | [API README](file:///home/lnb/Desktop/HA/HA-Contract/docs/api/README.md) |
 | **All** | English-Only Documentation Policy | 2026-08-23 | N/A |
 | **HRPAuth** | Core OAuth2 Implementation | 2026-08-23 | [hrpauth-business.yaml](file:///home/lnb/Desktop/HA/HA-Contract/docs/api/openapi/hrpauth-business.yaml) |
+| **WinnerProxy** | OAuth2 client_credentials Migration | 2026-08-23 | N/A |

@@ -16,6 +16,8 @@ This document explains the current database schema management, migration command
 | `cmd/migrate/main.go` | Migration command entry point |
 | `database/migrations/000001_baseline.up.sql` | Merged baseline: Final Schema for 5 tables |
 | `database/migrations/000001_baseline.down.sql` | Baseline rollback |
+| `database/migrations/000002_oauth2.up.sql` | OAuth2 schema (clients, tokens, codes) |
+| `database/migrations/000003_add_2fa_to_users.up.sql` | Add 2FA column to users table |
 
 All historical incremental migrations (000002–000007) have been merged into `000001_baseline` and are no longer kept separately.
 

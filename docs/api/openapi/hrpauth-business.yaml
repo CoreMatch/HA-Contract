@@ -128,6 +128,23 @@ paths:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
+  /totp/toggle:
+    post:
+      summary: Enable or disable two-factor authentication via Bearer token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
   /totp/hasbeenenabled:
     post:
       summary: Query whether TOTP is enabled via Bearer token

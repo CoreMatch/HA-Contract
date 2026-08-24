@@ -38,6 +38,7 @@ Table name: `users`
 | `remember_token` | string(100) | Legacy site session token field, retained only for backward compatibility |
 | `regip` | string(40) | IP at registration |
 | `totp` | string(32) | TOTP shared secret (Base32) |
+| `2FA` | tinyint(1) | **Two-Factor Authentication**: 1 = Enabled; 0 = Disabled (default 0) |
 | `cbh` | tinyint(1) | **Created By Human**: 1 = WebUI registration or claimed proxy registration; 0 = Unclaimed WinnerProxy proxy registration (default 1) |
 | `mbe` | tinyint(1) | **Mojang Bind Enabled**: 1 = Allow Mojang players with same name to bind via M.T. `/register`; 0 = HA priority refusal (default 0) |
 | `mojang_uuid` | string(32) | Bound Mojang UUID (lowercase hex without hyphens, `NULL`=unbound; `UNIQUE` index `uk_users_mojang_uuid`) |
@@ -81,8 +82,9 @@ Table name: `profiles`
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | string | UUID (primary key) |
-| `user_id` | uint | Owner user ID (foreign key) |
+| `user_id` | string | Owner internal UUID (corresponds to `users.uuid`) |
 | `name` | string | Minecraft profile name (unique) |
+| `model` | enum | Skin model: `default` or `slim` |
 | `created_at` / `updated_at` | datetime | Automatically maintained by GORM |
 
 > A User can have multiple Profiles (multiple characters), but the current registration process only creates the first one. For multiple characters, call extension interfaces outside of Yggdrasil `/api/profiles/minecraft`.
@@ -106,16 +108,69 @@ Table name: `tokens`
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | uint | Primary key |
-| `user_id` | uint | User ID |
+| `user_id` | string | Owner internal UUID (corresponds to `users.uuid`) |
 | `access_token` | string | Yggdrasil Access Token (unique) |
 | `client_token` | string | Yggdrasil Client Token |
-| `state` | string | State: `valid` / `temporarily_invalid` / `invalid` |
-| `profile_id` | string | Associated Profile UUID (foreign key, nullable) |
+| `selected_profile_id` | string | Associated Profile UUID (foreign key, nullable) |
 | `issued_at` | int64 | Unix millisecond timestamp |
 | `expires_in_days` | int | Validity in days (default 15) |
+| `state` | string | State: `valid` / `temporarily_invalid` / `invalid` |
 | `created_at` | datetime | Creation time (`DEFAULT CURRENT_TIMESTAMP`) |
 
 > See [tokens.md](./tokens.md) for detailed state machine.
+
+## OAuth2Client
+
+Table name: `oauth2_clients`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | uint | Primary key |
+| `client_id` | string | Client identifier (unique) |
+| `client_secret` | string | Client secret (nullable) |
+| `name` | string | Client name |
+| `type` | enum | `public` or `confidential` |
+| `grant_types` | text | Allowed grant types (comma-separated) |
+| `redirect_uris` | text | Whitelisted redirect URIs |
+| `scopes` | text | Allowed scopes |
+| `is_internal` | bool | Whether client is internal to HA system |
+| `is_super` | bool | Whether client has elevated permissions |
+| `is_active` | bool | Whether client is active |
+| `created_at` / `updated_at` | datetime | Timestamps |
+
+## OAuth2AccessToken
+
+Table name: `oauth2_access_tokens`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | uint | Primary key |
+| `access_token` | string | The Bearer access token (unique) |
+| `client_id` | string | Issuing client ID |
+| `user_id` | string | Associated internal UUID (nullable for service mode) |
+| `scopes` | text | Granted scopes |
+| `subject_type` | enum | `user` or `service` |
+| `target_uid` | uint | Explicit target UID for service mode (nullable) |
+| `target_email` | string | Explicit target email for service mode (nullable) |
+| `expires_at` | datetime | Expiration time |
+| `revoked_at` | datetime | Revocation time (nullable) |
+| `created_at` | datetime | Creation time |
+
+## OAuth2RefreshToken
+
+Table name: `oauth2_refresh_tokens`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | uint | Primary key |
+| `refresh_token` | string | The refresh token (unique) |
+| `access_token_id` | uint | Linked access token ID |
+| `client_id` | string | Issuing client ID |
+| `user_id` | string | Associated internal UUID |
+| `scopes` | text | Granted scopes |
+| `expires_at` | datetime | Expiration time |
+| `revoked_at` | datetime | Revocation time (nullable) |
+| `created_at` | datetime | Creation time |
 
 ## Session
 
