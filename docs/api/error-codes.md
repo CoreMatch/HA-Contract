@@ -66,4 +66,9 @@ The following error codes are the stable registry for current HA business APIs. 
 | `login_ticket_required` | Missing login ticket |
 | `invalid_login_ticket` | Login ticket is invalid or expired |
 | `endpoint_deprecated` | Endpoint has been removed from active auth flow |
+| `service_not_registered` | Service not registered; send `/services/presence` first |
+| `relay_failed` | Relay forwarding to microservice failed |
+| `relay_not_found` | Relay rule not found for deletion |
+| `sdk_not_found` | Service not registered or has no `sdk_url` declared |
+| `insufficient_auth_level` | Credential present but below the required auth level |
 | `internal_error` | Unclassified internal error |

@@ -1,6 +1,8 @@
 # Data Models
 
 > Detailed implementation: [`models/models.go`](../../models/models.go)
+>
+> Migration note: BlessingSkin-to-HRPAuth offline import rules are defined in [`bs2ha-migration.md`](./bs2ha-migration.md).
 
 This project uses GORM to maintain the following data models.
 
@@ -27,9 +29,9 @@ Table name: `users`
 | `uid` | uint | Primary key, **non-auto-increment**, allocated by backend `MAX(uid)+1` |
 | `uuid` | string(32) | Yggdrasil UUID (corresponds to Yggdrasil `selectedProfile.id`) |
 | `email` | string(255) | Email (**no database-level unique constraint**, deduplicated at business layer) |
-| `avatar` | string(255) | Avatar URL (currently not enabled) |
+| `avatar` | string(255) | Avatar URL exposed to first-party clients |
 | `username` | string(255) | Username (**no database-level unique constraint**, deduplicated at business layer) |
-| `password` | string(255) | bcrypt hash (`NOT NULL`) |
+| `password` | string(255) | Password hash or migration marker (`NOT NULL`): bcrypt for native HRPAuth accounts; BlessingSkin imports keep the bcrypt hash only when the source method is bcrypt, otherwise they use the fixed marker `BS2HA$RESET_REQUIRED` |
 | `ip` | string(255) | Most recent login IP |
 | `permission` | int | Permission bits (default 0) |
 | `last_sign_at` | datetime | Last activity (**for business/cleanup use**, used by proxy registration cleanup routine to judge activity) |
@@ -75,6 +77,15 @@ Table name: `users`
 - **Only effective in service proxy `/register` decision tree 2.a**: Checked when a same-name WebUI user is hit and their `mojang_uuid IS NULL`.
 - **Once `mojang_uuid` is written, the semantics of `mbe` disappear** (subsequent same-name Mojang players will not trigger 2.a); however, the `mbe` field is not automatically reset, making it easy to query authorization status.
 
+### `password`
+
+- **Native HRPAuth write format**: bcrypt.
+- **BlessingSkin migration contract**:
+  - source method = `BCRYPT` -> copy the existing bcrypt hash directly
+  - source method != `BCRYPT` -> write the fixed invalid marker `BS2HA$RESET_REQUIRED`
+- **Operational meaning**: non-bcrypt BlessingSkin imports do not log in with their old password and must use password reset.
+- **Configuration interaction**: `security.password_cost` applies to newly generated bcrypt hashes, including post-reset passwords.
+
 ## Profile
 
 Table name: `profiles`
@@ -88,6 +99,8 @@ Table name: `profiles`
 | `created_at` / `updated_at` | datetime | Automatically maintained by GORM |
 
 > A User can have multiple Profiles (multiple characters), but the current registration process only creates the first one. For multiple characters, call extension interfaces outside of Yggdrasil `/api/profiles/minecraft`.
+>
+> BlessingSkin migration intentionally narrows imported profiles according to [`bs2ha-migration.md`](./bs2ha-migration.md): keep the single player when only one exists, otherwise keep only the player matching the imported BlessingSkin username, and create a placeholder profile when no usable BlessingSkin player remains.
 
 ## ProfileProperty
 
@@ -99,7 +112,7 @@ Table name: `profile_properties`
 | `profile_id` | string | Profile UUID (foreign key) |
 | `name` | string | Property name (e.g., `textures`) |
 | `value` | string | Property value (base64 encoded JSON) |
-| `signature` | string | RSA signature of `value` using private key (nullable) |
+| `signature` | string | RSA signature of `value` using private key (nullable, but expected for production `textures` payloads) |
 
 ## Token
 

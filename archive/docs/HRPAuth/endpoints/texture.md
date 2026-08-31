@@ -11,6 +11,7 @@
 | [POST /texture/upload](#post-textureupload) | `POST` | **Remember Token** |
 | [POST /texture/delete](#post-texturedelete) | `POST` | **Remember Token** |
 | [POST /texture/get](#post-textureget) | `POST` | **Remember Token** |
+| [POST /texture/rewrite-callback](#post-texturerewrite-callback) | `POST` | **Manage Token** |
 
 > 三个端点所需 Token 均为 **Remember Token**（通过请求体 / 表单 / 查询参数中的 `remember_token` 字段传递）。
 >
@@ -194,6 +195,74 @@ curl -X POST http://localhost:8080/texture/upload \
 |------|---------|----------|
 | 401 | `Invalid token` | Remember Token 缺失或错误 |
 | 404 | `Profile not found` | 角色不存在或不属于该用户 |
+
+---
+
+## POST /texture/rewrite-callback
+
+批量重写所有已存储材质的 callback URL。把所有角色的 `skin` / `cape` 材质 URL 域名统一替换为**当前配置** `callback.url`，保留 `/textures/{hash}` 后缀，并对重写后的值重新签名。用于迁移域名 / 更换 `callback.url` 后修复旧数据。
+
+### 鉴权
+
+**Manage Token（M-T）**：必须提供 `manage_token`（等于 `config.yaml` 中 `manage.token`）。该端点为运维专用，不校验用户身份，也无需声明 `auth_type`。
+
+### 请求体
+
+```json
+{
+  "manage_token": "<M-T>",
+  "dry_run": true
+}
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `manage_token` | string | 是 | 运营级 M-T（也支持表单 / 查询参数传递） |
+| `dry_run` | bool | 否 | `true` 时只预览统计，不写库（也支持表单 / 查询参数 `dry_run=true`） |
+
+### 请求示例（curl）
+
+```bash
+curl -X POST http://localhost:8080/texture/rewrite-callback \
+  -F "manage_token=<M-T>" \
+  -F "dry_run=true"
+```
+
+### 成功响应
+
+```json
+{
+  "success": true,
+  "message": "材质 callback 重写完成",
+  "data": {
+    "callback_url": "https://auth.example.com",
+    "dry_run": true,
+    "total": 3,
+    "rewritten": 2,
+    "unchanged": 1,
+    "failed": 0,
+    "errors": []
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `data.callback_url` | string | 重写目标域名（`config.yaml` 的 `callback.url`，去尾斜杠） |
+| `data.dry_run` | bool | 是否为预览模式 |
+| `data.total` | int | 扫描到的 `profile_properties.textures` 记录总数 |
+| `data.rewritten` | int | URL 实际发生变化并（非 dry-run 时）已写库的记录数 |
+| `data.unchanged` | int | 未发生变化（已是目标域名）的记录数 |
+| `data.failed` | int | 解码 / 重签名 / 写库失败的记录数 |
+| `data.errors` | array | 失败明细（`profile <id>: <原因>`），无失败时为空数组 |
+
+### 失败响应
+
+| HTTP | message | 触发场景 |
+|------|---------|----------|
+| 401 | `Invalid manage token` | `manage_token` 缺失或与 `manage.token` 不匹配 |
+
+> 注意：非 dry-run 时，重写会重新调用 `SignTextureValue` 对值签名，因此要求配置了 `yggdrasil.server.signature_private_key_path`；若签名失败，该条记录不会写库并计入 `failed`。
 
 ---
 

@@ -206,6 +206,12 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+  /texture/rewrite-callback:
+    post:
+      summary: Rewrite all stored texture callback URLs to current callback.url (Manage Token)
+      responses:
+        '200': { description: Success }
+        '401': { $ref: '#/components/responses/Error' }
   /captcha:
     post:
       summary: Generate captcha
@@ -232,6 +238,93 @@ paths:
           description: Image byte stream
         '400': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+  /services/presence:
+    post:
+      summary: Register or heartbeat a microservice (bonjour handshake)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresenceRequest'
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+  /services/list:
+    get:
+      summary: List microservices relevant to a registered frontend service
+      parameters:
+        - in: query
+          name: name
+          required: true
+          schema:
+            type: string
+          description: Registered frontend service name
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+  /services/sdk/{name}:
+    get:
+      summary: Relay the JS usage file of a registered service
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: JS file relayed unchanged from the microservice
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+  /services/route:
+    post:
+      summary: Register routing rules (pre/post) for a registered service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RouteRequest'
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+  /services/relay:
+    post:
+      summary: Register relay rules for a registered service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RelayRequest'
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+    delete:
+      summary: Delete a relay rule of a service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RelayDeleteRequest'
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    get:
+      summary: List relay rules, optionally filtered by service
+      parameters:
+        - in: query
+          name: name
+          required: false
+          schema:
+            type: string
+          description: Filter by service name
+      responses:
+        '200': { description: Success }
 components:
   responses:
     Error:
@@ -263,3 +356,104 @@ components:
           description: Compatible alias, value matches code
         meta:
           $ref: '#/components/schemas/Meta'
+    ServiceScope:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        frontend_areas:
+          type: array
+          items:
+            type: string
+          description: Non-empty means the service is visible to frontends
+    PresenceRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        ttl_seconds:
+          type: integer
+          description: Self-declared lifetime in seconds; <=0 or omitted means never expires
+        scope:
+          $ref: '#/components/schemas/ServiceScope'
+        sdk_url:
+          type: string
+          description: URL of a JS usage file, relayed by HRPAuth unchanged
+        security_level:
+          type: integer
+          minimum: 0
+          maximum: 2
+          description: 0 none / 1 user / 2 ops
+        interacts_with:
+          type: array
+          items:
+            type: string
+          description: Other services this service interacts with
+    RouteRule:
+      type: object
+      required: [scope, paths]
+      properties:
+        scope:
+          type: string
+        paths:
+          type: array
+          items:
+            type: string
+          description: Exact paths and * prefix wildcards
+        pre_url:
+          type: string
+          description: Non-empty declares a pre-route
+        post_url:
+          type: string
+          description: Non-empty declares a post-route
+    RouteRequest:
+      type: object
+      required: [name, rules]
+      properties:
+        name:
+          type: string
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/RouteRule'
+    RelayRule:
+      type: object
+      required: [dest, source]
+      properties:
+        dest:
+          type: string
+          description: Public path prefix on the main service
+        source:
+          type: string
+          description: Microservice address; remaining path is appended
+    RelayRequest:
+      type: object
+      required: [name, relays]
+      properties:
+        name:
+          type: string
+        relays:
+          type: array
+          items:
+            $ref: '#/components/schemas/RelayRule'
+    RelayDeleteRequest:
+      type: object
+      required: [name, dest]
+      properties:
+        name:
+          type: string
+        dest:
+          type: string
+    ServiceSummary:
+      type: object
+      required: [name, scope_name]
+      properties:
+        name:
+          type: string
+        scope_name:
+          type: string
+        sdk_url:
+          type: string
+          description: URL of the service JS usage file, load via /services/sdk/{name}
