@@ -106,6 +106,32 @@ Loads the JS usage file of a service through HRPAuth as relay. HRPAuth fetches t
 - Relay failure returns `502 relay_failed`.
 - The frontend should always load the SDK through this endpoint; `sdk_url` itself points to the microservice's internal address and must not be reached directly.
 
+### Frontend SDK Exposure Convention (HRPAuth-Web)
+
+This section describes the **current HRPAuth-Web implementation** — it is not an HRPAuth requirement. HRPAuth still does not interpret SDK contents and only relays them unchanged.
+
+The reference frontend (HRPAuth-Web) expects an injected SDK to expose a **global object**:
+
+```html
+<script src="http://localhost:PORT/services/sdk/texture-service"></script>
+```
+
+The global key is derived from the service name: `window['<service-name>-sdk']` (e.g. `window['texture-service-sdk']`). The minimum shape recognized by the frontend:
+
+```javascript
+window['texture-service-sdk'] = {
+  name: 'texture-service',
+  version: '1.0.0',
+  menu: { label: 'Texture Studio' }, // optional: adds a navbar item
+  iframeUrl: '/texture-service',      // optional: <iframe> src when the item is opened
+  init: ({ area }) => { /* optional */ }
+};
+```
+
+- `menu` (optional): when present, the frontend adds a navbar item (login only) navigating to `/service/<name>`.
+- `iframeUrl` (optional): used as the `<iframe src>` on that page; absolute and relative URLs are both passed through as-is.
+- The frontend reads the global object via `getServiceSDK(name)` (see `HRPAuth-Web/src/utils/serviceRegistry.ts`); loading completion is observable via `onSDKLoaded(name)`.
+
 ## Route Rules (`POST /services/route`)
 
 A microservice declares its routing rules. Registration requires the service to be registered via `/services/presence` first.
