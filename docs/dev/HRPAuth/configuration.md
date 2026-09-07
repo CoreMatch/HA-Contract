@@ -249,9 +249,9 @@ Migration Behavior:
 |-------|------|---------|-------------|
 | `yggdrasil.security.token_expiry_days` | int | `15` | accessToken TTL (days) |
 | `yggdrasil.security.session_expiry_seconds` | int | `28800` | Refresh token/session TTL (seconds) |
-| `yggdrasil.security.max_texture_width` | int | `1024` | Max texture width (px) |
-| `yggdrasil.security.max_texture_height` | int | `1024` | Max texture height (px) |
-| `yggdrasil.security.max_texture_file_size` | int | `512000` | Max texture upload file size (bytes). Default ~500KB |
+| `yggdrasil.security.max_texture_width` | int | `1024` | Max texture width (px). Exceeding triggers a soft notice, upload still succeeds |
+| `yggdrasil.security.max_texture_height` | int | `1024` | Max texture height (px). Exceeding triggers a soft notice, upload still succeeds |
+| `yggdrasil.security.max_texture_file_size` | int | `512000` | Max texture upload file size (bytes). Exceeding rejects the upload. Default ~500KB |
 | `yggdrasil.security.max_tokens_per_user` | int | `10` | Max concurrent valid `accessToken`s per user. When exceeded, the oldest still-valid row is revoked before the new one is inserted (see [tokens.md](./tokens.md) §7). |
 
 ### `yggdrasil.feature_flags` — Feature Switches

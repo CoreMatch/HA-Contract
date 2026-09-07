@@ -67,6 +67,30 @@ curl -X POST http://localhost:8080/texture/upload \
 }
 ```
 
+当分辨率超出限制或尺寸不符合标准时，响应中会附加 `warnings` 数组（上传仍然成功）：
+
+```json
+{
+  "success": true,
+  "message": "材质上传成功",
+  "data": {
+    "profile_id": "uuid-xxx",
+    "texture_type": "cape",
+    "warnings": [
+      "cape size 128x64 exceeds standard size, but has a valid aspect ratio",
+      "texture resolution 128x64 exceeds limit 1024x1024, but has a valid aspect ratio"
+    ]
+  }
+}
+```
+
+| warnings 消息 | 含义 |
+|---------------|------|
+| `skin/cape size WxH exceeds standard size, but has a valid aspect ratio` | 尺寸超出标准（64x32/64x64 for skin, 64x32/22x17 for cape），但宽高比正确（2:1 或 1:1） |
+| `skin/cape size WxH does not match standard proportions` | 尺寸不符合标准宽高比 |
+| `texture resolution WxH exceeds limit MxN, but has a valid aspect ratio` | 分辨率超过配置上限，但宽高比正确 |
+| `texture resolution WxH exceeds limit MxN and has non-standard proportions` | 分辨率超过配置上限且宽高比不符合标准 |
+
 ### 失败响应
 
 | HTTP | message | 触发场景 |

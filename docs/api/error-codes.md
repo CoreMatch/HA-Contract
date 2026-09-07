@@ -43,7 +43,7 @@ The following error codes are the stable registry for current HA business APIs. 
 | `invalid_texture_file` | Invalid texture file format |
 | `invalid_texture_model` | Invalid texture model |
 | `texture_name_required` | Texture name missing |
-| `invalid_texture_size` | Invalid texture size |
+| `invalid_texture_size` | Texture file exceeds the configured maximum file size (`max_texture_file_size`). Dimension mismatches are now soft warnings, not errors. |
 | `texture_upload_failed` | Texture upload failed |
 | `texture_delete_failed` | Texture deletion failed |
 | `texture_read_failed` | Texture read failed |

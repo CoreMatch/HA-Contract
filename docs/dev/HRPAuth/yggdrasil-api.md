@@ -133,7 +133,7 @@ The response also carries `X-Authlib-Injector-API-Location: /` so that authlib-i
 | Endpoint | Auth | Notes |
 |----------|------|-------|
 | `POST /api/profiles/minecraft` | none | Body: `{names: [...]}`. Returns `[]` when empty, otherwise the list of `{id, name}` for known profiles. |
-| `PUT /api/user/profile/:uuid/:textureType` | `Authorization: Bearer <accessToken>` | `textureType ∈ {skin, cape}`. Multipart with `file` (PNG, validated to be 64x32/64x64 for skin or 64x32/22x17 for cape) and optional `model` (`slim` or empty). PNG is re-encoded to strip metadata. `textures` property is re-signed with the Yggdrasil private key. |
+| `PUT /api/user/profile/:uuid/:textureType` | `Authorization: Bearer <accessToken>` | `textureType ∈ {skin, cape}`. Multipart with `file` (PNG, validated to be 64x32/64x64 for skin or 64x32/22x17 for cape) and optional `model` (`slim` or empty). PNG is re-encoded to strip metadata. `textures` property is re-signed with the Yggdrasil private key. Non-standard dimensions or oversized textures are allowed with a `X-Texture-Warnings` response header when warnings are generated. |
 | `DELETE /api/user/profile/:uuid/:textureType` | `Authorization: Bearer <accessToken>` | Clears the texture. The property is dropped when the payload becomes empty; otherwise only the requested texture type is removed and the payload is re-signed. |
 | `GET /textures/:hash` | none | Streams `<storage>/textures/<hash>` as `image/png`. `404 NotFoundException` if the file is missing. |
 
