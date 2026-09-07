@@ -286,6 +286,50 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '502': { $ref: '#/components/responses/Error' }
+  /mojang/profile/{uuid}:
+    get:
+      summary: Fetch a Mojang player's profile (id, name, cape availability)
+      description: >
+        Proxies the profile lookup from Mojang's session server.
+        No authentication required. Returns the player's UUID, display name
+        and whether a cape is available. This is a lightweight endpoint that
+        does not download any texture data.
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+          description: Mojang UUID (with or without hyphens)
+      responses:
+        '200':
+          description: Mojang profile info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 获取 Mojang Profile 成功
+                  id:
+                    type: string
+                    description: Mojang UUID (no hyphens)
+                    example: 069a79f444e94726a5befca90e38aaf5
+                  name:
+                    type: string
+                    description: Player display name
+                    example: Notch
+                  has_cape:
+                    type: boolean
+                    description: Whether the player has a cape
+                    example: true
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
   /texture/rewrite-callback:
     post:
       summary: Rewrite all stored texture callback URLs to current callback.url (Manage Token)

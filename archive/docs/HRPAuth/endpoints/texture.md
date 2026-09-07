@@ -12,6 +12,8 @@
 | [POST /texture/delete](#post-texturedelete) | `POST` | **Remember Token** |
 | [POST /texture/get](#post-textureget) | `POST` | **Remember Token** |
 | [POST /texture/rewrite-callback](#post-texturerewrite-callback) | `POST` | **Manage Token** |
+| [GET /mojang/profile/:uuid](#get-mojangprofileuuid) | `GET` | 无 |
+| [GET /texture/mojang/:uuid](#get-texturemojanguuid) | `GET` | 无 |
 
 > 三个端点所需 Token 均为 **Remember Token**（通过请求体 / 表单 / 查询参数中的 `remember_token` 字段传递）。
 >
@@ -263,6 +265,103 @@ curl -X POST http://localhost:8080/texture/rewrite-callback \
 | 401 | `Invalid manage token` | `manage_token` 缺失或与 `manage.token` 不匹配 |
 
 > 注意：非 dry-run 时，重写会重新调用 `SignTextureValue` 对值签名，因此要求配置了 `yggdrasil.server.signature_private_key_path`；若签名失败，该条记录不会写库并计入 `failed`。
+
+---
+
+## GET /mojang/profile/:uuid
+
+通过后端代理获取 Mojang 玩家 Profile 信息（不含材质数据）。前端不直接调用任何外部 Mojang API，所有外部数据均经由后端代理。
+
+### 鉴权
+
+**无**（公开端点）
+
+### 路径参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `uuid` | string | 是 | Mojang UUID，支持带连字符或不带（如 `069a79f4-44e9-4726-a5be-fca90e38aaf5` 或 `069a79f444e94726a5befca90e38aaf5`） |
+
+### 成功响应
+
+```json
+{
+  "success": true,
+  "message": "获取 Mojang Profile 成功",
+  "id": "069a79f444e94726a5befca90e38aaf5",
+  "name": "Notch",
+  "has_cape": true
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | string | Mojang UUID（无连字符） |
+| `name` | string | 玩家显示名 |
+| `has_cape` | bool | 该玩家是否拥有披风 |
+
+### 失败响应
+
+| HTTP | code | message | 触发场景 |
+|------|------|---------|----------|
+| 400 | `invalid_mojang_uuid` | `无效的 Mojang UUID` | UUID 长度不是 32 位 |
+| 404 | `user_not_found` | `该 UUID 在 Mojang 服务器上不存在` | Mojang Session Server 返回 204/404 |
+| 502 | `texture_fetch_failed` | `无法连接 Mojang Session Server: ...` | 网络错误或 Mojang 服务异常 |
+
+### 副作用
+
+- 后端调用 `sessionserver.mojang.com`，下载量极小（仅 JSON 元数据）
+- 不下载任何材质 PNG 文件
+
+---
+
+## GET /texture/mojang/:uuid
+
+通过后端代理获取 Mojang 玩家的皮肤或披风材质 PNG 文件。前端不直接调用任何外部 Mojang API，所有外部数据均经由后端代理。
+
+### 鉴权
+
+**无**（公开端点）
+
+### 路径参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `uuid` | string | 是 | Mojang UUID，支持带连字符或不带 |
+
+### 查询参数
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `type` | string | 否 | `skin` | `skin`（皮肤）或 `cape`（披风） |
+
+### 成功响应
+
+直接返回 PNG 图片二进制流，`Content-Type: image/png`，`Cache-Control: public, max-age=300`。
+
+### 失败响应
+
+```json
+{
+  "success": false,
+  "message": "该 UUID 在 Mojang 服务器上不存在",
+  "code": "user_not_found"
+}
+```
+
+| HTTP | code | message | 触发场景 |
+|------|------|---------|----------|
+| 400 | `invalid_mojang_uuid` | `无效的 Mojang UUID` | UUID 长度不是 32 位 |
+| 400 | `invalid_texture_type` | `无效的材质类型，只能是 skin 或 cape` | `type` 参数不合法 |
+| 404 | `user_not_found` | `该 UUID 在 Mojang 服务器上不存在` | Mojang Session Server 返回 204/404 |
+| 404 | `texture_fetch_failed` | `该玩家没有皮肤材质` / `该玩家没有披风材质` | 玩家没有对应类型的材质 |
+| 502 | `texture_fetch_failed` | `无法连接 Mojang Session Server: ...` / `下载材质文件失败: ...` | 网络错误或 Mojang CDN 异常 |
+
+### 副作用
+
+- 后端调用 `sessionserver.mojang.com` 获取 Profile
+- 后端从 `textures.mojang.com` CDN 下载 PNG 文件并转发给调用方
+- 返回的 PNG 带 5 分钟缓存（`Cache-Control: public, max-age=300`）
 
 ---
 

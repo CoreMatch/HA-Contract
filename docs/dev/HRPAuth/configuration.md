@@ -7,7 +7,7 @@ When the project is first started, a default configuration file `config.yaml` wi
 ## Complete `config.yaml` Example
 
 ```yaml
-version: "3"
+version: "5"
 site:
   name: "HRPAuth"
   implementation: "HRPAuth"
@@ -70,6 +70,7 @@ yggdrasil:
     session_expiry_seconds: 28800 # Refresh token/session TTL (seconds)
     max_texture_width: 1024      # Max texture width (px)
     max_texture_height: 1024     # Max texture height (px)
+    max_texture_file_size: 512000 # Max texture upload file size (bytes, ~500KB)
   feature_flags:
     non_email_login: false
     legacy_skin_api: false
@@ -88,7 +89,9 @@ The top-level `version` field in the configuration file indicates the **schema v
 |---------|---------|
 | `1.0` | Initial YAML configuration (`memcache` captcha, no redis) |
 | `2` | Added `redis`; renamed `memcache` to `verification_code` |
-| `3` (Current) | Moved `security` fields (including captcha) from `yggdrasil.security` to the top-level `security`; added `manage.token`; default `redis.prefix` is `hrpauth_` |
+| `3` | Moved `security` fields (including captcha) from `yggdrasil.security` to the top-level `security`; added `manage.token`; default `redis.prefix` is `hrpauth_` |
+| `4` | Added `oauth2` section for site-side OAuth2 authorization |
+| `5` (Current) | Added `yggdrasil.security.max_texture_file_size` for texture upload file size limit (default 512000) |
 
 Migration Behavior:
 
@@ -105,7 +108,7 @@ Migration Behavior:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `version` | string | Configuration schema version (current `"3"`) |
+| `version` | string | Configuration schema version (current `"5"`) |
 
 ### `site` — Site Information
 
@@ -248,6 +251,7 @@ Migration Behavior:
 | `yggdrasil.security.session_expiry_seconds` | int | `28800` | Refresh token/session TTL (seconds) |
 | `yggdrasil.security.max_texture_width` | int | `1024` | Max texture width (px) |
 | `yggdrasil.security.max_texture_height` | int | `1024` | Max texture height (px) |
+| `yggdrasil.security.max_texture_file_size` | int | `512000` | Max texture upload file size (bytes). Default ~500KB |
 | `yggdrasil.security.max_tokens_per_user` | int | `10` | Max concurrent valid `accessToken`s per user. When exceeded, the oldest still-valid row is revoked before the new one is inserted (see [tokens.md](./tokens.md) §7). |
 
 ### `yggdrasil.feature_flags` — Feature Switches
