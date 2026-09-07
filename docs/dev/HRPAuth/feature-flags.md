@@ -7,10 +7,10 @@ Feature flags for the Yggdrasil protocol layer, corresponding to `yggdrasil.feat
 | Configuration Item | Default | Description |
 |--------------------|---------|-------------|
 | `non_email_login` | `true` | Allows login via **Minecraft profile name** (in addition to email) at `POST /authserver/authenticate`. Implementation in [`../services/auth_service.go::VerifyCredentials`](../services/auth_service.go); when `true`, users can input `email` or `profiles.name`. Only affects Yggdrasil endpoints; `POST /login` (this site) still only accepts email. |
-| `legacy_skin_api` | `false` | Enables the legacy skin API (`/skins/MinecraftSkins/...`). No longer used by modern clients. |
+| `legacy_skin_api` | `true` | Enables the legacy skin API (`GET /skins/MinecraftSkins/{username}.png`). See [`legacy-skin-api.md`](./legacy-skin-api.md). When `false`, returns `404 NotFoundException`. |
 | `no_mojang_namespace` | `false` | Disables Mojang namespace. When enabled, the namespace of profile properties will not have the `minecraft:` prefix. |
 | `enable_mojang_anti_features` | `false` | Enables Mojang anti-cheat features. Specific behavior is interpreted by the client. |
-| `enable_profile_key` | `false` | Enables profile keys (Yggdrasil 1.1+). Mojang 1.19+ clients will request new endpoints like `/player/certificates`. |
+| `enable_profile_key` | `false` | Enables the Minecraft 1.19+ Profile Key feature. When `true`, `POST /minecraftservices/player/certificates` and `GET /minecraftservices/publickeys` become available. Key pair is RSA 2048, persisted in `profile_keys`, valid 48h. See [`profile-keys.md`](./profile-keys.md). |
 | `username_check` | `true` | Enables username checking (restricts Minecraft profile name format). **Highly recommended to keep `true`**. |
 | `enable_ip_check` | `false` | Enables IP validation. When enabled, `GET /sessionserver/session/minecraft/hasJoined` will check if `query.ip` matches the IP in the session record; if not, it will be rejected (returns 204). |
 

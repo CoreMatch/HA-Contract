@@ -70,6 +70,36 @@ paths:
       responses:
         '200': { description: Success }
         '401': { $ref: '#/components/responses/Error' }
+  /texture/delete:
+    post:
+      summary: Delete a texture owned by the current user
+      description: |
+        Removes the texture record matching `(uid, type, hash)` from the database
+        and forcibly cleans up the original PNG file and the WebP preview file
+        from disk. Even if other users still reference the same hash, the files
+        are removed; their DB records are left untouched.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [type, hash]
+              properties:
+                type:
+                  type: string
+                  enum: [skin, cape]
+                hash:
+                  type: string
+                  description: SHA-256 hash (64-char hex)
+      responses:
+        '200': { description: Texture deleted }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
 components:
   securitySchemes:
     BearerAuth:

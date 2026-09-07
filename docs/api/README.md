@@ -11,9 +11,11 @@ This is the single source of truth for the HA Business API, and it also records 
 
 This project implements the following external standards. For detailed protocol definitions, please refer to [docs/references/](../references/).
 
-1. **Yggdrasil API / authlib-injector**: Implementation of the official Minecraft authentication protocol and its injector compatibility layer.
+1. **Yggdrasil API / authlib-injector**: Implementation of the official Minecraft authentication protocol and its injector compatibility layer. Endpoints and request/response schemas for the Yggdrasil surface (`/authserver/*`, `/sessionserver/*`, `/api/profiles/*`, `/api/user/profile/*`, `/textures/*`, `/skins/MinecraftSkins/*`, `/minecraftservices/*`, meta `GET /`) are documented in [`../dev/HRPAuth/yggdrasil-api.md`](../dev/HRPAuth/yggdrasil-api.md).
 2. **CustomSkinAPI**: Implementation of the skin library standard interface.
 3. **HASkinProxy (Protocol Translation)**: A dedicated service that bridges Yggdrasil API to CustomSkinAPI for CSL-compatible clients.
+
+> Note: the Yggdrasil surface is intentionally **not** part of the OpenAPI `hrpauth-business.yaml` file — that file covers only the first-party business endpoints (`/login`, `/oauth/*`, `/texture/*`, etc.). Anything that a Minecraft client would call via authlib-injector is documented separately under `docs/dev/HRPAuth/yggdrasil-api.md`.
 
 ## Unified Constraints
 

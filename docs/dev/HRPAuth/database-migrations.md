@@ -18,6 +18,7 @@ This document explains the current database schema management, migration command
 | `database/migrations/000001_baseline.down.sql` | Baseline rollback |
 | `database/migrations/000002_oauth2.up.sql` | OAuth2 schema (clients, tokens, codes) |
 | `database/migrations/000003_add_2fa_to_users.up.sql` | Add 2FA column to users table |
+| `database/migrations/000004_profile_keys.up.sql` | Profile keys table (Minecraft 1.19+ chat-signing, see [`profile-keys.md`](./profile-keys.md)) |
 
 All historical incremental migrations (000002–000007) have been merged into `000001_baseline` and are no longer kept separately.
 

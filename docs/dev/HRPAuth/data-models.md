@@ -19,6 +19,7 @@ This project uses GORM to maintain the following data models.
 | [OAuth2AuthorizationCode](#oauth2authorizationcode) | `oauth2_authorization_codes` | Site-side authorization codes |
 | [Token](#token) | `tokens` | Yggdrasil authentication tokens |
 | [Session](#session) | `sessions` | Server sessions |
+| [ProfileKey](#profilekey) | `profile_keys` | Minecraft 1.19+ chat-signing key pairs (one row per user) |
 
 ## User
 
@@ -57,7 +58,27 @@ Table name: `users`
     - New user with `mojang_uuid` provided → `0` (proxy registration).
     - New user without `mojang_uuid` provided → `1` (equivalent to WebUI).
 - **Cleanup Basis**: Users with `cbh=0` and both `register_at` / `last_sign_at` exceeding 30 days are deleted by `BotUserCleanupController` (see `references/HA-ROADMAP.md` §4).
-- **Claiming Mechanism**: Whether `cbh` flips to 1 when a proxy-registered user subsequently registers and binds via WebUI is decided by the business layer; the current implementation keeps the original value.
+- **Claiming Mechanism**:
+  - Via WebUI / MBE: whether `cbh` flips to 1 when a proxy-registered user subsequently registers and binds via WebUI is decided by the business layer; the current implementation keeps the original value.
+  - Via operator endpoint `POST /admin/claim-user`: when an operator assigns credentials to a `cbh=0` user, the handler **flips `cbh` to 1** as part of the same transaction, removing the user from the bot-user cleanup eligibility. See "Operator Claiming" below.
+
+### Operator Claiming (`POST /admin/claim-user`)
+
+Proxy-registered users are normally unable to log in to the business system because their email is a placeholder (`<username>@mojang-imported.invalid`) and their password is a WinnerProxy-generated random string. The operator claiming endpoint gives them a real WebUI credential pair.
+
+| Field | Value |
+|---|---|
+| Authentication | OAuth2 Bearer Service Token, scope `user.claim.as-service` |
+| Request body | `username` (≥ 3 chars), `email` (must be unique), `password` (≥ 6 chars) |
+| Target | User with `username` equal to the request value AND `cbh=0` |
+
+Handler semantics (`controllers/auth_controller.go > ClaimUser`):
+
+1. Reject when target is missing or `cbh=1` (already a human account).
+2. UPDATE the same row with `email`, `password` (bcrypt), `cbh = 1`, `verified = 1`.
+3. Return `{uid, username, email}`.
+
+Side effects: after flipping `cbh` to 1, the user is no longer eligible for `BotUserCleanupController`, so operator claiming is the only way to permanently remove a `cbh=0` row without the user having to interact via MBE.
 
 ### `mojang_uuid`
 
@@ -72,10 +93,13 @@ Table name: `users`
 ### `mbe` (Mojang Bind Enabled)
 
 - **Values**: `0` (default) = Prohibit Mojang players with the same name from binding via service proxy `/register` (**HA priority**, Mojang players receive 409 and are kicked); `1` = Allow binding.
-- **Write Endpoint**:
-  - `POST /user/mojang-bind-enable` → Player self-enable (Bearer user token) or service enable (Bearer service token + `uid`/`email`).
+- **Write Endpoints**:
+  - `POST /user/mojang-bind-enable` → Player self-enable (Remember Token) or service enable (Manage Token + `uid`/`email`). Sets `mbe = 1`. Idempotent.
+  - `POST /user/mojang-bind-disable` → Player self-disable (Remember Token) or service disable (Manage Token + `uid`/`email`). Sets `mbe = 0`. Idempotent.
+- **Query**: `mbe` is included in the `POST /user` response as `data.mbe` (0 or 1).
 - **Only effective in service proxy `/register` decision tree 2.a**: Checked when a same-name WebUI user is hit and their `mojang_uuid IS NULL`.
-- **Once `mojang_uuid` is written, the semantics of `mbe` disappear** (subsequent same-name Mojang players will not trigger 2.a); however, the `mbe` field is not automatically reset, making it easy to query authorization status.
+- **Once `mojang_uuid` is written, the semantics of `mbe` disappear** (subsequent same-name Mojang players will not trigger 2.a). On successful bind, `mbe` is **automatically reset to 0** together with the `mojang_uuid` write, so the field cleanly reflects the current authorization status.
+- **Auto-disable timeout**: After `POST /user/mojang-bind-enable` sets `mbe = 1`, a 15-minute countdown begins. If no bind (`mojang_uuid` write) occurs within that window, the system automatically resets `mbe = 0`. The timeout is cancelled on successful bind (which also resets `mbe = 0`), explicit disable, or re-enable (which restarts the timer). Implementation: `controllers/mbe_timeout_controller.go` — an in-memory event stack scanned every 30 seconds.
 
 ### `password`
 
@@ -199,3 +223,20 @@ Table name: `sessions`
 | `expires_at` | datetime | Expiration time |
 
 > Sessions are written by `POST /sessionserver/session/minecraft/join` and read by `GET /sessionserver/session/minecraft/hasJoined`.
+
+## ProfileKey
+
+Table name: `profile_keys`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | uint | Primary key |
+| `user_id` | string(32) | Owner internal UUID (`users.uuid`); `UNIQUE` index `uk_profile_keys_user_id` |
+| `public_key` | text | PEM-encoded RSA public key (`BEGIN RSA PUBLIC KEY`) |
+| `private_key` | text | PEM-encoded RSA private key (`BEGIN RSA PRIVATE KEY`) |
+| `public_key_signature` | text | Base64 SHA1withRSA signature over `<expiresAtMillis><publicKeyPEM>` produced by the Yggdrasil signature private key |
+| `expires_at` | datetime | Validity expiry (issued + 48h) |
+| `refreshed_after` | datetime | Earliest moment the client may request a new key pair (issued + 40h) |
+| `created_at` / `updated_at` | datetime | GORM-managed |
+
+> See [`profile-keys.md`](./profile-keys.md) for the full flow and [`services/profile_key_service.go`](../../services/profile_key_service.go) for the service implementation. The schema is brought in by `database/migrations/000004_profile_keys.up.sql`.

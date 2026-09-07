@@ -5,6 +5,7 @@
 | [POST /user](#post-user) | `POST` | **Remember Token** |
 | [POST /user/declare-email](#post-userdeclare-email) | `POST` | **Manage Token** |
 | [POST /user/mojang-bind-enable](#post-usermojang-bind-enable) | `POST` | **Remember Token** 或 **Manage Token** |
+| [POST /user/mojang-bind-disable](#post-usermojang-bind-disable) | `POST` | **Remember Token** 或 **Manage Token** |
 
 > 详细实现： [`controllers/user_info_controller.go`](../../controllers/user_info_controller.go)
 
@@ -68,7 +69,8 @@
     "email": "user@example.com",
     "username": "PlayerOne",
     "avatar": "",
-    "verified": true
+    "verified": true,
+    "mbe": 0
   }
 }
 ```
@@ -80,6 +82,7 @@
 | `data.username` | string | 用户名 |
 | `data.avatar` | string | 头像 URL（当前版本未使用，留空） |
 | `data.verified` | bool | 邮箱是否已验证 |
+| `data.mbe` | int | Mojang 绑定许可状态：`1` = 已开启，`0` = 已关闭（默认） |
 
 ### 失败响应
 
@@ -222,4 +225,50 @@
 
 ### 副作用
 
-仅更新 `users.mbe = 1`（无其他字段被修改）。**绑定成功后 `mbe` 字段无意义**（`mojang_uuid` 一旦设置，§3.4 2.a 不会再触发），但本端点不会主动重置 `mbe`，便于后续手动查询当前授权状态。如需 disable，目前需直接 SQL 或扩展端点。
+仅更新 `users.mbe = 1`（无其他字段被修改）。**绑定成功后 `mbe` 字段无意义**（`mojang_uuid` 一旦设置，§3.4 2.a 不会再触发），但本端点不会主动重置 `mbe`，便于后续手动查询当前授权状态。
+
+启用后启动 **15 分钟自动禁用倒计时**：若在窗口内未完成绑定（`mojang_uuid` 未写入），系统自动将 `mbe` 恢复为 `0`。绑定成功、调用 `POST /user/mojang-bind-disable`、或重新调用本端点（重启计时器）均可取消倒计时。
+
+---
+
+## POST /user/mojang-bind-disable
+
+关闭指定用户的 **MBE（Mojang Bind Enabled）** 开关。MBE=0 后，同名 Mojang 玩家撞名进服时收到 `409 username_already_bound`（HA 优先）。同时取消该用户的 MBE 自动禁用倒计时。
+
+| 字段 | 值 |
+|------|---|
+| 方法 | `POST` |
+| 鉴权 | **Remember Token**（玩家自关）或 **Manage Token**（运维代关，需声明 `auth_type: "manage"` 并附加 `uid` 或 `email`）|
+| 幂等 | 是（已关闭时返回 200）|
+
+### 请求体
+
+与 `POST /user/mojang-bind-enable` 格式完全相同，鉴权 scope 改为 `user.mojang-bind-disable`。
+
+**玩家自己关**（用 Remember Token）：
+
+```json
+{ "remember_token": "<Remember Token>" }
+```
+
+**运维代关**（用 Manage Token + uid）：
+
+```json
+{ "remember_token": "<Manage Token>", "uid": "42", "auth_type": "manage" }
+```
+
+### 成功响应
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Mojang bind disabled",
+  "data": { "uid": 42, "mbe": 0 }
+}
+```
+
+### 失败响应
+
+与 `POST /user/mojang-bind-enable` 一致（401/403/404/500）。

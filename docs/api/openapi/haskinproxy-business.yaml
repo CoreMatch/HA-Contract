@@ -1,0 +1,222 @@
+openapi: 3.1.0
+info:
+  title: HASkinProxy Business API
+  version: 1.0.0
+  description: >
+    HTTP endpoints exposed by HASkinProxy. Includes the CSL profile / texture
+    proxy that adapts HRPAuth Yggdrasil responses into the CustomSkinLoader
+    JSON shape, and a transparent forwarder for HRPAuth's POST /texture/delete
+    used by the WEBUI / SDK.
+servers:
+  - url: /
+paths:
+  /health:
+    get:
+      summary: Liveness probe
+      description: Does not contact the upstream.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    const: ok
+  /sdk/haskinproxy.js:
+    get:
+      summary: JS SDK file loaded by the WEBUI dashboard
+      description: Relayed unchanged by HRPAuth to the main service origin.
+      responses:
+        '200':
+          description: JS file
+          content:
+            application/javascript: {}
+  /customskinloader:
+    get:
+      summary: CustomSkinLoader setup page embedded in the dashboard
+      responses:
+        '200':
+          description: HTML
+          content:
+            text/html: {}
+  /{username}:
+    get:
+      summary: CSL profile for the given username
+      description: >
+        Resolves the username to a UUID via POST /api/profiles/minecraft,
+        fetches the session profile via GET /sessionserver/session/minecraft/profile/:uuid,
+        decodes the base64 textures property and re-packages the
+        skin / cape / elytra hashes as a CSL JSON object. Cached for
+        cache.profile_ttl seconds.
+      parameters:
+        - in: path
+          name: username
+          required: true
+          schema:
+            type: string
+          description: Minecraft username. The CSL client appends `.json`, which is stripped server-side.
+      responses:
+        '200':
+          description: CSL profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CSLProfile'
+        '404':
+          $ref: '#/components/responses/UpstreamError'
+  /textures/{hash}:
+    get:
+      summary: Raw texture bytes
+      description: >
+        Forwards GET /textures/:hash to the upstream and caches the bytes
+        for cache.texture_ttl seconds. Content-Type, Last-Modified and
+        Cache-Control are forwarded from the upstream.
+      parameters:
+        - in: path
+          name: hash
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Texture bytes
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/UpstreamError'
+  /{username}/texture/delete:
+    post:
+      summary: Forward a texture delete to HRPAuth POST /texture/delete
+      description: >
+        Pass-through. The request body and the Authorization header are
+        forwarded verbatim to HRPAuth POST /texture/delete. The :username
+        path segment is used only to evict the local cache on success;
+        it is NOT sent to the upstream. The upstream response (status
+        and JSON body) is forwarded unchanged.
+      parameters:
+        - in: path
+          name: username
+          required: true
+          schema:
+            type: string
+          description: Minecraft username whose local profile cache entry should be evicted on success.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TextureDeleteRequest'
+      responses:
+        '200':
+          description: Upstream success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TextureDeleteResponse'
+        '400':
+          $ref: '#/components/responses/UpstreamError'
+        '401':
+          $ref: '#/components/responses/UpstreamError'
+        '403':
+          $ref: '#/components/responses/UpstreamError'
+        '404':
+          $ref: '#/components/responses/UpstreamError'
+        '500':
+          $ref: '#/components/responses/UpstreamError'
+        '502':
+          description: Upstream unreachable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+components:
+  responses:
+    UpstreamError:
+      description: Forwarded upstream error (status and body) or proxy error
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/TextureDeleteErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: string
+  schemas:
+    CSLProfile:
+      type: object
+      required: [username, textures]
+      properties:
+        username:
+          type: string
+        textures:
+          type: object
+          additionalProperties:
+            type: string
+          description: 'Map of texture type (e.g. default, slim, cape, elytra) to texture hash.'
+    TextureDeleteRequest:
+      type: object
+      description: >
+        The HRPAuth POST /texture/delete request body, forwarded unchanged.
+        See HA-Contract docs/dev/HRPAuth texture.md for full semantics.
+      properties:
+        remember_token:
+          type: string
+          description: Bearer token (Remember Token or Manage Token). Required.
+        profile_id:
+          type: string
+          description: Character UUID. Defaults to the user's first profile when omitted.
+        texture_type:
+          type: string
+          enum: [skin, cape]
+          description: Required.
+        auth_type:
+          type: string
+          enum: [remember, manage]
+          description: Required when using a Manage Token; must be `manage`.
+        uid:
+          type: string
+          description: Target user UID. Required when using a Manage Token (mutually exclusive with email).
+        email:
+          type: string
+          description: Target user email. Required when using a Manage Token (mutually exclusive with uid).
+    TextureDeleteResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+        data:
+          type: object
+          required: [profile_id, texture_type]
+          properties:
+            profile_id:
+              type: string
+            texture_type:
+              type: string
+              enum: [skin, cape]
+    TextureDeleteErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: false
+        message:
+          type: string
+        code:
+          type: string
+        error:
+          type: string

@@ -248,6 +248,7 @@ Migration Behavior:
 | `yggdrasil.security.session_expiry_seconds` | int | `28800` | Refresh token/session TTL (seconds) |
 | `yggdrasil.security.max_texture_width` | int | `1024` | Max texture width (px) |
 | `yggdrasil.security.max_texture_height` | int | `1024` | Max texture height (px) |
+| `yggdrasil.security.max_tokens_per_user` | int | `10` | Max concurrent valid `accessToken`s per user. When exceeded, the oldest still-valid row is revoked before the new one is inserted (see [tokens.md](./tokens.md) §7). |
 
 ### `yggdrasil.feature_flags` — Feature Switches
 

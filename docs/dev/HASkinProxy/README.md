@@ -35,9 +35,31 @@ The service is configured via a `config.yaml` file. Default values are generated
 - **Language**: Go (1.20+)
 - **Framework**: Gin Gonic
 - **Caching**: freecache
-- **Compliance**: 
+- **Compliance**:
   - Upstream: [Yggdrasil API](https://github.com/yushijinhun/authlib-injector/wiki/Yggdrasil-API-Reference)
   - Downstream: [CustomSkinAPI](file:///home/lnb/HASkinProxy/HA-Contract/docs/references/CustomSkinAPI.md)
+
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Liveness probe. |
+| `GET` | `/{username}` | CSL profile (read-through cache). |
+| `GET` | `/textures/{hash}` | Raw texture bytes (read-through cache). |
+| `POST` | `/{username}/texture/delete` | Forward to upstream `POST /texture/delete`. |
+| `GET` | `/sdk/haskinproxy.js` | JS SDK consumed by the WEBUI dashboard. |
+| `GET` | `/customskinloader` | CustomSkinLoader setup page (iframe). |
+
+### Texture Management Passthrough
+
+`POST /{username}/texture/delete` is a transparent forwarder to HRPAuth's `POST /texture/delete`. The proxy itself does **not** authenticate requests; the `Authorization` header and the request body (containing the bearer token, `profile_id`, `texture_type`, optional `auth_type` / `uid` / `email`) are forwarded verbatim. The upstream response (status code and JSON body) is returned to the client unchanged.
+
+`:username` is used only to evict local cache entries on success:
+
+- `profile:{username}` is removed unconditionally on upstream 2xx.
+- `tex:{hash}` entries belonging to that profile (captured before the upstream call from the cached CSL profile) are also removed, so subsequent `GET /textures/{hash}` calls and CSL profile fetches reflect the deletion without waiting for TTL expiry.
+
+On non-2xx upstream responses, no cache eviction occurs. On network errors to the upstream, the proxy responds `502 Bad Gateway` with `{"error": "..."}`.
 
 ## Integration with HA System
 

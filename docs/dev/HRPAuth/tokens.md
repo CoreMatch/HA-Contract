@@ -12,6 +12,7 @@ This document clarifies all Tokens and their lifecycles involved in the project.
 4. [`/refresh` Reclaiming and Kicking](#4-refresh-reclaiming-and-kicking)
 5. [Handling of `temporarily_invalid` by Endpoints](#5-handling-of-temporarily_invalid-by-endpoints)
 6. [Background Cleanup Tasks](#6-background-cleanup-tasks)
+7. [Per-User Token Count Limit](#7-per-user-token-count-limit) — `max_tokens_per_user` quota and oldest-first revocation
 
 ---
 
@@ -158,7 +159,7 @@ B will now also be rejected by `/validate` and `/join`, but retains the ability 
 | `POST /sessionserver/session/minecraft/join` | `valid` | 403 ForbiddenOperationException |
 | `POST /authserver/refresh` | `valid`, `temporarily_invalid` | Success, triggers "reclaim" process |
 | `POST /authserver/invalidate` | `valid` | 403 (kicked tokens cannot be invalidated) |
-| `POST /authserver/signout` | Based on username/password, unrelated to token state | Revokes all tokens for the user (including valid / temporarily_invalid / invalid) |
+| `POST /authserver/signout` | Based on username/password, unrelated to token state | Revokes all tokens for the user (including valid / temporarily_invalid / invalid). **Rate limited** by the same Redis counter as `/authserver/authenticate` (`security.rate_limit_max_attempts` / `security.rate_limit_window_sec`) to prevent password enumeration. |
 
 ---
 
@@ -171,3 +172,62 @@ B will now also be rejected by `/validate` and `/join`, but retains the ability 
 - Deletion count is logged: `[TokenCleanup] removed N expired/invalid tokens`.
 
 > **Why not directly DELETE expired `valid` rows?** Because GORM soft delete + state machine coordination is safer: set to `invalid` first, then physically delete during the next cleanup. This ensures no errors during auditing or concurrent race conditions.
+
+---
+
+## 7. Per-User Token Count Limit
+
+Per the authlib-injector wiki (§令牌): *"a user can have multiple tokens simultaneously, but the server should also limit the number of tokens. When the token count exceeds the limit (e.g. 10), the oldest token should be revoked before the new one is issued."*
+
+This is enforced in [`services/auth_service.go::EnforceTokenLimit`](../services/auth_service.go), called immediately before `CreateToken` in both `/authenticate` and `/refresh`.
+
+### Algorithm
+
+```
+limit    := yggdrasil.security.max_tokens_per_user (default 10)
+count    := SELECT COUNT(*) FROM tokens WHERE user_id = ? AND state = 'valid'
+if count >= limit:
+    revoke := count - limit + 1
+    UPDATE tokens
+       SET state = 'invalid'
+     WHERE id IN (
+           SELECT id FROM tokens
+            WHERE user_id = ? AND state = 'valid'
+            ORDER BY issued_at ASC
+            LIMIT revoke
+     )
+INSERT new tokens row (state = 'valid')
+```
+
+Notes:
+
+- Only `state = 'valid'` rows count toward the limit. `temporarily_invalid` and `invalid` rows are ignored.
+- Revocation selects by `ORDER BY issued_at ASC LIMIT N`, so the *oldest* tokens are dropped first (largest grace period for the client to refresh and reclaim).
+- Because the revoke runs **before** the new INSERT, the user is always left with exactly `limit` valid rows after the call.
+- The limit is read from `yggdrasil.security.max_tokens_per_user`. Setting it to `0` falls back to the default `10` (defensive default — see [`config/config.go`](../config/config.go)).
+
+### Interaction with Mutual Kicking
+
+The per-user limit is independent of mutual kicking:
+
+- Mutual kicking moves rows from `valid` → `temporarily_invalid` (Section 3, 4).
+- The per-user limit only counts and revokes `valid` rows.
+
+A kicked token does not consume the user's quota; the kicked user can still reclaim via `/refresh`, which will allocate one fresh `valid` row and, if needed, revoke the oldest `valid` row.
+
+### Timeline Example (with `limit = 2`)
+
+```text
+T0  Client A logs in   → row#1 {state=valid}              count=1
+T1  Client B logs in   → row#1 → temporarily_invalid
+                         row#2 {state=valid}              count=1
+T2  Client C logs in   → row#2 → temporarily_invalid
+                         row#3 {state=valid}              count=1
+T3  Client A refreshes → ValidateTokenForRefresh(row#1) (temporarily_invalid OK)
+                         row#1 → invalid
+                         row#2 → temporarily_invalid
+                         count = 1 (row#3), under limit, no extra revoke
+                         row#4 {state=valid}              count=1
+```
+
+If client D then logs in, `count=1`, no revoke is needed. The cap only triggers when an `/authenticate` or `/refresh` would otherwise push the count above the configured limit.

@@ -14,6 +14,7 @@ The following error codes are the stable registry for current HA business APIs. 
 | `invalid_remember_token` | Legacy invalid Remember Token |
 | `manage_target_required` | Missing target user identifier for delegated/service operation |
 | `user_not_found` | Target user does not exist |
+| `user_not_claimable` | Target user is not a proxy-registered account, or its bound `mojang_uuid` does not match |
 | `username_too_short` | Username is too short |
 | `password_too_short` | Password is too short |
 | `username_already_taken` | Username is already taken |
@@ -46,6 +47,7 @@ The following error codes are the stable registry for current HA business APIs. 
 | `texture_upload_failed` | Texture upload failed |
 | `texture_delete_failed` | Texture deletion failed |
 | `texture_read_failed` | Texture read failed |
+| `texture_fetch_failed` | Failed to fetch texture from upstream (e.g. Mojang Session Server or texture CDN) |
 | `upload_request_too_large` | Upload request is too large |
 | `upload_rate_limited` | Upload rate limited |
 | `texture_not_found` | Texture file does not exist |

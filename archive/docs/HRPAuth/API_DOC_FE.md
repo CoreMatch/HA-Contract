@@ -91,6 +91,7 @@
 | 用户 | POST | `/user` | **是** |
 | 用户 | POST | `/user/declare-email` | **Manage Token** |
 | 用户 | POST | `/user/mojang-bind-enable` | **是**（或 Manage Token + uid/email）|
+| 用户 | POST | `/user/mojang-bind-disable` | **是**（或 Manage Token + uid/email）|
 | 邮箱 | POST | `/email-verification` | 视 action 而定 |
 | TOTP | POST | `/totp/setup` | **是** |
 | TOTP | POST | `/totp/verify` | 否（凭 passcode） |
@@ -252,7 +253,7 @@ M.T. 路径**新建代注册**用户时（M.T. + 新 username + mojang_uuid）�
   - 命中 + 无 `mojang_uuid` → 400
   - 未命中 → 新建 user（`mojang_uuid` 有则 `cbh=0`，否则 `cbh=1`；`mbe=0` 默认）
 
-> WebUI 用户在 WebUI 个人设置里点"允许 Mojang 绑定"会调 `POST /user/mojang-bind-enable`，把 `mbe` 置为 1。
+> WebUI 用户在 WebUI 个人设置里点"允许 Mojang 绑定"会调 `POST /user/mojang-bind-enable`，把 `mbe` 置为 1。启用后启动 **15 分钟自动禁用倒计时**，超时未绑定则自动恢复为 0。
 
 ### 4.4 POST /user/declare-email
 
@@ -406,10 +407,11 @@ T5  失败：后端返回 400 "Invalid or expired captcha" → 前端应重新�
 {
   "success": true,
   "message": "获取用户信息成功",
-  "data": { "uid": 1, "email": "user@example.com", "username": "PlayerOne", "avatar": "", "verified": true }
+  "data": { "uid": 1, "email": "user@example.com", "username": "PlayerOne", "avatar": "", "verified": true, "mbe": 0 }
 }
 ```
 - `verified`：邮箱是否已验证（前端可据此引导用户完成验证）
+- `mbe`：Mojang 绑定许可状态（`1` = 已开启，`0` = 已关闭）
 
 **失败响应（401）：**
 ```json
@@ -450,7 +452,24 @@ T5  失败：后端返回 400 "Invalid or expired captcha" → 前端应重新�
 - `Manage Token 需要指定 uid 或 email` — M.T. 路径下未指定目标用户
 - `用户不存在或token无效` — Token 无效或对应用户不存在
 
-> 玩家绑定成功后 `mbe` 字段意义消失（`mojang_uuid` 一旦设置，§3.4 2.a 不再触发），但本端点不主动重置 `mbe`，便于查询当前授权状态。
+> 玩家绑定成功后 `mbe` 字段意义消失（`mojang_uuid` 一旦设置，§3.4 2.a 不再触发），但本端点不主动重置 `mbe`，便于查询当前授权状态。启用后启动 **15 分钟自动禁用倒计时**：若在窗口内未完成绑定，系统自动将 `mbe` 恢复为 `0`；绑定成功、调用 disable 端点、或重新调用本端点均可取消倒计时。
+
+---
+
+### POST /user/mojang-bind-disable
+
+**所需 Token：** **Remember Token**（玩家自关）；**Manage Token + uid/email**（运维代关）
+
+关闭用户的 **MBE（Mojang Bind Enabled）** 开关。`mbe=0` 后，同名 Mojang 玩家撞名收到 `409 username_already_bound`（HA 优先）。同时取消该用户的 MBE 自动禁用倒计时。**幂等**。
+
+**请求体：** 与 `POST /user/mojang-bind-enable` 格式完全相同。
+
+**成功响应：**
+```json
+{ "success": true, "message": "Mojang bind disabled", "data": { "uid": 42, "mbe": 0 } }
+```
+
+**失败响应：** 与 enable 端点一致。
 
 ---
 

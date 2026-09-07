@@ -75,6 +75,39 @@ paths:
       responses:
         '200': { description: Success }
         '401': { $ref: '#/components/responses/Error' }
+  /admin/claim-user:
+    post:
+      summary: Operator claim of a proxy-registered user (cbh=0)
+      description: >
+        Assigns a real email + password to a proxy-registered user identified
+        by `username` so that the user can log in to the business system
+        via WebUI. Requires an OAuth2 Service Token carrying the
+        `user.claim.as-service` scope. On success the user's `cbh` is flipped
+        from 0 to 1.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username:
+                  type: string
+                  description: Username of the target user (>= 3 chars).
+                email:
+                  type: string
+                  description: New email the user will use to log in.
+                password:
+                  type: string
+                  description: New password (>= 6 chars, hashed via bcrypt).
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
   /user:
     post:
       summary: Get user information via Bearer token
@@ -94,6 +127,14 @@ paths:
   /user/mojang-bind-enable:
     post:
       summary: Enable Mojang binding via Bearer token
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /user/mojang-bind-disable:
+    post:
+      summary: Disable Mojang binding via Bearer token
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -190,6 +231,13 @@ paths:
   /texture/delete:
     post:
       summary: Delete user texture via Bearer token
+      description: >
+        Forwarded unchanged by HASkinProxy at POST /{username}/texture/delete.
+        The HASkinProxy forwarder does not authenticate the request itself;
+        the Authorization header and the body are forwarded verbatim, and the
+        upstream response (status + body) is returned to the client unchanged.
+        See haskinproxy-business.yaml for the forwarder's cache-eviction
+        behavior on success.
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -206,6 +254,38 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+  /texture/mojang/{uuid}:
+    get:
+      summary: Fetch a Mojang player's texture (skin or cape) by UUID
+      description: >
+        Proxies the texture download from Mojang's session server and CDN.
+        No authentication required. Returns the raw PNG image.
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+          description: Mojang UUID (with or without hyphens)
+        - in: query
+          name: type
+          required: false
+          schema:
+            type: string
+            enum: [skin, cape]
+            default: skin
+          description: Texture type to fetch
+      responses:
+        '200':
+          description: Raw PNG image
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
   /texture/rewrite-callback:
     post:
       summary: Rewrite all stored texture callback URLs to current callback.url (Manage Token)
