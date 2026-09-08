@@ -165,6 +165,8 @@ B will now also be rejected by `/validate` and `/join`, but retains the ability 
 
 ## 6. Background Cleanup Tasks
 
+### 6.1 Yggdrasil Token Cleanup
+
 `runOnce` in [`controllers/token_cleanup_controller.go`](../controllers/token_cleanup_controller.go) is triggered at `main.go` startup + every 1 hour. Logic in [`services/auth_service.go`](../services/auth_service.go):
 
 - DELETE rows where `state='invalid'`.
@@ -172,6 +174,48 @@ B will now also be rejected by `/validate` and `/join`, but retains the ability 
 - Deletion count is logged: `[TokenCleanup] removed N expired/invalid tokens`.
 
 > **Why not directly DELETE expired `valid` rows?** Because GORM soft delete + state machine coordination is safer: set to `invalid` first, then physically delete during the next cleanup. This ensures no errors during auditing or concurrent race conditions.
+
+### 6.2 OAuth2 Token Cleanup
+
+`runOnce` in [`controllers/oauth2_cleanup_controller.go`](../controllers/oauth2_cleanup_controller.go) is triggered at `main.go` startup + every 24 hours. Logic in [`services/oauth2_service.go`](../services/oauth2_service.go):
+
+**Access Token** (`oauth2_access_tokens`):
+- DELETE rows where `expires_at < now()` — token 已过期。
+- DELETE rows where `revoked_at IS NOT NULL` — token 已被撤销（如用户主动登出、刷新轮换）。
+- 日志: `[OAuth2Cleanup] removed N expired/revoked access tokens`。
+
+**Authorization Code** (`oauth2_authorization_codes`):
+- DELETE rows where `expires_at < now()` — code 已过期（默认 TTL 5 分钟）。
+- 已消费的 code 由 `consumed_at` 标记，但由于 TTL 极短（5 分钟），过期条件已完全覆盖消费场景，无需单独清理。
+- 日志: `[OAuth2Cleanup] removed N expired authorization codes`。
+
+### 6.3 OAuth2 Token 竞态防护
+
+`ExchangeAuthorizationCode` 和 `RefreshUserToken` 采用原子 UPDATE 防止并发重复消费/刷新：
+
+```sql
+-- 授权码消费：原子标记 consumed_at，仅首个并发请求影响 1 行
+UPDATE oauth2_authorization_codes
+   SET consumed_at = ?
+ WHERE code = ? AND consumed_at IS NULL AND expires_at > ?
+
+-- Refresh Token 轮换：原子标记 revoked_at，仅首个并发请求影响 1 行
+UPDATE oauth2_refresh_tokens
+   SET revoked_at = ?
+ WHERE refresh_token = ? AND revoked_at IS NULL AND expires_at > ?
+```
+
+两个方法在原子 UPDATE 后检查 `RowsAffected`：等于 0 则返回 `ErrOAuthInvalidGrant`。这避免了 check-then-act 竞态，且无应用层锁开销。
+
+### 6.4 所有后台任务汇总
+
+| 任务 | 控制器 | 周期 | 清理目标 |
+|------|--------|------|----------|
+| Yggdrasil Token 清理 | `TokenCleanupController` | 1 小时 | `tokens` 表中 `invalid` 或过期记录 |
+| OAuth2 Token 清理 | `OAuth2CleanupController` | 24 小时 | `oauth2_access_tokens` (过期/撤销)、`oauth2_authorization_codes` (过期) |
+| 代注册用户清理 | `BotUserCleanupController` | 24 小时 | 不活跃的 bot 用户及其级联数据 |
+| Session 清理 | `SessionCleanupController` | 24 小时 | 过期 session 记录 |
+| 纹理清理 | `TextureCleanupController` | 1 小时 | 无引用的纹理文件 |
 
 ---
 
