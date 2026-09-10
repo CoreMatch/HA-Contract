@@ -163,6 +163,7 @@ HRPAuth exposes a microservice extension layer (relay, pre-routing, post-routing
 | # | Item | Owner | Depends On | Status | Notes |
 |---|---|---|---|---|---|
 | 1.1 | *Example: Ensure all business routes appear in OpenAPI specs* | *HRPAuth, HASkinLib* | *—* | *Pending* | *Use `check-business-api-drift.sh` to verify* |
+| 2.1 | `POST /admin/force-bind`: transfer `mojang_uuid` from proxy account (cbh=0) to manual account, delete proxy account | HRPAuth | — | Pending | Contract & wiki updated; Velocity plugin (`HRPAuth-Spigot`) `ForceBindCommand` implemented; HA backend handler not yet implemented |
 
 > Agents should add items to this table when a task reveals a cross-project dependency or a new requirement.
 > Always ask the owner before adding or modifying roadmap items.

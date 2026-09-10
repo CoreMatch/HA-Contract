@@ -108,6 +108,44 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+  /admin/force-bind:
+    post:
+      summary: Force-transfer Mojang UUID from proxy account to target account
+      description: >
+        Transfers the `mojang_uuid` from a proxy-registered user (cbh=0)
+        identified by `username` to a manually registered account identified
+        by `email` + `password`, then deletes the proxy-registered account.
+        Requires an OAuth2 Service Token and a valid `manage_token` in the
+        request body. This endpoint is intended for players who have both a
+        proxy-registered account (from WinnerProxy) and a manually registered
+        account, and want to consolidate their Mojang identity onto the manual
+        account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password, manage_token]
+              properties:
+                username:
+                  type: string
+                  description: Username of the proxy-registered account (cbh=0), auto-detected from the player session.
+                email:
+                  type: string
+                  description: Email of the target manually registered account.
+                password:
+                  type: string
+                  description: Password of the target manually registered account.
+                manage_token:
+                  type: string
+                  description: Operator manage token for authorization.
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
   /user:
     post:
       summary: Get user information via Bearer token

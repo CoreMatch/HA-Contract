@@ -80,6 +80,27 @@ Handler semantics (`controllers/auth_controller.go > ClaimUser`):
 
 Side effects: after flipping `cbh` to 1, the user is no longer eligible for `BotUserCleanupController`, so operator claiming is the only way to permanently remove a `cbh=0` row without the user having to interact via MBE.
 
+### Force Bind (`POST /admin/force-bind`)
+
+Players who have both a proxy-registered account (cbh=0, created by WinnerProxy) and a manually registered account can use this endpoint to transfer the proxy account's `mojang_uuid` to the manual account and delete the proxy account.
+
+| Field | Value |
+|---|---|
+| Authentication | OAuth2 Bearer Service Token + `manage_token` in request body |
+| Request body | `username` (proxy account username, ≥ 3 chars), `email` (target account email), `password` (target account password), `manage_token` |
+| Source account | User with `username` equal to the request value AND `cbh=0` |
+| Target account | User matching `email` + `password` (bcrypt verified) |
+
+Handler semantics:
+
+1. Validate `manage_token` against server config.
+2. Find source account by `username` where `cbh=0`; reject if not found or has no `mojang_uuid`.
+3. Authenticate target account by `email` + `password`; reject if credentials are invalid.
+4. Transfer `mojang_uuid` from source to target (UPDATE target, then DELETE source) in a single transaction.
+5. Return success.
+
+Side effects: the proxy-registered account is permanently deleted. The target account's `mojang_uuid` is overwritten. Any existing `mojang_uuid` on the target account is replaced.
+
 ### `mojang_uuid`
 
 - **Format**: 32-bit lowercase hex (UUID without hyphens), isomorphic with Yggdrasil `selectedProfile.id`.
@@ -87,6 +108,7 @@ Side effects: after flipping `cbh` to 1, the user is no longer eligible for `Bot
 - **Write Sources**:
   - Service proxy `/register` decision tree 1 (hit by `mojang_uuid`) → idempotent return.
   - Service proxy `/register` decision tree 2.a `mbe=1` → written during bind.
+  - `POST /admin/force-bind` → transfers `mojang_uuid` from a proxy-registered account to a target account (see "Force Bind" below).
   - **Not** written via WebUI `/register`.
 - **Relationship with `users.uuid`**: `users.uuid` is the internal UUID for the user within the HA / Yggdrasil system (unrelated to Mojang); `mojang_uuid` is the bound Mojang authentic UUID. Both can coexist and be different.
 
