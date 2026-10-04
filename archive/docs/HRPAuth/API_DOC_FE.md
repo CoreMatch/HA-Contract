@@ -92,6 +92,9 @@
 | 用户 | POST | `/user/declare-email` | **Manage Token** |
 | 用户 | POST | `/user/mojang-bind-enable` | **是**（或 Manage Token + uid/email）|
 | 用户 | POST | `/user/mojang-bind-disable` | **是**（或 Manage Token + uid/email）|
+| 安全 | POST | `/user/security/change-email/send-code` | **是** |
+| 安全 | POST | `/user/security/change-email/webauthn-begin` | **是** |
+| 安全 | POST | `/user/security/change-email` | **是** |
 | 邮箱 | POST | `/email-verification` | 视 action 而定 |
 | TOTP | POST | `/totp/setup` | **是** |
 | TOTP | POST | `/totp/verify` | 否（凭 passcode） |
@@ -473,7 +476,43 @@ T5  失败：后端返回 400 "Invalid or expired captcha" → 前端应重新�
 
 ---
 
-## 6. 邮箱验证
+## 6. 安全设置
+
+### 6.1 POST /user/security/change-email
+
+执行更换邮箱操作。仅需提供任意一个已开启的双因素认证因子。
+
+**所需 Token：** **Remember Token**
+
+**请求体：**
+```json
+{
+  "new_email": "new@example.com",
+  "totp_code": "...",
+  "email_code": "...",
+  "webauthn": {
+    "flow_id": "...",
+    "credential": { ... }
+  }
+}
+```
+
+**成功响应：**
+```json
+{
+  "success": true,
+  "message": "Email updated successfully",
+  "data": { "email": "new@example.com" }
+}
+```
+
+**校验规则：**
+- 必须成功验证至少一个已开启的 2FA 因子（TOTP、WebAuthn 或 邮件验证码）。
+- 不再需要提供当前密码，也不支持修改密码。
+
+---
+
+## 7. 邮箱验证
 
 ### POST /email-verification
 
@@ -502,7 +541,7 @@ T5  失败：后端返回 400 "Invalid or expired captcha" → 前端应重新�
 
 ---
 
-## 7. TOTP 两步验证
+## 8. TOTP 两步验证
 
 > `/totpgen`（`GET /totpgen?secret=xxx`）是**后端调试接口**，用于根据 TOTP Secret 直接生成动态口令。**生产前端不要调用**此接口 —— 用户应从已安装的 Authenticator 应用（Google Authenticator / Microsoft Authenticator / Authy 等）读取 6 位动态口令。
 
@@ -569,7 +608,7 @@ T5  失败：后端返回 400 "Invalid or expired captcha" → 前端应重新�
 
 ---
 
-## 8. 用户资料管理
+## 9. 用户资料管理
 
 ### POST /change-username
 
@@ -605,7 +644,7 @@ T5  失败：后端返回 400 "Invalid or expired captcha" → 前端应重新�
 
 ---
 
-## 9. 纹理管理
+## 10. 纹理管理
 
 > 三个端点均使用 **Remember Token** 鉴权。纹理 URL 由后端托管，前端只需展示。
 >
@@ -693,7 +732,7 @@ curl -X POST https://auth.example.com/texture/upload \
 
 ---
 
-## 10. 典型前端流程
+## 11. 典型前端流程
 
 ### 登录（含 TOTP）
 
@@ -738,7 +777,7 @@ curl -X POST https://auth.example.com/texture/upload \
 
 ---
 
-## 11. 不在本文档范围的端点
+## 12. 不在本文档范围的端点
 
 以下端点由 **Minecraft 客户端 / Authlib-Injector** 直接调用，**前端不要**直接调用：
 

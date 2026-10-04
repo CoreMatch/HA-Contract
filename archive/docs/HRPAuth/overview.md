@@ -28,6 +28,7 @@ HRPAuth-Backend-Go 是一个基于 **Go + Gin** 框架的 Minecraft 认证后端
 | 认证 | 注册 / 登录 / 登出 | [endpoints/auth.md](./endpoints/auth.md) |
 | 图形验证码 | 注册前置校验 | [endpoints/captcha.md](./endpoints/captcha.md) |
 | 用户信息 | 获取当前登录用户资料 | [endpoints/user-info.md](./endpoints/user-info.md) |
+| 安全设置 | 更换邮箱（含 2FA 校验） | [endpoints/user-security.md](./endpoints/user-security.md) |
 | 邮箱验证 | 6 位数字验证码下发与校验 | [endpoints/email-verification.md](./endpoints/email-verification.md) |
 | TOTP | 两步验证的设置 / 校验 / 状态查询 | [endpoints/totp.md](./endpoints/totp.md) |
 | 用户资料 | 用户名、Minecraft 角色名修改 | [endpoints/user-profile.md](./endpoints/user-profile.md) |
