@@ -20,6 +20,7 @@ This project uses GORM to maintain the following data models.
 | [Token](#token) | `tokens` | Yggdrasil authentication tokens |
 | [Session](#session) | `sessions` | Server sessions |
 | [ProfileKey](#profilekey) | `profile_keys` | Minecraft 1.19+ chat-signing key pairs (one row per user) |
+| [WebAuthnCredential](#webauthncredential) | `webauthn_credentials` | Stored WebAuthn credential records for passkeys / security keys |
 
 ## User
 
@@ -42,6 +43,8 @@ Table name: `users`
 | `regip` | string(40) | IP at registration |
 | `totp` | string(32) | TOTP shared secret (Base32) |
 | `2FA` | tinyint(1) | **Two-Factor Authentication**: 1 = Enabled; 0 = Disabled (default 0) |
+| `webauthn_2fa_enabled` | tinyint(1) | Whether registered WebAuthn credentials may be used as the second factor after password verification |
+| `email_2fa_enabled` | tinyint(1) | Whether email verification codes may be used as the second factor after password verification |
 | `cbh` | tinyint(1) | **Created By Human**: 1 = WebUI registration or claimed proxy registration; 0 = Unclaimed WinnerProxy proxy registration (default 1) |
 | `mbe` | tinyint(1) | **Mojang Bind Enabled**: 1 = Allow Mojang players with same name to bind via M.T. `/register`; 0 = HA priority refusal (default 0) |
 | `mojang_uuid` | string(32) | Bound Mojang UUID (lowercase hex without hyphens, `NULL`=unbound; `UNIQUE` index `uk_users_mojang_uuid`) |
@@ -262,3 +265,20 @@ Table name: `profile_keys`
 | `created_at` / `updated_at` | datetime | GORM-managed |
 
 > See [`profile-keys.md`](./profile-keys.md) for the full flow and [`services/profile_key_service.go`](../../services/profile_key_service.go) for the service implementation. The schema is brought in by `database/migrations/000004_profile_keys.up.sql`.
+
+## WebAuthnCredential
+
+Table name: `webauthn_credentials`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | uint | Primary key |
+| `user_id` | string(32) | Owner internal UUID (`users.uuid`) |
+| `name` | string(255) | User-visible label for this credential |
+| `credential_id` | string(1024) | Base64url-encoded credential ID |
+| `credential_id_hash` | char(64) | SHA-256 hash of raw credential ID, used for stable lookup and uniqueness |
+| `credential_json` | mediumtext | Serialized `go-webauthn` credential record used for future verification |
+| `last_used_at` | datetime | Last successful assertion time |
+| `created_at` / `updated_at` | datetime | Timestamps |
+
+This table is introduced by `database/migrations/000009_add_webauthn_support.up.sql`.

@@ -22,7 +22,7 @@ Frontend
 
 ## Service Registration (`POST /services/presence`)
 
-Every participant — including the frontend SPA itself — is a microservice. It announces its existence with a "bonjour" handshake; HRPAuth replies "ca va très bien, merci".
+Every extension participant registers its presence here. On the frontend side, **individual frontend instances no longer need to register presence**. The frontend acts as an SDK consumer and asks `GET /services/list` which frontend SDKs currently exist. It announces its existence with a "bonjour" handshake; HRPAuth replies "ca va très bien, merci".
 
 ### Request
 
@@ -46,7 +46,7 @@ Every participant — including the frontend SPA itself — is a microservice. I
 | `ttl_seconds` | Optional self-declared lifetime in seconds. `<= 0` or omitted means **never expires**; the record is kept until the HRPAuth process exits. |
 | `scope` | Optional scope declaration. |
 | `scope.name` | Scope name of this service. |
-| `scope.frontend_areas` | Frontend areas this service covers. **Non-empty means the service is visible to frontends**; omitted/empty means frontend-invisible (internal only). The frontend SPA uses this field to declare itself as a frontend. |
+| `scope.frontend_areas` | Frontend mount areas this service covers. **Non-empty means the service is visible to the WebUI host**; omitted/empty means frontend-invisible (internal only). For first-party frontend integration, these areas are mount zones inside one WebUI, not multiple independent WebUIs or SDK hosts. |
 | `sdk_url` | Optional URL of a JS file that tells the target frontend area how to use this service. The file content is negotiated between the microservice and the frontend; HRPAuth does not interpret it and only relays it. |
 | `security_level` | Auth level of this service: `0` none / `1` user / `2` ops. Default `0`, clamped to `0..2`. |
 | `interacts_with` | Optional list of other services this service interacts with. By default a service is implicitly treated as interacting with the main service only. |
@@ -70,13 +70,18 @@ Repeated heartbeats keep `first_seen`, refresh `last_seen`, and may update all o
 
 ## Frontend Service Discovery (`GET /services/list`)
 
-The frontend SPA pulls the list of microservices relevant to itself. Public endpoint, no authentication; the caller must be a registered service and pass its own name.
+The frontend instance pulls the list of currently available frontend SDKs. Public endpoint, no authentication; the frontend does **not** need to register itself via `/services/presence` first.
 
 ```
-GET /services/list?name=hrpauth-webui
+GET /services/list
 ```
 
-HRPAuth looks up the frontend's registered `scope.frontend_areas`, then returns only services whose `frontend_areas` **overlap** with it. The frontend itself is excluded.
+HRPAuth treats the frontend as a special microservice SDK consumer and returns all services that both:
+
+- declare `scope.frontend_areas`
+- declare `sdk_url`
+
+The returned `frontend_areas` are interpreted by the frontend to decide where each SDK should mount inside the single WebUI host.
 
 ```json
 {
@@ -86,17 +91,16 @@ HRPAuth looks up the frontend's registered `scope.frontend_areas`, then returns 
     {
       "name": "texture-service",
       "scope_name": "texture-processing",
+      "frontend_areas": ["skin", "user"],
       "sdk_url": "http://127.0.0.1:2703/sdk/texture-sdk.js"
     }
   ]
 }
 ```
 
-`name` is required; missing or unregistered (or not declared as frontend) yields `service_not_registered`.
-
 ## SDK Relaying (`GET /services/sdk/:name`)
 
-Loads the JS usage file of a service through HRPAuth as relay. HRPAuth fetches the service's `sdk_url` and passes the response through unchanged (Content-Type follows the microservice, typically `application/javascript`).
+Loads the JS usage file of a service through HRPAuth as relay. HRPAuth fetches the service's `sdk_url` and passes the response through unchanged (Content-Type follows the microservice, typically `application/javascript`). These SDK files are expected to be loaded and managed by one WebUI host, not by separate per-page/per-area frontend SDK hosts.
 
 ```html
 <script src="http://localhost:PORT/services/sdk/texture-service"></script>
@@ -108,7 +112,7 @@ Loads the JS usage file of a service through HRPAuth as relay. HRPAuth fetches t
 
 ### Frontend SDK Exposure Convention (HRPAuth-Web)
 
-This section describes the **current HRPAuth-Web implementation** — it is not an HRPAuth requirement. HRPAuth still does not interpret SDK contents and only relays them unchanged.
+This section describes the **current HRPAuth-Web implementation** — it is not an HRPAuth requirement. HRPAuth still does not interpret SDK contents and only relays them unchanged. The convention assumes **one WebUI host runtime** that loads multiple service SDKs, not one independent SDK runtime per frontend area.
 
 The reference frontend (HRPAuth-Web) expects an injected SDK to expose a **global object**:
 

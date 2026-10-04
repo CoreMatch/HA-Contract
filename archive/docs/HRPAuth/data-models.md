@@ -34,6 +34,9 @@
 | `remember_token` | string(100) | 本站业务系统会话令牌 |
 | `regip` | string(40) | 注册时 IP |
 | `totp` | string(32) | TOTP 共享密钥（Base32）|
+| `2FA` | tinyint(1) | **Two-Factor Authentication**：1 = 开启；0 = 关闭（默认 0）|
+| `webauthn_2fa_enabled` | tinyint(1) | 是否允许使用已注册的 WebAuthn 凭证作为密码验证后的第二因子 |
+| `email_2fa_enabled` | tinyint(1) | 是否允许使用邮箱验证码作为密码验证后的第二因子 |
 | `cbh` | tinyint(1) | **Created By Human**：1 = WebUI 注册或已认领的代注册；0 = WinnerProxy 代注册未认领（默认 1）|
 | `mbe` | tinyint(1) | **Mojang Bind Enabled**：1 = 允许同名 Mojang 玩家通过 M.T. `/register` 绑定；0 = HA 优先拒绝（默认 0）|
 | `mojang_uuid` | string(32) | 绑定的 Mojang UUID（无连字符小写 hex，`NULL`=未绑；`UNIQUE` 索引 `uk_users_mojang_uuid`）|

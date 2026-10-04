@@ -7,7 +7,7 @@ When the project is first started, a default configuration file `config.yaml` wi
 ## Complete `config.yaml` Example
 
 ```yaml
-version: "5"
+version: "7"
 site:
   name: "HRPAuth"
   implementation: "HRPAuth"
@@ -91,7 +91,9 @@ The top-level `version` field in the configuration file indicates the **schema v
 | `2` | Added `redis`; renamed `memcache` to `verification_code` |
 | `3` | Moved `security` fields (including captcha) from `yggdrasil.security` to the top-level `security`; added `manage.token`; default `redis.prefix` is `hrpauth_` |
 | `4` | Added `oauth2` section for site-side OAuth2 authorization |
-| `5` (Current) | Added `yggdrasil.security.max_texture_file_size` for texture upload file size limit (default 512000) |
+| `5` | Added `yggdrasil.security.max_texture_file_size` for texture upload file size limit (default 512000) |
+| `6` | Added top-level `storage` section with `orphan_file_expiry_days` (default 7) |
+| `7` (Current) | Added `oauth2.super_client_extra_scopes` for database scope delegation |
 
 Migration Behavior:
 
@@ -206,6 +208,7 @@ Migration Behavior:
 | `oauth2.refresh_token_ttl_sec` | int | `2592000` | Site-side refresh token TTL |
 | `oauth2.super_client_id` | string | `hrpauth-internal-super` | Built-in low-friction service client ID |
 | `oauth2.super_client_secret` | string | generated | Built-in low-friction service client secret |
+| `oauth2.super_client_extra_scopes` | array | `[]` | Additional scopes (e.g. `db.line.read`) to grant the built-in super client. Only `db.*` scopes are accepted; all others are silently ignored. |
 | `oauth2.public_client_id` | string | `hrpauth-webui` | Built-in public client for first-party WebUI |
 | `oauth2.public_redirect_uris` | array | `["<frontend>/oauth/callback"]` | Allowed redirect URIs for the built-in public client |
 

@@ -28,7 +28,9 @@
 | 认证（注册 / 登录 / 登出） | [endpoints/auth.md](./endpoints/auth.md) | 部分 Remember Token |
 | 图形验证码 | [endpoints/captcha.md](./endpoints/captcha.md) | 公开 |
 | 用户信息 | [endpoints/user-info.md](./endpoints/user-info.md) | Remember Token |
+| 用户安全设置 | [endpoints/user-security.md](./endpoints/user-security.md) | Bearer Token / Multi-Factor |
 | 邮箱验证 | [endpoints/email-verification.md](./endpoints/email-verification.md) | 按 action 而定 |
+| 邮件两步验证 | [endpoints/email-2fa.md](./endpoints/email-2fa.md) | Login Ticket / Bearer Token |
 | TOTP 两步验证 | [endpoints/totp.md](./endpoints/totp.md) | Remember Token / Passcode |
 | 用户资料 | [endpoints/user-profile.md](./endpoints/user-profile.md) | Remember Token |
 | 密钥生成 | [endpoints/keygen.md](./endpoints/keygen.md) | 公开（管理类） |

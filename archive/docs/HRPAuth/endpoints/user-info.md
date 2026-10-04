@@ -3,6 +3,8 @@
 | 端点 | 方法 | 鉴权 |
 |------|------|------|
 | [POST /user](#post-user) | `POST` | **Remember Token** |
+| [DELETE /user](#delete-user) | `DELETE` | **Bearer Token** |
+| [GET /user/deleted](#get-user-deleted) | `GET` | **Bearer Token** (运维) |
 | [POST /user/declare-email](#post-userdeclare-email) | `POST` | **Manage Token** |
 | [POST /user/mojang-bind-enable](#post-usermojang-bind-enable) | `POST` | **Remember Token** 或 **Manage Token** |
 | [POST /user/mojang-bind-disable](#post-usermojang-bind-disable) | `POST` | **Remember Token** 或 **Manage Token** |
@@ -96,6 +98,75 @@
 - 已登录态刷新时验证 Token 仍有效
 - 拉取用户最新信息（用户名、邮箱、验证状态）
 - 决定是否引导用户完成邮箱验证或开启 TOTP
+
+---
+
+## DELETE /user
+
+申请注销当前账号。执行后进入“冷静期”。
+
+| 字段 | 值 |
+|------|---|
+| 方法 | `DELETE` |
+| 鉴权 | **Bearer Token** (`user.delete`) |
+| 实现 | [`controllers/user_info_controller.go`](../../controllers/user_info_controller.go) |
+
+### 请求体
+
+```json
+{
+  "password": "your_password"
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `password` | string | 是 | 当前用户的登录密码（二次确认） |
+
+### 行为说明
+
+1. **即时失效**: 立即撤销该用户的所有站内 OAuth2 令牌和 Yggdrasil 令牌。
+2. **软删除**: 在数据库中标记 `deleted_at`，账号进入冷静期。
+3. **冷静期恢复**: 在冷静期内（约 3-8 天），用户若重新登录成功，系统将自动撤销注销申请，恢复账号。
+4. **彻底清理**: 冷静期结束后，后台任务将彻底物理删除该用户及其所有关联数据（角色、皮肤、密钥等）。
+
+### 成功响应
+
+```json
+{
+  "success": true,
+  "message": "账号注销成功"
+}
+```
+
+---
+
+## GET /user/deleted
+
+获取当前处于注销冷静期的账号列表（仅运维）。
+
+| 字段 | 值 |
+|------|---|
+| 方法 | `GET` |
+| 鉴权 | **Bearer Token** (`user.delete.list`) |
+| 实现 | [`controllers/user_info_controller.go`](../../controllers/user_info_controller.go) |
+
+### 成功响应
+
+```json
+{
+  "success": true,
+  "message": "获取删除列表成功",
+  "data": {
+    "deleted_accounts": [
+      {
+        "uid": 42,
+        "deleted_at": "2026-09-30T10:00:00Z"
+      }
+    ]
+  }
+}
+```
 
 ---
 

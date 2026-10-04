@@ -29,6 +29,8 @@ The service is configured via a `config.yaml` file. Default values are generated
 | `upstream` | `base_url` | The URL of the Yggdrasil-compliant service. |
 | `cache` | `profile_ttl` | Cache duration for profile data in seconds. |
 | `cache` | `texture_ttl` | Cache duration for texture metadata in seconds. |
+| `smtp` | `host`, `port`, `username`, `password`, `from_email`, `from_name` | SMTP server configuration for sending verification emails. |
+| `auth` | `code_ttl` | Lifetime of the verification code in seconds (default 600). |
 
 ## Implementation Details
 
@@ -47,6 +49,8 @@ The service is configured via a `config.yaml` file. Default values are generated
 | `GET` | `/{username}` | CSL profile (read-through cache). |
 | `GET` | `/textures/{hash}` | Raw texture bytes (read-through cache). |
 | `POST` | `/{username}/texture/delete` | Forward to upstream `POST /texture/delete`. |
+| `GET` | `/auth/captcha` | Get a graphic captcha for verification. |
+| `POST` | `/auth/send-reset-code` | Request a password reset code (email). |
 | `GET` | `/sdk/haskinproxy.js` | JS SDK consumed by the WEBUI dashboard. |
 | `GET` | `/customskinloader` | CustomSkinLoader setup page (iframe). |
 

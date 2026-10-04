@@ -80,6 +80,7 @@ HRPAuth exposes a microservice extension layer (relay, pre-routing, post-routing
 
 - Register via `POST /services/presence` (bonjour handshake).
 - Declare a `sdk_url` pointing to a JS file that exposes `window['<service-name>-sdk']`.
+- Treat HRPAuth WebUI as **one overall SDK host**. `frontend_areas` are mount zones inside that single WebUI, not separate WebUIs or separate SDK runtimes. Frontend instances do not need to register presence; they discover available SDKs via `GET /services/list`.
 - Declare relay rules via `POST /services/relay` for frontend-accessible paths.
 - See `docs/dev/HRPAuth/microservices.md` for full specification.
 

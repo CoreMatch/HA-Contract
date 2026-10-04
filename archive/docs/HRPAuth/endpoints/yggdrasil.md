@@ -47,28 +47,56 @@
 
 ## GET /
 
-获取 Yggdrasil 服务元信息。
+获取服务元信息与状态快照。该端点整合了原 `/status` 接口的内容与 Yggdrasil 规范元数据。
 
 ### 响应
 
 ```json
 {
-  "meta": {
-    "serverName": "HRPAuth",
-    "implementationName": "HRPAuth",
-    "implementationVersion": "1.0.0",
-    "links": {
-      "homepage": "https://github.com/yourname/HRPAuth-Backend-Go"
-    }
+  "status": "online",
+  "success": true,
+  "message": "HRPAuth Backend is running.",
+  "site": {
+    "name": "HRPAuth",
+    "url": "https://auth.example.com",
+    "version": "1.0.0",
+    "go_version": "go1.26",
+    "server_time": "2026-10-03 15:04:05"
   },
-  "skinDomains": ["example.com"],
-  "signaturePublickey": "<PEM 公钥>"
+  "yggdrasil": {
+    "meta": {
+      "serverName": "HRPAuth",
+      "implementationName": "HRPAuth-Backend-Go",
+      "implementationVersion": "1.0.0",
+      "links": {
+        "homepage": "https://auth.example.com",
+        "register": "https://auth.example.com/register"
+      },
+      "feature.non_email_login": false,
+      "feature.legacy_skin_api": false,
+      "feature.no_mojang_namespace": true,
+      "feature.enable_mojang_anti_features": false,
+      "feature.enable_profile_key": true,
+      "feature.username_check": false
+    },
+    "skinDomains": [
+      "example.com",
+      ".example.com"
+    ],
+    "signaturePublickey": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
+  },
+  "meta": {
+    "request_id": "..."
+  }
 }
 ```
 
 | 字段 | 说明 |
 |------|------|
-| `signaturePublickey` | 由 `POST /generate-key` 生成的 2048 位 RSA 公钥，Authlib-Injector 与 Mojang 客户端据此校验 `serverId` 签名 |
+| `status` | 服务存活状态，固定为 `online` |
+| `site` | 站内业务体系基本信息（版本、时间等） |
+| `yggdrasil` | 兼容 Yggdrasil 规范的元数据 |
+| `yggdrasil.signaturePublickey` | 由系统生成的 2048 位 RSA 公钥，Authlib-Injector 与 Mojang 客户端据此校验 `serverId` 签名 |
 
 ---
 

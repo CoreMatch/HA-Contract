@@ -28,6 +28,12 @@ paths:
   /oauth/login-ticket:
     post:
       summary: Verify password and issue a short-lived login ticket or first-party tokens
+      description: >
+        First-party password login entrypoint. If neither TOTP, WebAuthn, nor Email 2FA
+        is enabled for the user, the server returns OAuth2 access/refresh tokens
+        directly. Otherwise it returns a short-lived `login_ticket` plus
+        `totp_required`, `webauthn_required`, `email_required`, and `second_factors`
+        so the client can choose an allowed second factor.
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -60,6 +66,60 @@ paths:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
+  /forgot-password:
+    post:
+      summary: Send recovery verification code to email
+      description: >
+        Validates the captcha and sends a 4-digit recovery code to the
+        provided email address if it is registered. The response is always
+        successful to prevent email enumeration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, captcha_token, captcha_code]
+              properties:
+                email:
+                  type: string
+                  format: email
+                captcha_token:
+                  type: string
+                captcha_code:
+                  type: string
+      responses:
+        '200':
+          description: If the email is registered, a verification code has been sent.
+        '400': { $ref: '#/components/responses/Error' }
+  /reset-password:
+    post:
+      summary: Reset password using recovery code
+      description: >
+        Submits the 4-digit recovery code and a new password to reset the
+        account password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, code, new_password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                code:
+                  type: string
+                  pattern: '^[0-9]{4}$'
+                  description: 4-digit recovery code
+                new_password:
+                  type: string
+                  minLength: 6
+      responses:
+        '200':
+          description: Password reset successful
+        '400': { $ref: '#/components/responses/Error' }
   /register:
     post:
       summary: Register user or proxy-register via Bearer service token
@@ -153,6 +213,49 @@ paths:
         '200': { description: Success }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+    delete:
+      summary: Request account deletion (enter cooling period)
+      description: >
+        Soft-deletes the user and revokes all tokens. The account remains in a
+        cooling period (3-8 days) and can be restored by logging in again.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  description: User's password for confirmation.
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /user/deleted:
+    get:
+      summary: List accounts in deletion cooling period (Operator only)
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      deleted_accounts:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DeletedAccount'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
   /user/declare-email:
     post:
       summary: Declare email via Bearer service token
@@ -178,6 +281,108 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+  /user/security/change-email/send-code:
+    post:
+      summary: Send verification code to current email for email change
+      description: Requires `user.security.manage` scope.
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /user/security/change-email/webauthn-begin:
+    post:
+      summary: Start WebAuthn sudo authentication for email change
+      description: Requires `user.security.manage` scope.
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /user/security/change-email:
+    post:
+      summary: Change user email and optionally password
+      description: >
+        Requires `user.security.manage` scope. Supports two verification paths:
+        1. Password + 1 factor (TOTP, Email Code, or WebAuthn).
+        2. Any 2 factors (TOTP, Email Code, WebAuthn).
+        If path 2 is used, current password is not required and a new password can be set.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_email]
+              properties:
+                new_email: { type: string, format: email }
+                current_password: { type: string }
+                new_password: { type: string, minLength: 6 }
+                totp_code: { type: string }
+                email_code: { type: string }
+                webauthn:
+                  type: object
+                  properties:
+                    flow_id: { type: string }
+                    credential: { type: object, additionalProperties: true }
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /user/lookup:
+    post:
+      summary: Resolve username from UID or UID from username
+      description: >
+        Public endpoint — no authentication required.
+        Provide exactly one of `uid` (numeric) or `username` (string).
+        If `uid` is provided, returns the matching user's `uid` and `username`.
+        If `username` is provided, returns the matching user's `uid` and `username`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  properties:
+                    uid:
+                      type: integer
+                      description: Numeric UID to look up
+                  required: [uid]
+                - type: object
+                  properties:
+                    username:
+                      type: string
+                      description: Username to look up
+                  required: [username]
+      responses:
+        '200':
+          description: Lookup successful
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data, meta]
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: lookup successful
+                  data:
+                    type: object
+                    required: [uid, username]
+                    properties:
+                      uid:
+                        type: integer
+                        example: 42
+                      username:
+                        type: string
+                        example: Steve
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
   /email-verification:
     post:
       summary: Entry point for email verification actions
@@ -187,6 +392,67 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '429': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
+  /email-2fa/send:
+    post:
+      summary: Send 2FA verification code to user's email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [login_ticket]
+              properties:
+                login_ticket: { type: string }
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /email-2fa/verify:
+    post:
+      summary: Verify email 2FA code and issue tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [login_ticket, code]
+              properties:
+                login_ticket: { type: string }
+                code: { type: string }
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /email-2fa/toggle:
+    post:
+      summary: Enable or disable email 2FA via Bearer token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /email-2fa/status:
+    get:
+      summary: Query email 2FA status via Bearer token
+      parameters:
+        - in: query
+          name: uid
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
   /totpgen:
     get:
       summary: Generate current OTP for a specified secret
@@ -227,6 +493,126 @@ paths:
   /totp/hasbeenenabled:
     post:
       summary: Query whether TOTP is enabled via Bearer token
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /webauthn/register/begin:
+    post:
+      summary: Start WebAuthn credential registration via Bearer token
+      description: >
+        Begins a WebAuthn registration ceremony for the authenticated user.
+        The optional request body may provide a friendly credential name and an
+        `attachment` hint (`platform` or `cross-platform`).
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebAuthnRegistrationBeginRequest'
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /webauthn/register/finish:
+    post:
+      summary: Finish WebAuthn credential registration via Bearer token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebAuthnFinishRequest'
+      responses:
+        '201': { description: Credential registered }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /webauthn/credentials:
+    get:
+      summary: List the authenticated user's WebAuthn credentials
+      responses:
+        '200': { description: Success }
+        '401': { $ref: '#/components/responses/Error' }
+  /webauthn/credentials/{id}:
+    delete:
+      summary: Delete a WebAuthn credential via Bearer token
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200': { description: Credential deleted }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /webauthn/2fa/toggle:
+    post:
+      summary: Enable or disable WebAuthn as the password second factor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebAuthnToggle2FARequest'
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /webauthn/login/begin:
+    post:
+      summary: Start a WebAuthn primary login ceremony
+      description: >
+        Starts a passkey / security-key login flow. If `email` is provided, the
+        server uses an account-bound ceremony; if omitted, it starts a
+        discoverable passkey ceremony.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebAuthnLoginBeginRequest'
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /webauthn/login/finish:
+    post:
+      summary: Finish a WebAuthn primary login ceremony and issue OAuth2 tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebAuthnFinishRequest'
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /webauthn/2fa/begin:
+    post:
+      summary: Start a WebAuthn second-factor ceremony from login_ticket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebAuthnSecondFactorBeginRequest'
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /webauthn/2fa/finish:
+    post:
+      summary: Finish a WebAuthn second-factor ceremony and issue OAuth2 tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebAuthnFinishRequest'
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -414,17 +800,9 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
   /services/list:
     get:
-      summary: List microservices relevant to a registered frontend service
-      parameters:
-        - in: query
-          name: name
-          required: true
-          schema:
-            type: string
-          description: Registered frontend service name
+      summary: List currently available frontend SDK services
       responses:
         '200': { description: Success }
-        '400': { $ref: '#/components/responses/Error' }
   /services/sdk/{name}:
     get:
       summary: Relay the JS usage file of a registered service
@@ -502,6 +880,58 @@ components:
       properties:
         request_id:
           type: string
+    DeletedAccount:
+      type: object
+      required: [uid, deleted_at]
+      properties:
+        uid:
+          type: integer
+        deleted_at:
+          type: string
+          format: date-time
+    WebAuthnRegistrationBeginRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Optional user-visible name for the credential
+        attachment:
+          type: string
+          enum: [platform, cross-platform]
+          description: Optional authenticator attachment hint
+    WebAuthnLoginBeginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          description: >
+            Optional email for account-bound login. Omit to start a
+            discoverable passkey ceremony.
+    WebAuthnFinishRequest:
+      type: object
+      required: [flow_id, credential]
+      properties:
+        flow_id:
+          type: string
+          description: Server-issued WebAuthn ceremony identifier
+        credential:
+          type: object
+          description: Raw browser WebAuthn response payload
+          additionalProperties: true
+    WebAuthnSecondFactorBeginRequest:
+      type: object
+      required: [login_ticket]
+      properties:
+        login_ticket:
+          type: string
+          description: Login ticket returned by /oauth/login-ticket
+    WebAuthnToggle2FARequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+          description: Whether WebAuthn may be used as a second factor after password verification
     ErrorEnvelope:
       type: object
       required: [success, message, code, error, meta]
@@ -528,7 +958,7 @@ components:
           type: array
           items:
             type: string
-          description: Non-empty means the service is visible to frontends
+          description: Non-empty means the service is visible to the WebUI host; areas are mount zones inside one WebUI, not separate frontend SDK hosts
     PresenceRequest:
       type: object
       required: [name]
@@ -542,7 +972,7 @@ components:
           $ref: '#/components/schemas/ServiceScope'
         sdk_url:
           type: string
-          description: URL of a JS usage file, relayed by HRPAuth unchanged
+          description: URL of a JS usage file, relayed by HRPAuth unchanged and intended to be loaded by the single WebUI host runtime
         security_level:
           type: integer
           minimum: 0
@@ -610,12 +1040,17 @@ components:
           type: string
     ServiceSummary:
       type: object
-      required: [name, scope_name]
+      required: [name, scope_name, frontend_areas]
       properties:
         name:
           type: string
         scope_name:
           type: string
+        frontend_areas:
+          type: array
+          items:
+            type: string
+          description: Frontend mount areas declared by the service SDK
         sdk_url:
           type: string
-          description: URL of the service JS usage file, load via /services/sdk/{name}
+          description: URL of the service JS usage file, load via /services/sdk/{name} from the frontend SDK consumer

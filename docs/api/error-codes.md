@@ -40,6 +40,11 @@ The following error codes are the stable registry for current HA business APIs. 
 | `totp_secret_required` | TOTP secret missing |
 | `totp_not_configured` | TOTP not configured |
 | `invalid_passcode` | Incorrect TOTP passcode |
+| `webauthn_not_configured` | WebAuthn is not configured for the requested operation |
+| `email_2fa_not_configured` | Email 2FA is not configured for the requested operation |
+| `invalid_webauthn_flow` | WebAuthn flow_id is invalid, expired, or does not match the expected flow |
+| `webauthn_credential_not_found` | Requested WebAuthn credential record does not exist |
+| `webauthn_verification_failed` | WebAuthn ceremony verification failed |
 | `invalid_texture_type` | Invalid texture type |
 | `texture_file_required` | Texture file missing |
 | `invalid_texture_file` | Invalid texture file format |
@@ -76,3 +81,15 @@ The following error codes are the stable registry for current HA business APIs. 
 | `sdk_not_found` | Service not registered or has no `sdk_url` declared |
 | `insufficient_auth_level` | Credential present but below the required auth level |
 | `internal_error` | Unclassified internal error |
+| `oauth_state_mismatch` | OAuth2 state parameter mismatch (CSRF / replay protection) |
+| `oauth_token_expired` | OAuth2 access token expired; client should call `/api/auth/refresh` |
+| `oauth_refresh_failed` | OAuth2 refresh token is invalid, expired, or revoked |
+| `oauth_revoke_failed` | OAuth2 token revocation request failed |
+| `mca_invalid_request` | MatchCoreArena: general parameter error |
+| `mca_user_not_found` | MatchCoreArena: user does not exist |
+| `mca_friend_not_found` | MatchCoreArena: friend relationship does not exist |
+| `mca_friend_request_exists` | MatchCoreArena: friend request already exists |
+| `mca_team_not_found` | MatchCoreArena: team does not exist |
+| `mca_team_name_taken` | MatchCoreArena: team name is already in use |
+| `mca_not_team_leader` | MatchCoreArena: only the team leader can perform this action |
+| `mca_match_not_found` | MatchCoreArena: match does not exist |

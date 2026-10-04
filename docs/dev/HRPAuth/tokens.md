@@ -22,7 +22,8 @@ This document clarifies all Tokens and their lifecycles involved in the project.
 |------------|-------------------------------|--------|---------|-----------------------------------|-------------------------------|
 | **OAuth2 Access Token** (Site Business API) | `Authorization: Bearer <access_token>` | 32-byte random string | Site-side business API credential. Used by both user tokens and service tokens. | `POST /oauth/token`, `POST /oauth/login-ticket`, `POST /totp/verify` | `/logout`, `/user`, `/change-*`, `/texture/*`, `/totp/*`, `/user/declare-email`, service-mode `/register` |
 | **OAuth2 Refresh Token** | `refresh_token` | 32-byte random string | Refresh site-side user session | `POST /oauth/token` (`grant_type=authorization_code|refresh_token`), `POST /oauth/login-ticket`, `POST /totp/verify` | `POST /oauth/token` (`grant_type=refresh_token`) |
-| **OAuth2 Login Ticket** | `login_ticket` | 24-byte random string | Short-lived password-proof ticket for TOTP-enabled first-party login | `POST /oauth/login-ticket` | `POST /totp/verify` |
+| **OAuth2 Login Ticket** | `login_ticket` | 24-byte random string | Short-lived password-proof ticket for first-party MFA; may be consumed by TOTP or WebAuthn 2FA | `POST /oauth/login-ticket` | `POST /totp/verify`, `POST /webauthn/2fa/begin` |
+| **WebAuthn Flow ID** | `flow_id` | 24-byte random string | Server-side identifier for a WebAuthn begin/finish ceremony | `POST /webauthn/*/begin` | `POST /webauthn/*/finish` |
 | **OAuth2 Authorization Code** | `code` | 32-byte random string | Authorization code for `authorization_code + PKCE` | `POST /oauth/authorize/decision` | `POST /oauth/token` (`grant_type=authorization_code`) |
 | **Built-in Super Client Secret** | `client_secret` | 32-byte random string | Low-friction service-to-service credential for `client_credentials` | Generated into `config.yaml > oauth2.super_client_secret` | `POST /oauth/token` (`grant_type=client_credentials`) |
 | **Yggdrasil Access Token** | `accessToken` | Random string (`utils.GenerateAccessToken`) | Access token for Yggdrasil API, carried by Minecraft client when joining a server | `POST /authserver/authenticate`, `POST /authserver/refresh` | `POST /authserver/refresh`, `POST /authserver/validate`, `POST /authserver/invalidate`, `POST /sessionserver/session/minecraft/join`, `PUT/DELETE /api/user/profile/:uuid/:textureType` (via `Authorization: Bearer <accessToken>` header) |
@@ -32,12 +33,14 @@ This document clarifies all Tokens and their lifecycles involved in the project.
 | **Captcha Code** (Graphical Captcha Answer) | `captcha_code` | 5-character string (alphanumeric, excluding `0/O/1/I/L`) | Answer filled in by the user after identifying it on the image | Image issued by `POST /captcha` | `POST /register` (`captcha_code` field) |
 | **TOTP Secret** | `totpkey` (response) / `secret` (`/totpgen` query param) | 32-byte Base32 string | Shared TOTP seed key between user and server | `POST /totp/setup` (response `totpkey`) | `GET /totpgen?secret=<totpkey>` (debug interface) |
 | **TOTP Passcode** | `passcode` | 6-digit number | One-time 6-digit dynamic passcode | `GET /totpgen?secret=<totpkey>` (response plaintext) | `POST /totp/verify` |
+| **Maintenance Token** (M-T) | `Authorization: Bearer <token>` | Configurable | Super credential for maintenance, bypasses all permission checks | Generated into `config.yaml > auth.maintenance_token` | `/api/maintenance/sql`, and all other protected endpoints |
 
 > ⚠️ **Important Distinctions**:
 > 1. Site business APIs now authenticate with **OAuth2 Bearer tokens**, not `remember_token`.
 > 2. `Manage Token (M-T)` is now a **legacy compatibility credential** and should not be used for new integrations.
 > 3. Service-to-service proxy operations use `client_credentials` and endpoint-level scopes such as `register.manage` or `user.declare-email`.
 > 4. `Yggdrasil Access Token` remains completely independent from site OAuth2 access tokens.
+> 5. Database scopes (`db.line.read`, `db.line.write`, `db.line.delete`, `db.table.create`, `db.table.delete`) are **NOT** included in the built-in super client by default. They must be explicitly granted via `oauth2.super_client_extra_scopes` in `config.yaml`.
 
 ---
 
