@@ -1,6 +1,6 @@
 # Yggdrasil API Reference
 
-This document is the single source of truth for the **Yggdrasil-compatible** HTTP surface exposed by HRPAuth. It complements (and does not replace) the openapi business spec at `docs/api/openapi/hrpauth-business.yaml` — that file covers HRPAuth-only business endpoints; this file covers everything under `/authserver/*`, `/sessionserver/*`, `/api/profiles/*`, `/api/user/profile/*`, `/skins/*`, `/minecraftservices/*` and the meta endpoint `GET /`.
+This document is the single source of truth for the **Yggdrasil-compatible** HTTP surface exposed by the **HRPAuth-Yggdrasil-API** service. This service is decoupled from the HRPAuth core and focuses entirely on Minecraft-related logic.
 
 > Reference target: [authlib-injector Yggdrasil Server Technical Specification](https://yushijinhun.github.io/authlib-injector/) and [wiki.vg Authentication](https://wiki.vg/Authentication).
 
@@ -14,6 +14,7 @@ This document is the single source of truth for the **Yggdrasil-compatible** HTT
 6. [Profile and Texture](#6-profile-and-texture)
 7. [Legacy Skin API](#7-legacy-skin-api)
 8. [Minecraft Services (Profile Keys)](#8-minecraft-services-profile-keys)
+9. [Account Registration and Sync](#9-account-registration-and-sync)
 
 ---
 
@@ -136,6 +137,7 @@ The response also carries `X-Authlib-Injector-API-Location: /` so that authlib-i
 | `PUT /api/user/profile/:uuid/:textureType` | `Authorization: Bearer <accessToken>` | `textureType ∈ {skin, cape}`. Multipart with `file` (PNG, validated to be 64x32/64x64 for skin or 64x32/22x17 for cape) and optional `model` (`slim` or empty). PNG is re-encoded to strip metadata. `textures` property is re-signed with the Yggdrasil private key. Non-standard dimensions or oversized textures are allowed with a `X-Texture-Warnings` response header when warnings are generated. |
 | `DELETE /api/user/profile/:uuid/:textureType` | `Authorization: Bearer <accessToken>` | Clears the texture. The property is dropped when the payload becomes empty; otherwise only the requested texture type is removed and the payload is re-signed. |
 | `GET /textures/:hash` | none | Streams `<storage>/textures/<hash>` as `image/png`. `404 NotFoundException` if the file is missing. |
+| `GET /previews/:fileName` | none | Streams generated WebP preview file. |
 
 ## 7. Legacy Skin API
 
@@ -153,3 +155,55 @@ The response also carries `X-Authlib-Injector-API-Location: /` so that authlib-i
 - `/player/certificates` auth: `Authorization: Bearer <yggdrasil accessToken>`.
 - 2048-bit RSA key pair, persisted per user, valid 48h with refresh window at +40h.
 - Public key signed by the Yggdrasil signature private key (SHA1withRSA), so the existing `signaturePublickey` from `GET /` doubles as the trust root.
+
+## 9. Account Registration and Sync
+
+### Game Account Registration (`POST /register`)
+
+Creates a game-specific account and default profile for an existing core user.
+
+- **Auth**: None (requires core credentials in body).
+- **Body**: `{ "identifier": "<email or username>", "password": "<password>", "mojang_uuid": "<optional>" }`.
+- **Logic**:
+    1. Verifies credentials against the HRPAuth core service.
+    2. Checks if a game account already exists for the user (1:1 mapping).
+    3. Inherits the `username` from the core service for the default profile.
+    4. Binds `mojang_uuid` if provided and valid.
+
+### Username Sync (`POST /internal/sync-username`)
+
+Internal endpoint called by HRPAuth core when a user's name is updated.
+
+- **Auth**: `X-Internal-Key` header.
+- **Body**: `{ "core_user_id": "<uuid>", "new_username": "<string>" }`.
+- **Effect**: Updates all profiles associated with the `core_user_id` to the new username.
+
+### Proxy Registration (`POST /internal/proxy-register`)
+
+Used by WinnerProxy to create a game account without an HRPAuth core identity.
+
+- **Auth**: `X-Internal-Key` header.
+- **Body**: `{ "username": "<string>", "password": "<string>", "mojang_uuid": "<string>" }`.
+- **Logic**:
+    1. Creates an account with `cbh = 0` (Created By Human = false).
+    2. Stores the provided `password` (hashed) for local Yggdrasil auth.
+    3. Account is subject to bot cleanup if not claimed within 30 days.
+
+### Claim Account (`POST /internal/claim-account`)
+
+Binds an existing proxy game account to a newly created HRPAuth core identity.
+
+- **Auth**: `X-Internal-Key` header.
+- **Body**: `{ "mojang_uuid": "<string>", "core_user_id": "<uuid>" }`.
+- **Logic**:
+    1. Finds the proxy account by `mojang_uuid` where `cbh = 0`.
+    2. Updates `core_user_id` and sets `cbh = 1`.
+    3. The account is now a full human account and no longer subject to bot cleanup.
+
+### Delete Account (`POST /internal/delete-account`)
+
+Internal endpoint to delete a game account when a core user is deleted.
+
+- **Auth**: `X-Internal-Key` header.
+- **Body**: `{ "core_user_id": "<uuid>" }`.
+- **Effect**: Deletes the account and all associated profiles/tokens/sessions.

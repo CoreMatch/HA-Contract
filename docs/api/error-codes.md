@@ -45,6 +45,8 @@ The following error codes are the stable registry for current HA business APIs. 
 | `invalid_webauthn_flow` | WebAuthn flow_id is invalid, expired, or does not match the expected flow |
 | `webauthn_credential_not_found` | Requested WebAuthn credential record does not exist |
 | `webauthn_verification_failed` | WebAuthn ceremony verification failed |
+| `recovery_key_already_configured` | Recovery key is already configured for the user |
+| `recovery_key_not_configured` | Recovery key is not configured for the user |
 | `invalid_texture_type` | Invalid texture type |
 | `texture_file_required` | Texture file missing |
 | `invalid_texture_file` | Invalid texture file format |

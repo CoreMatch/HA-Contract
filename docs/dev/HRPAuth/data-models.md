@@ -1,53 +1,86 @@
 # Data Models
 
-> Detailed implementation: [`models/models.go`](../../models/models.go)
->
-> Migration note: BlessingSkin-to-HRPAuth offline import rules are defined in [`bs2ha-migration.md`](./bs2ha-migration.md).
+HRPAuth is split into two services: the **Core** service (General Auth) and the **Yggdrasil-API** service (Minecraft logic).
 
-This project uses GORM to maintain the following data models.
+## Core Service Models
 
-## Model Overview
+Table name: `users`, `oauth2_clients`, `oauth2_access_tokens`, `oauth2_refresh_tokens`, `oauth2_authorization_codes`, `webauthn_credentials`.
 
-| Model | Table Name | Description |
-|-------|------------|-------------|
-| [User](#user) | `users` | User information |
-| [Profile](#profile) | `profiles` | Minecraft profile data |
-| [ProfileProperty](#profileproperty) | `profile_properties` | Profile properties (e.g., textures) |
-| [OAuth2Client](#oauth2client) | `oauth2_clients` | Site-side OAuth2 clients |
-| [OAuth2AccessToken](#oauth2accesstoken) | `oauth2_access_tokens` | Site-side OAuth2 access tokens |
-| [OAuth2RefreshToken](#oauth2refreshtoken) | `oauth2_refresh_tokens` | Site-side OAuth2 refresh tokens |
-| [OAuth2AuthorizationCode](#oauth2authorizationcode) | `oauth2_authorization_codes` | Site-side authorization codes |
-| [Token](#token) | `tokens` | Yggdrasil authentication tokens |
-| [Session](#session) | `sessions` | Server sessions |
-| [ProfileKey](#profilekey) | `profile_keys` | Minecraft 1.19+ chat-signing key pairs (one row per user) |
-| [WebAuthnCredential](#webauthncredential) | `webauthn_credentials` | Stored WebAuthn credential records for passkeys / security keys |
-
-## User
+### User
 
 Table name: `users`
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `uid` | uint | Primary key, **non-auto-increment**, allocated by backend `MAX(uid)+1` |
-| `uuid` | string(32) | Yggdrasil UUID (corresponds to Yggdrasil `selectedProfile.id`) |
-| `email` | string(255) | Email (**no database-level unique constraint**, deduplicated at business layer) |
-| `avatar` | string(255) | Avatar URL exposed to first-party clients |
-| `username` | string(255) | Username (**no database-level unique constraint**, deduplicated at business layer) |
-| `password` | string(255) | Password hash or migration marker (`NOT NULL`): bcrypt for native HRPAuth accounts; BlessingSkin imports keep the bcrypt hash only when the source method is bcrypt, otherwise they use the fixed marker `BS2HA$RESET_REQUIRED` |
+| `uuid` | string(32) | Internal unique identifier for the user |
+| `email` | string(255) | Email address |
+| `username` | string(255) | Username |
+| `password` | string(255) | bcrypt hash |
 | `ip` | string(255) | Most recent login IP |
-| `permission` | int | Permission bits (default 0) |
-| `last_sign_at` | datetime | Last activity (**for business/cleanup use**, used by proxy registration cleanup routine to judge activity) |
-| `register_at` | datetime | Registration time (**for business/cleanup use**, used by proxy registration cleanup routine to judge account age) |
-| `verified` | tinyint(1) | Whether email is verified (default 0) |
-| `remember_token` | string(100) | Legacy site session token field, retained only for backward compatibility |
-| `regip` | string(40) | IP at registration |
-| `totp` | string(32) | TOTP shared secret (Base32) |
-| `2FA` | tinyint(1) | **Two-Factor Authentication**: 1 = Enabled; 0 = Disabled (default 0) |
-| `webauthn_2fa_enabled` | tinyint(1) | Whether registered WebAuthn credentials may be used as the second factor after password verification |
-| `email_2fa_enabled` | tinyint(1) | Whether email verification codes may be used as the second factor after password verification |
-| `cbh` | tinyint(1) | **Created By Human**: 1 = WebUI registration or claimed proxy registration; 0 = Unclaimed WinnerProxy proxy registration (default 1) |
-| `mbe` | tinyint(1) | **Mojang Bind Enabled**: 1 = Allow Mojang players with same name to bind via M.T. `/register`; 0 = HA priority refusal (default 0) |
-| `mojang_uuid` | string(32) | Bound Mojang UUID (lowercase hex without hyphens, `NULL`=unbound; `UNIQUE` index `uk_users_mojang_uuid`) |
+| `permission` | int | Permission bits |
+| `verified` | tinyint(1) | Whether email is verified |
+| `2FA` | tinyint(1) | Two-Factor Authentication enabled |
+| ... | ... | ... |
+
+*(Minecraft-specific fields like `mbe`, `mojang_uuid`, `cbh` have been moved to the Yggdrasil-API service)*
+
+## Yggdrasil-API Service Models
+
+These models handle Minecraft-specific authentication and profile management.
+
+### Account (1:1 Mapping)
+
+Table name: `accounts`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | int | Primary key |
+| `core_user_id` | string(32) | Foreign key to Core `users.uuid` (NULL for proxy accounts) |
+| `mojang_uuid` | string(32) | Bound Mojang UUID (unique) |
+| `password` | string(255) | Local password hash (proxy accounts only) |
+| `mbe` | tinyint(1) | Mojang Bind Enabled flag |
+| `cbh` | tinyint(1) | Created By Human: `1` = regular; `0` = proxy registration |
+| `last_sign_at` | timestamp | Last time the user signed in to Yggdrasil |
+
+### Profile
+
+Table name: `profiles`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | UUID (primary key) |
+| `account_id` | int | Reference to `accounts.id` |
+| `name` | string | Minecraft profile name (inherits from Core `username`) |
+| `model` | enum | `default` or `slim` |
+
+### Other Yggdrasil Models
+
+- **ProfileProperty**: Textures and other signed properties.
+- **Token**: Yggdrasil protocol access tokens.
+- **Session**: Game server join sessions.
+- **ProfileKey**: Minecraft 1.19+ chat-signing keys.
+- **TextureListSkin / TextureListCape**: Metadata for stored textures.
+
+### Texture Library
+
+Table names: `texture_list_skin`, `texture_list_cape`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | uint | Primary key, auto-increment |
+| `hash` | string(64) | SHA-256 hash of the texture |
+| `account_id` | int | Reference to `accounts.id` |
+| `name` | string(255) | Display name of the texture |
+| `description` | text | Texture description |
+| `tags` | text | Comma-separated tags |
+| `width` | int | Image width |
+| `height` | int | Image height |
+| `preview_file` | string(255) | Name of the generated WebP preview file |
+| `created_at` | datetime | Creation time |
+| `updated_at` | datetime | Update time |
+
+> Unique constraint: `(account_id, hash)` to prevent duplicate textures per account.
 
 ## Field Semantics
 

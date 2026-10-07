@@ -1,0 +1,193 @@
+openapi: 3.1.0
+info:
+  title: HRPAuth Yggdrasil Business API
+  version: 1.0.0
+  description: Unified specification for HRPAuth-Yggdrasil-API business interfaces (textures, game accounts, Mojang proxy).
+servers:
+  - url: /
+paths:
+  /texture/upload/{uuid}:
+    post:
+      summary: Upload texture and generate preview for a specific profile
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+          description: Profile UUID
+      responses:
+        '200': { description: Successfully updated existing record }
+        '201': { description: Successfully created new record }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /texture/delete/{uuid}/{type}:
+    delete:
+      summary: Delete a texture for a specific profile
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: type
+          required: true
+          schema:
+            type: string
+            enum: [skin, cape]
+      responses:
+        '200': { description: Texture deleted }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /previews/{fileName}:
+    get:
+      summary: Get preview file
+      parameters:
+        - in: path
+          name: fileName
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: webp file
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /textures/{hash}:
+    get:
+      summary: Pull original texture file
+      parameters:
+        - in: path
+          name: hash
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: png file
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /skin/{username}:
+    get:
+      summary: Legacy Skin API (CustomSkinAPI compatible)
+      parameters:
+        - in: path
+          name: username
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: png file
+        '204':
+          description: No texture for user
+  /admin/claim-user:
+    post:
+      summary: Operator claim of a proxy-registered game account (cbh=0)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username: { type: string }
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /admin/force-bind:
+    post:
+      summary: Force-transfer Mojang UUID from proxy account to target account
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password, manage_token]
+              properties:
+                username: { type: string }
+                email: { type: string }
+                password: { type: string }
+                manage_token: { type: string }
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /mojang/profile/{uuid}:
+    get:
+      summary: Proxy Mojang profile lookup
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Success }
+        '404': { $ref: '#/components/responses/Error' }
+  /texture/mojang/{uuid}:
+    get:
+      summary: Proxy Mojang texture download
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema: { type: string }
+        - in: query
+          name: type
+          schema: { type: string, enum: [skin, cape] }
+      responses:
+        '200': { description: png file }
+        '404': { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+  responses:
+    Error:
+      description: Standard error response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+  schemas:
+    Meta:
+      type: object
+      required: [request_id]
+      properties:
+        request_id:
+          type: string
+    ErrorEnvelope:
+      type: object
+      required: [success, message, code, error, meta]
+      properties:
+        success:
+          type: boolean
+          const: false
+        message:
+          type: string
+        code:
+          type: string
+        error:
+          type: string
+        meta:
+          $ref: '#/components/schemas/Meta'

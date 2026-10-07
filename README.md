@@ -4,8 +4,8 @@ This project is the core contract and service collection of the [CoreMatch](http
 
 ## Project Structure
 
-- [HRPAuth](https://github.com/CoreMatch/HRPAuth): Authentication service (Business API + Yggdrasil compatible)
-- [HASkinLib](https://github.com/CoreMatch/HASkinLib): Skin library service
+- [HRPAuth](https://github.com/CoreMatch/HRPAuth): Core authentication service (Generic Auth)
+- [HRPAuth-Yggdrasil-API](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API): Yggdrasil API provider and game account management (Minecraft-specific)
 - [WinnerProxy](https://github.com/CoreMatch/WinnerProxy): Proxy service
 - [HASkinProxy](https://github.com/CoreMatch/HASkinProxy): Yggdrasil-to-CSL compatibility proxy
 - [HRPAuth-WebUI](https://github.com/CoreMatch/HRPAuth-WebUI): Frontend interface for the authentication service
@@ -20,7 +20,7 @@ To prevent documentation drift from the actual project, this project adopts a un
 
 ### Interface Definitions (OpenAPI)
 - [HRPAuth Business API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/hrpauth-business.yaml)
-- [HASkinLib Business API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/haskinlib-business.yaml)
+- [HRPAuth Yggdrasil Business API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/hrpauth-yggdrasil-business.yaml)
 
 ### Development and Internal Documentation
 - [HRPAuth Development Guide](https://github.com/CoreMatch/HA-Contract/tree/main/docs/dev/HRPAuth/): Includes configuration, data models, migrations, Token mechanisms, etc.

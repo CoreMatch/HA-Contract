@@ -18,7 +18,19 @@ Frontend
   -> Extension Layer (relay / orchestration middlewares)
        -> HRPAuth core (standard, unmodified)
        -> Microservices (pre routing / post routing)
+       -> Specialized Business Services (e.g., Yggdrasil-API)
 ```
+
+## Specialized Business Services
+
+Certain domain-specific logic is moved into independent services to keep the HRPAuth core clean and generic:
+
+### Yggdrasil API Provider (`HRPAuth-Yggdrasil-API`)
+
+- **Role**: Implements Minecraft Yggdrasil protocols and game-specific account management.
+- **Mapping**: Establishes a 1:1 mapping between HRPAuth core users and game accounts via `core_user_id`.
+- **Inheritance**: Game accounts inherit the core service's `username` at registration.
+- **Sync**: Listens to core service username updates via internal sync APIs to maintain consistency.
 
 ## Service Registration (`POST /services/presence`)
 

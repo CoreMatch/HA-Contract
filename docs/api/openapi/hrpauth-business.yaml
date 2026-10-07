@@ -30,10 +30,11 @@ paths:
       summary: Verify password and issue a short-lived login ticket or first-party tokens
       description: >
         First-party password login entrypoint. If neither TOTP, WebAuthn, nor Email 2FA
-        is enabled for the user, the server returns OAuth2 access/refresh tokens
-        directly. Otherwise it returns a short-lived `login_ticket` plus
-        `totp_required`, `webauthn_required`, `email_required`, and `second_factors`
-        so the client can choose an allowed second factor.
+        is enabled for the user, the server returns OAuth2 access/refresh tokens directly
+        (recovery key alone does not trigger 2FA). Otherwise it returns a short-lived
+        `login_ticket` plus `totp_required`, `webauthn_required`, `email_required`,
+        `recovery_key_required`, and `second_factors` so the client can choose
+        an allowed second factor.
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -135,77 +136,28 @@ paths:
       responses:
         '200': { description: Success }
         '401': { $ref: '#/components/responses/Error' }
-  /admin/claim-user:
-    post:
-      summary: Operator claim of a proxy-registered user (cbh=0)
-      description: >
-        Assigns a real email + password to a proxy-registered user identified
-        by `username` so that the user can log in to the business system
-        via WebUI. Requires an OAuth2 Service Token carrying the
-        `user.claim.as-service` scope. On success the user's `cbh` is flipped
-        from 0 to 1.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [username, email, password]
-              properties:
-                username:
-                  type: string
-                  description: Username of the target user (>= 3 chars).
-                email:
-                  type: string
-                  description: New email the user will use to log in.
-                password:
-                  type: string
-                  description: New password (>= 6 chars, hashed via bcrypt).
+  /user/deleted:
+    get:
+      summary: List accounts in deletion cooling period (Operator only)
       responses:
-        '200': { description: Success }
-        '400': { $ref: '#/components/responses/Error' }
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      deleted_accounts:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DeletedAccount'
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
-        '404': { $ref: '#/components/responses/Error' }
-        '409': { $ref: '#/components/responses/Error' }
-  /admin/force-bind:
-    post:
-      summary: Force-transfer Mojang UUID from proxy account to target account
-      description: >
-        Transfers the `mojang_uuid` from a proxy-registered user (cbh=0)
-        identified by `username` to a manually registered account identified
-        by `email` + `password`, then deletes the proxy-registered account.
-        Requires an OAuth2 Service Token and a valid `manage_token` in the
-        request body. This endpoint is intended for players who have both a
-        proxy-registered account (from WinnerProxy) and a manually registered
-        account, and want to consolidate their Mojang identity onto the manual
-        account.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [username, email, password, manage_token]
-              properties:
-                username:
-                  type: string
-                  description: Username of the proxy-registered account (cbh=0), auto-detected from the player session.
-                email:
-                  type: string
-                  description: Email of the target manually registered account.
-                password:
-                  type: string
-                  description: Password of the target manually registered account.
-                manage_token:
-                  type: string
-                  description: Operator manage token for authorization.
-      responses:
-        '200': { description: Success }
-        '400': { $ref: '#/components/responses/Error' }
-        '401': { $ref: '#/components/responses/Error' }
-        '403': { $ref: '#/components/responses/Error' }
-        '404': { $ref: '#/components/responses/Error' }
   /user:
     post:
       summary: Get user information via Bearer token
@@ -234,28 +186,6 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
-  /user/deleted:
-    get:
-      summary: List accounts in deletion cooling period (Operator only)
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean }
-                  message: { type: string }
-                  data:
-                    type: object
-                    properties:
-                      deleted_accounts:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/DeletedAccount'
-        '401': { $ref: '#/components/responses/Error' }
-        '403': { $ref: '#/components/responses/Error' }
   /user/declare-email:
     post:
       summary: Declare email via Bearer service token
@@ -265,22 +195,6 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
-  /user/mojang-bind-enable:
-    post:
-      summary: Enable Mojang binding via Bearer token
-      responses:
-        '200': { description: Success }
-        '400': { $ref: '#/components/responses/Error' }
-        '401': { $ref: '#/components/responses/Error' }
-        '404': { $ref: '#/components/responses/Error' }
-  /user/mojang-bind-disable:
-    post:
-      summary: Disable Mojang binding via Bearer token
-      responses:
-        '200': { description: Success }
-        '400': { $ref: '#/components/responses/Error' }
-        '401': { $ref: '#/components/responses/Error' }
-        '404': { $ref: '#/components/responses/Error' }
   /user/security/change-email/send-code:
     post:
       summary: Send verification code to current email for email change
@@ -318,6 +232,7 @@ paths:
                 new_password: { type: string, minLength: 6 }
                 totp_code: { type: string }
                 email_code: { type: string }
+                recovery_key: { type: string }
                 webauthn:
                   type: object
                   properties:
@@ -328,6 +243,130 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
+  /user/security/recovery-key/create:
+    post:
+      summary: Create initial recovery key
+      description: >
+        Requires `user.security.manage` scope. Does not require any verification
+        factor, only the user's login session. Fails if a recovery key is already
+        configured.
+      responses:
+        '200':
+          description: Recovery key created successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      recovery_key: { type: string }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /user/security/recovery-key/regenerate:
+    post:
+      summary: Regenerate recovery key
+      description: >
+        Requires `user.security.manage` scope and at least one verification factor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecoveryKeyRequest'
+      responses:
+        '200':
+          description: Recovery key regenerated successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      recovery_key: { type: string }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /user/security/recovery-key/revoke:
+    post:
+      summary: Revoke recovery key
+      description: >
+        Requires `user.security.manage` scope and at least one verification factor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecoveryKeyRequest'
+      responses:
+        '200': { description: Recovery key revoked successfully }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /user/security/recovery-key/verify:
+    post:
+      summary: Verify recovery key with login_ticket and issue OAuth2 tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [login_ticket, recovery_key]
+              properties:
+                login_ticket: { type: string }
+                recovery_key: { type: string }
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /user/security/2fa/status:
+    post:
+      summary: Query all two-factor authentication status via Bearer token
+      description: >
+        Requires `user.security.manage` scope. Supports providing `uid` via
+        query parameter or JSON request body. Returns status for TOTP, WebAuthn,
+        Email 2FA, and Recovery Key.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                uid: { type: string }
+      parameters:
+        - in: query
+          name: uid
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      totp_enabled: { type: boolean }
+                      webauthn_2fa_enabled: { type: boolean }
+                      webauthn_credentials: { type: integer }
+                      recovery_key_enabled: { type: boolean }
+                      email_2fa_enabled: { type: boolean }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
   /user/lookup:
     post:
       summary: Resolve username from UID or UID from username
@@ -441,18 +480,6 @@ paths:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
-  /email-2fa/status:
-    get:
-      summary: Query email 2FA status via Bearer token
-      parameters:
-        - in: query
-          name: uid
-          required: true
-          schema: { type: string }
-      responses:
-        '200': { description: Success }
-        '400': { $ref: '#/components/responses/Error' }
-        '401': { $ref: '#/components/responses/Error' }
   /totpgen:
     get:
       summary: Generate current OTP for a specified secret
@@ -486,13 +513,6 @@ paths:
               properties:
                 enabled:
                   type: boolean
-      responses:
-        '200': { description: Success }
-        '400': { $ref: '#/components/responses/Error' }
-        '401': { $ref: '#/components/responses/Error' }
-  /totp/hasbeenenabled:
-    post:
-      summary: Query whether TOTP is enabled via Bearer token
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -635,131 +655,6 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
-  /generate-key:
-    post:
-      summary: Generate key pair
-      responses:
-        '200': { description: Success }
-        '403': { $ref: '#/components/responses/Error' }
-        '500': { $ref: '#/components/responses/Error' }
-  /texture/upload:
-    post:
-      summary: Upload user texture via Bearer token
-      responses:
-        '200': { description: Success }
-        '400': { $ref: '#/components/responses/Error' }
-        '401': { $ref: '#/components/responses/Error' }
-        '403': { $ref: '#/components/responses/Error' }
-        '404': { $ref: '#/components/responses/Error' }
-        '500': { $ref: '#/components/responses/Error' }
-  /texture/delete:
-    post:
-      summary: Delete user texture via Bearer token
-      description: >
-        Forwarded unchanged by HASkinProxy at POST /{username}/texture/delete.
-        The HASkinProxy forwarder does not authenticate the request itself;
-        the Authorization header and the body are forwarded verbatim, and the
-        upstream response (status + body) is returned to the client unchanged.
-        See haskinproxy-business.yaml for the forwarder's cache-eviction
-        behavior on success.
-      responses:
-        '200': { description: Success }
-        '400': { $ref: '#/components/responses/Error' }
-        '401': { $ref: '#/components/responses/Error' }
-        '403': { $ref: '#/components/responses/Error' }
-        '404': { $ref: '#/components/responses/Error' }
-        '500': { $ref: '#/components/responses/Error' }
-  /texture/get:
-    post:
-      summary: Get user texture via Bearer token
-      responses:
-        '200': { description: Success }
-        '400': { $ref: '#/components/responses/Error' }
-        '401': { $ref: '#/components/responses/Error' }
-        '403': { $ref: '#/components/responses/Error' }
-        '404': { $ref: '#/components/responses/Error' }
-  /texture/mojang/{uuid}:
-    get:
-      summary: Fetch a Mojang player's texture (skin or cape) by UUID
-      description: >
-        Proxies the texture download from Mojang's session server and CDN.
-        No authentication required. Returns the raw PNG image.
-      parameters:
-        - in: path
-          name: uuid
-          required: true
-          schema:
-            type: string
-          description: Mojang UUID (with or without hyphens)
-        - in: query
-          name: type
-          required: false
-          schema:
-            type: string
-            enum: [skin, cape]
-            default: skin
-          description: Texture type to fetch
-      responses:
-        '200':
-          description: Raw PNG image
-          content:
-            image/png:
-              schema:
-                type: string
-                format: binary
-        '400': { $ref: '#/components/responses/Error' }
-        '404': { $ref: '#/components/responses/Error' }
-        '502': { $ref: '#/components/responses/Error' }
-  /mojang/profile/{uuid}:
-    get:
-      summary: Fetch a Mojang player's profile (id, name, cape availability)
-      description: >
-        Proxies the profile lookup from Mojang's session server.
-        No authentication required. Returns the player's UUID, display name
-        and whether a cape is available. This is a lightweight endpoint that
-        does not download any texture data.
-      parameters:
-        - in: path
-          name: uuid
-          required: true
-          schema:
-            type: string
-          description: Mojang UUID (with or without hyphens)
-      responses:
-        '200':
-          description: Mojang profile info
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: 获取 Mojang Profile 成功
-                  id:
-                    type: string
-                    description: Mojang UUID (no hyphens)
-                    example: 069a79f444e94726a5befca90e38aaf5
-                  name:
-                    type: string
-                    description: Player display name
-                    example: Notch
-                  has_cape:
-                    type: boolean
-                    description: Whether the player has a cape
-                    example: true
-        '400': { $ref: '#/components/responses/Error' }
-        '404': { $ref: '#/components/responses/Error' }
-        '502': { $ref: '#/components/responses/Error' }
-  /texture/rewrite-callback:
-    post:
-      summary: Rewrite all stored texture callback URLs to current callback.url (Manage Token)
-      responses:
-        '200': { description: Success }
-        '401': { $ref: '#/components/responses/Error' }
   /captcha:
     post:
       summary: Generate captcha
@@ -932,6 +827,17 @@ components:
         enabled:
           type: boolean
           description: Whether WebAuthn may be used as a second factor after password verification
+    RecoveryKeyRequest:
+      type: object
+      properties:
+        totp_code: { type: string }
+        email_code: { type: string }
+        recovery_key: { type: string }
+        webauthn:
+          type: object
+          properties:
+            flow_id: { type: string }
+            credential: { type: object, additionalProperties: true }
     ErrorEnvelope:
       type: object
       required: [success, message, code, error, meta]

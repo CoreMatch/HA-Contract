@@ -12,7 +12,8 @@
 | [POST /totp/setup](#post-totpsetup) | `POST` | **Remember Token** |
 | [POST /totp/verify](#post-totpverify) | `POST` | **TOTP Passcode**（6 位数字） |
 | [POST /totp/toggle](#post-totptoggle) | `POST` | **Remember Token** |
-| [POST /totp/hasbeenenabled](#post-totphasbeenenabled) | `POST` | **Remember Token** |
+
+---
 
 > ⚠️ `/totpgen` 是**后端调试接口**，仅用于根据 TOTP Secret 直接生成动态口令。**生产前端不要调用**此接口 —— 用户应从已安装的 Authenticator 应用读取 6 位动态口令。
 
@@ -211,56 +212,3 @@ GET /totpgen?secret=<Base32 TOTP Secret>
 
 - 已开启 TOTP 的用户在 `/login` 后强制二次校验（前端跳转到 TOTP 校验页）
 - 用户首次绑定 TOTP 时，校验一次以完成"确认开启"
-
----
-
-## POST /totp/hasbeenenabled
-
-查询指定用户是否已开启 TOTP 两步验证。
-
-### 鉴权
-
-**Remember Token**（通过请求体 `rt` 字段提交；与 `uid` 字段联合校验 `users.remember_token`）
-
-> M.T. 运维代开：`rt` 换成 M-T 并传 `"auth_type": "manage"`，即可查询任意 `uid` 用户（跳过 `rt` 归属校验）。后端**不再**因 token 恰好等于 M-T 而自动升级。
-
-### 请求体
-
-```json
-{
-  "uid": "1",
-  "rt": "<Remember Token>"
-}
-```
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `uid` | string | 是 | 用户 UID |
-| `rt` | string | 是 | Remember Token（字段名 `rt`，不是 `remember_token`）；M.T. 路径填 M-T |
-| `auth_type` | string | M.T. 必填 `"manage"` | 声明 token 类型，缺省 `remember` |
-
-### 成功响应
-
-```json
-{
-  "success": true,
-  "enabled": 1
-}
-```
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `enabled` | int | `1` = 已开启双因素认证（`users.totp` 非空且 `users.2FA` 为 1）；`0` = 未开启 |
-
-### 失败响应
-
-```json
-{
-  "success": false,
-  "message": "Invalid uid or rt"
-}
-```
-
-### 用途
-
-前端可在登录后 / 进入用户中心时探测，决定是否展示"开启 TOTP"入口或"输入 TOTP"入口。

@@ -11,7 +11,6 @@
 | [POST /email-2fa/send](#post-email-2fasend) | `POST` | **Login Ticket** |
 | [POST /email-2fa/verify](#post-email-2faverify) | `POST` | **Login Ticket** + **Verification Code** |
 | [POST /email-2fa/toggle](#post-email-2fatoggle) | `POST` | **Bearer Token** |
-| [POST /email-2fa/status](#get-email-2fastatus) | `GET` | **Bearer Token** |
 
 ---
 
@@ -94,31 +93,3 @@
     "enabled": true
   }
 }
-```
-
----
-
-## GET /email-2fa/status
-
-查询当前用户的邮件 2FA 配置状态。
-
-### 鉴权
-
-**Bearer Token**（要求 scope `email-2fa.status`）
-
-### 查询参数
-
-- `uid`: 用户 UID
-
-### 成功响应
-
-```json
-{
-  "success": true,
-  "message": "Email 2FA status retrieved",
-  "data": {
-    "enabled": true,
-    "verified": true
-  }
-}
-```
