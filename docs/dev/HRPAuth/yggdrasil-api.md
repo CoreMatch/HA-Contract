@@ -200,6 +200,14 @@ Binds an existing proxy game account to a newly created HRPAuth core identity.
     2. Updates `core_user_id` and sets `cbh = 1`.
     3. The account is now a full human account and no longer subject to bot cleanup.
 
+### Invalidate Tokens (`POST /internal/invalidate-tokens`)
+
+Revokes all Yggdrasil access tokens for the game account linked to a core user.
+
+- **Auth**: `X-Internal-Key` header.
+- **Body**: `{ "core_user_id": "<uuid>" }`.
+- **Effect**: Marks all active tokens for the linked game account as `invalid` without deleting the account itself. Used by Core `DELETE /user` so the cooling-period account cannot keep using stale Yggdrasil tokens.
+
 ### Delete Account (`POST /internal/delete-account`)
 
 Internal endpoint to delete a game account when a core user is deleted.

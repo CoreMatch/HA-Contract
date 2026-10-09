@@ -693,26 +693,6 @@ paths:
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
-  /services/list:
-    get:
-      summary: List currently available frontend SDK services
-      responses:
-        '200': { description: Success }
-  /services/sdk/{name}:
-    get:
-      summary: Relay the JS usage file of a registered service
-      parameters:
-        - in: path
-          name: name
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: JS file relayed unchanged from the microservice
-        '400': { $ref: '#/components/responses/Error' }
-        '404': { $ref: '#/components/responses/Error' }
-        '502': { $ref: '#/components/responses/Error' }
   /services/route:
     post:
       summary: Register routing rules (pre/post) for a registered service
@@ -760,7 +740,161 @@ paths:
           description: Filter by service name
       responses:
         '200': { description: Success }
+  /services/sdk-packages:
+    post:
+      summary: Upload an SDK package archive
+      description: >
+        Uploads a new SDK package archive (tar.gz / zip) as multipart/form-data.
+        The single file field is `package`. On success the package metadata is
+        returned with HTTP 201. Only the package owner / operator with a valid
+        API key may upload.
+      operationId: uploadSdkPackage
+      parameters:
+        - $ref: '#/components/parameters/ApiKeyHeader'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [package]
+              properties:
+                package:
+                  type: string
+                  format: binary
+                  description: SDK package archive file
+      responses:
+        '201':
+          description: Package uploaded and stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    $ref: '#/components/schemas/SdkPackageMeta'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+    get:
+      summary: List SDK package metadata
+      description: >
+        Returns metadata for all stored SDK packages. Supports HTTP caching via
+        ETag / If-None-Match: when the client sends an If-None-Match header that
+        matches the current ETag, the server responds 304 Not Modified without a
+        body.
+      operationId: listSdkPackages
+      parameters:
+        - $ref: '#/components/parameters/ApiKeyHeader'
+      responses:
+        '200':
+          description: Array of package metadata
+          headers:
+            ETag:
+              description: Entity tag for cache validation
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SdkPackageMeta'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '304':
+          description: Not modified; the client copy is current (If-None-Match matched)
+        '400': { $ref: '#/components/responses/Error' }
+  /services/sdk-packages/{name}:
+    get:
+      summary: Get a single SDK package metadata
+      operationId: getSdkPackage
+      parameters:
+        - $ref: '#/components/parameters/ApiKeyHeader'
+        - $ref: '#/components/parameters/PackageNamePath'
+      responses:
+        '200':
+          description: Package metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    $ref: '#/components/schemas/SdkPackageMeta'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    delete:
+      summary: Delete an SDK package
+      operationId: deleteSdkPackage
+      parameters:
+        - $ref: '#/components/parameters/ApiKeyHeader'
+        - $ref: '#/components/parameters/PackageNamePath'
+      responses:
+        '200':
+          description: Package deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      name: { type: string }
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /services/sdk-packages/{name}/download:
+    get:
+      summary: Download the raw SDK package archive
+      operationId: downloadSdkPackage
+      parameters:
+        - $ref: '#/components/parameters/ApiKeyHeader'
+        - $ref: '#/components/parameters/PackageNamePath'
+      responses:
+        '200':
+          description: Raw package archive bytes
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
 components:
+  parameters:
+    ApiKeyHeader:
+      name: X-API-Key
+      in: header
+      required: true
+      schema:
+        type: string
+      description: API key granting access to SDK package management endpoints
+    PackageNamePath:
+      name: name
+      in: path
+      required: true
+      schema:
+        type: string
+      description: SDK package name
   responses:
     Error:
       description: Standard error response
@@ -876,9 +1010,6 @@ components:
           description: Self-declared lifetime in seconds; <=0 or omitted means never expires
         scope:
           $ref: '#/components/schemas/ServiceScope'
-        sdk_url:
-          type: string
-          description: URL of a JS usage file, relayed by HRPAuth unchanged and intended to be loaded by the single WebUI host runtime
         security_level:
           type: integer
           minimum: 0
@@ -944,19 +1075,69 @@ components:
           type: string
         dest:
           type: string
-    ServiceSummary:
+    SdkPackageMeta:
       type: object
-      required: [name, scope_name, frontend_areas]
+      required: [name, version, sha256, size, uploaded_at, run_scripts]
       properties:
         name:
           type: string
-        scope_name:
+          description: SDK package name (matches manifest name)
+        version:
           type: string
-        frontend_areas:
+          description: Semantic version from manifest
+        sha256:
+          type: string
+          description: SHA-256 digest of the raw archive bytes
+        size:
+          type: integer
+          format: int64
+          description: Archive size in bytes
+        uploaded_at:
+          type: string
+          format: date-time
+        routes:
           type: array
           items:
+            $ref: '#/components/schemas/SdkRouteMeta'
+        menu:
+          $ref: '#/components/schemas/SdkMenuMeta'
+        dashboard:
+          $ref: '#/components/schemas/SdkDashboardMeta'
+        dependencies:
+          type: object
+          additionalProperties:
             type: string
-          description: Frontend mount areas declared by the service SDK
-        sdk_url:
+          description: npm dependencies declared in the manifest
+        run_scripts:
+          type: boolean
+          description: Whether to run npm scripts during build
+    SdkRouteMeta:
+      type: object
+      required: [path, module]
+      properties:
+        path:
           type: string
-          description: URL of the service JS usage file, load via /services/sdk/{name} from the frontend SDK consumer
+          description: Frontend route path, starts with /
+        module:
+          type: string
+          description: In-package relative path to a module with default React export
+        title:
+          type: string
+    SdkMenuMeta:
+      type: object
+      required: [label, path]
+      properties:
+        label:
+          type: string
+        path:
+          type: string
+          description: Must reference a route path
+    SdkDashboardMeta:
+      type: object
+      required: [label, path]
+      properties:
+        label:
+          type: string
+        path:
+          type: string
+          description: Must reference a route path

@@ -79,9 +79,10 @@ When creating new endpoints, declare the required auth level and document it in 
 HRPAuth exposes a microservice extension layer (relay, pre-routing, post-routing). If your sub-project needs to integrate with HRPAuth's WEBUI, follow the extension protocol:
 
 - Register via `POST /services/presence` (bonjour handshake).
-- Declare a `sdk_url` pointing to a JS file that exposes `window['<service-name>-sdk']`.
-- Treat HRPAuth WebUI as **one overall SDK host**. `frontend_areas` are mount zones inside that single WebUI, not separate WebUIs or separate SDK runtimes. Frontend instances do not need to register presence; they discover available SDKs via `GET /services/list`.
+- Upload an SDK source package (tar.gz/zip with a root-level `manifest.json`, `schema_version=1`) to `POST /services/sdk-packages` to integrate into the WebUI at compile time.
+- Treat HRPAuth WebUI as **one overall SDK host**. `frontend_areas` are mount zones inside that single WebUI, not separate WebUIs or separate SDK runtimes. HA-WebUI-SDKHandler polls `GET /services/sdk-packages` (ETag-based) and aggregates all SDK source packages into the WebUI build.
 - Declare relay rules via `POST /services/relay` for frontend-accessible paths.
+- See `docs/dev/HRPAuth/sdk-package.md` for the SDK package format.
 - See `docs/dev/HRPAuth/microservices.md` for full specification.
 
 ### 7. Sub-Project Coupling Awareness
@@ -93,7 +94,7 @@ HRPAuth exposes a microservice extension layer (relay, pre-routing, post-routing
 
 ### 8. Configuration Conventions
 
-- HRPAuth uses versioned `config.yaml` with auto-migration (currently schema v3). When adding new config fields, increment the version and add a migration function.
+- HRPAuth uses versioned `config.yaml` with auto-migration (currently schema v9). When adding new config fields, increment the version and add a migration function.
 - HASkinProxy, WinnerProxy use simple `config.yaml` with auto-generation on first run.
 - HRPAuth-Web uses `public/config.json` (runtime) and `config/backend-dev.json` (dev proxy).
 
@@ -149,7 +150,7 @@ HRPAuth exposes a microservice extension layer (relay, pre-routing, post-routing
 - React 19 + MUI v7 + Vite 7 + React Router v7.
 - Uses `skinview3d` for 3D skin rendering and `qrcode.react` for QR codes.
 - Dev proxy configured in `config/backend-dev.json`.
-- Discovers microservices at runtime via `GET /services/list` and loads their SDKs.
+- Has all satellite SDKs injected as source packages at compile time by HA-WebUI-SDKHandler.
 
 ---
 

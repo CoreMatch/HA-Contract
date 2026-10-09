@@ -1,6 +1,6 @@
 # Microservice Extension Layer
 
-This document describes the microservice extension mechanism of HRPAuth. It covers service registration, frontend service discovery, SDK relaying, route rules, relay rules, request orchestration, and the three-level auth model.
+This document describes the microservice extension mechanism of HRPAuth. It covers service registration, compile-time SDK aggregation, route rules, relay rules, request orchestration, and the three-level auth model.
 
 ## Design Positioning
 
@@ -34,7 +34,7 @@ Certain domain-specific logic is moved into independent services to keep the HRP
 
 ## Service Registration (`POST /services/presence`)
 
-Every extension participant registers its presence here. On the frontend side, **individual frontend instances no longer need to register presence**. The frontend acts as an SDK consumer and asks `GET /services/list` which frontend SDKs currently exist. It announces its existence with a "bonjour" handshake; HRPAuth replies "ca va très bien, merci".
+Every extension participant registers its presence here. On the frontend side, **individual frontend instances no longer need to register presence**: the frontend consumes SDKs through the compile-time SDK aggregation pipeline (see [SDK Package Contract](sdk-package.md)) instead of runtime discovery. It announces its existence with a "bonjour" handshake; HRPAuth replies "ca va très bien, merci".
 
 ### Request
 
@@ -46,7 +46,6 @@ Every extension participant registers its presence here. On the frontend side, *
     "name": "texture-processing",
     "frontend_areas": ["skin", "user"]
   },
-  "sdk_url": "http://127.0.0.1:2703/sdk/texture-sdk.js",
   "security_level": 1,
   "interacts_with": ["audit-service"]
 }
@@ -59,7 +58,7 @@ Every extension participant registers its presence here. On the frontend side, *
 | `scope` | Optional scope declaration. |
 | `scope.name` | Scope name of this service. |
 | `scope.frontend_areas` | Frontend mount areas this service covers. **Non-empty means the service is visible to the WebUI host**; omitted/empty means frontend-invisible (internal only). For first-party frontend integration, these areas are mount zones inside one WebUI, not multiple independent WebUIs or SDK hosts. |
-| `sdk_url` | Optional URL of a JS file that tells the target frontend area how to use this service. The file content is negotiated between the microservice and the frontend; HRPAuth does not interpret it and only relays it. |
+| `sdk_url` | **Removed.** This field was the legacy URL of a runtime JS usage file under the old SDK relay model. It is no longer part of `PresenceRequest` / `PresenceRecord`; SDKs are now delivered as source packages (see [SDK Package Contract](sdk-package.md)) and aggregated into the frontend at compile time, so no runtime URL is recorded anymore. |
 | `security_level` | Auth level of this service: `0` none / `1` user / `2` ops. Default `0`, clamped to `0..2`. |
 | `interacts_with` | Optional list of other services this service interacts with. By default a service is implicitly treated as interacting with the main service only. |
 
@@ -80,79 +79,90 @@ Every extension participant registers its presence here. On the frontend side, *
 
 Repeated heartbeats keep `first_seen`, refresh `last_seen`, and may update all optional fields. Expired records are cleaned lazily on access.
 
-## Frontend Service Discovery (`GET /services/list`)
+## Compile-time SDK Aggregation
 
-The frontend instance pulls the list of currently available frontend SDKs. Public endpoint, no authentication; the frontend does **not** need to register itself via `/services/presence` first.
+The runtime JS SDK model is **removed**. The legacy endpoints `GET /services/list` (frontend SDK discovery) and `GET /services/sdk/:name` (SDK relaying) are gone, and the frontend (HRPAuth-Web) no longer discovers or loads SDK modules at runtime — there is no `window['<service-name>-sdk']` contract anymore. Frontend SDKs are delivered as **source packages** and aggregated into a generated frontend build at compile time. The authoritative contract is the [SDK Package Contract](sdk-package.md).
+
+### Data Flow
 
 ```
-GET /services/list
+Satellite service                    HRPAuth (main)                   HA-WebUI-SDKHandler
+--------------                       ----------------                 ---------------------
+POST /services/sdk-packages  ──►     validate + store (fs + Redis)
+                                      GET /services/sdk-packages   ◄──  poll (ETag)
+                                      GET /services/sdk-packages/{name}/download ◄─ download archive
+                                                                         copy template
+                                                                         extract + inject SDKs
+                                                                         merge npm deps
+                                                                         npm install + tsc + vite build
+                                                                         publish artifacts atomically ──► HRPAuth-Web (dist, atomic `current` switch)
 ```
 
-HRPAuth treats the frontend as a special microservice SDK consumer and returns all services that both:
+### Upload
 
-- declare `scope.frontend_areas`
-- declare `sdk_url`
+A satellite service uploads a self-contained SDK package (a `tar.gz` or `zip` archive with exactly one root-level `manifest.json`) to HRPAuth via `POST /services/sdk-packages` (multipart/form-data, ops level 2 auth). HRPAuth validates the archive and the manifest, records the metadata (`name`/`version`/`sha256`/`size`/`routes`/`menu`/`dashboard`/`dependencies`/`run_scripts`), and stores the package under `StorageDir/<name>/archive` with a `.meta.json` sidecar. Uploading a package whose `name` already exists is **rejected with `409 sdk_package_conflict`**; replacing a package requires deleting it first (`DELETE /services/sdk-packages/{name}`).
 
-The returned `frontend_areas` are interpreted by the frontend to decide where each SDK should mount inside the single WebUI host.
+### Pull & Build
+
+The SDK handler (`HA-WebUI-SDKHandler`) talks to **HRPAuth only**: it polls `GET /services/sdk-packages` (ETag change detection) for the current package set and downloads each archive via `GET /services/sdk-packages/{name}/download`. For every build it copies the current frontend template, injects all SDK sources into `src/generated/services/<name>/`, merges npm dependencies, compiles (`npm install` → `tsc -b` → `vite build`), and publishes the resulting static assets by atomically switching the `current` directory. **On failure the previous published version keeps serving traffic.**
+
+### Trust Boundary
+
+- Satellite services **absolutely trust HRPAuth**: all authentication is performed by HRPAuth (ops level 2) and satellite services never expose their own auth entry points to the WebUI.
+- The SDK handler pulls packages **from HRPAuth only**; it never reaches satellite services directly.
+- HRPAuth is the **single trusted broker** for SDK packages.
+
+### Package API
+
+| Endpoint | Method | Auth | Purpose |
+| --- | --- | --- | --- |
+| `/services/sdk-packages` | POST | ops (level 2) | Upload a SDK package (multipart/form-data) |
+| `/services/sdk-packages` | GET | ops (level 2) | List stored package metadata |
+| `/services/sdk-packages/{name}` | GET | ops (level 2) | Fetch single package metadata |
+| `/services/sdk-packages/{name}/download` | GET | ops (level 2) | Download a package archive (binary, ETag) |
+| `/services/sdk-packages/{name}` | DELETE | ops (level 2) | Delete a package |
+
+All package endpoints are part of the Business API (`docs/api/openapi/hrpauth-business.yaml`); error codes are registered in `docs/api/error-codes.md`.
+
+### manifest.json Example
+
+Each package declares its frontend integration surface declaratively in a root-level `manifest.json`, replacing the old runtime `window['<service-name>-sdk']` global. Example (full field reference in [sdk-package.md](sdk-package.md)):
 
 ```json
 {
-  "success": true,
-  "message": "services fetched",
-  "data": [
+  "schema_version": 1,
+  "name": "texture-service",
+  "version": "1.0.0",
+  "routes": [
     {
-      "name": "texture-service",
-      "scope_name": "texture-processing",
-      "frontend_areas": ["skin", "user"],
-      "sdk_url": "http://127.0.0.1:2703/sdk/texture-sdk.js"
+      "path": "/texture",
+      "module": "src/pages/TexturePage",
+      "title": "Texture Studio"
     }
-  ]
+  ],
+  "menu": {
+    "label": "Texture Studio",
+    "path": "/texture"
+  },
+  "dashboard": {
+    "label": "Texture Studio",
+    "path": "/texture"
+  },
+  "dependencies": {
+    "some-lib": "^1.0.0"
+  },
+  "run_scripts": false
 }
 ```
 
-## SDK Relaying (`GET /services/sdk/:name`)
+### Removed Runtime Endpoints
 
-Loads the JS usage file of a service through HRPAuth as relay. HRPAuth fetches the service's `sdk_url` and passes the response through unchanged (Content-Type follows the microservice, typically `application/javascript`). These SDK files are expected to be loaded and managed by one WebUI host, not by separate per-page/per-area frontend SDK hosts.
+The following endpoints are **removed** and must not be used:
 
-```html
-<script src="http://localhost:PORT/services/sdk/texture-service"></script>
-```
+- `GET /services/list` — runtime frontend SDK discovery.
+- `GET /services/sdk/:name` — runtime JS SDK relaying.
 
-- Requires the service to be registered **and** to have declared `sdk_url`; otherwise `404 sdk_not_found`.
-- Relay failure returns `502 relay_failed`.
-- The frontend should always load the SDK through this endpoint; `sdk_url` itself points to the microservice's internal address and must not be reached directly.
-
-### Frontend SDK Exposure Convention (HRPAuth-Web)
-
-This section describes the **current HRPAuth-Web implementation** — it is not an HRPAuth requirement. HRPAuth still does not interpret SDK contents and only relays them unchanged. The convention assumes **one WebUI host runtime** that loads multiple service SDKs, not one independent SDK runtime per frontend area.
-
-The reference frontend (HRPAuth-Web) expects an injected SDK to expose a **global object**:
-
-```html
-<script src="http://localhost:PORT/services/sdk/texture-service"></script>
-```
-
-The global key is derived from the service name: `window['<service-name>-sdk']` (e.g. `window['texture-service-sdk']`). The minimum shape recognized by the frontend:
-
-```javascript
-window['texture-service-sdk'] = {
-  name: 'texture-service',
-  version: '1.0.0',
-  menu: { label: 'Texture Studio' },       // optional: adds a navbar item
-  dashboard: { label: 'Texture Studio' },  // optional: adds a Dashboard sidebar item (url falls back to iframeUrl)
-  iframeUrl: '/texture-service',            // optional: <iframe> src fallback
-  mount: (container, { area }) => {         // optional: renders a component into container; may return a cleanup fn
-    return () => { /* cleanup */ };
-  },
-  init: ({ area }) => { /* optional */ }
-};
-```
-
-- `menu` (optional): when present, the frontend adds a navbar item (login only) navigating to `/service/<name>`.
-- `dashboard` (optional): when present, the frontend adds a sidebar item to the Dashboard page; selecting it embeds the service content in the main area.
-- `mount` (optional): when present, the frontend calls `mount(container, { area })` and renders the service component into the container (any technology; may return a cleanup function). Takes precedence over `iframeUrl`.
-- `iframeUrl` (optional): `<iframe src>` **fallback** used when `mount` is not provided; absolute and relative URLs are both passed through as-is.
-- The frontend reads the global object via `getServiceSDK(name)` (see `HRPAuth-Web/src/utils/serviceRegistry.ts`); loading completion is observable via `onSDKLoaded(name)`.
+The frontend has no runtime SDK module loader anymore; frontend integration surfaces (routes, navbar menu, dashboard items) are declared in `manifest.json` and materialized into the compiled bundle by the SDK handler.
 
 ## Route Rules (`POST /services/route`)
 
