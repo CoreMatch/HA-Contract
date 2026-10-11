@@ -26,11 +26,17 @@ The service is configured via a `config.yaml` file. Default values are generated
 | Section | Key | Description |
 |---------|-----|-------------|
 | `server` | `listen_addr` | The address and port the proxy listens on (default `:2702`). |
+| `server` | `public_url` | Externally reachable base URL, announced to HRPAuth as the relay source. |
 | `upstream` | `base_url` | The URL of the Yggdrasil-compliant service. |
+| `upstream` | `timeout` | Upstream request timeout in seconds. |
+| `upstream` | `client_id`, `client_secret` | OAuth2 client id/token used to authenticate against HRPAuth. |
 | `cache` | `profile_ttl` | Cache duration for profile data in seconds. |
 | `cache` | `texture_ttl` | Cache duration for texture metadata in seconds. |
-| `smtp` | `host`, `port`, `username`, `password`, `from_email`, `from_name` | SMTP server configuration for sending verification emails. |
-| `auth` | `code_ttl` | Lifetime of the verification code in seconds (default 600). |
+| `cache` | `max_size_mb` | Maximum in-memory cache size in MB. |
+| `presence` | `enabled` | Toggle the presence (bonjour) handshake with HRPAuth (default `true`). |
+| `presence` | `name` | Service name registered in HRPAuth (default `HASkinProxy`). |
+| `presence` | `ttl_seconds` | Self-declared registration lifetime in seconds; `<=0` means never expire. |
+| `sdk` | `enabled` | Toggle the automatic compile-time SDK package upload to HRPAuth (default `true`). |
 
 ## Implementation Details
 
@@ -49,10 +55,11 @@ The service is configured via a `config.yaml` file. Default values are generated
 | `GET` | `/{username}` | CSL profile (read-through cache). |
 | `GET` | `/textures/{hash}` | Raw texture bytes (read-through cache). |
 | `POST` | `/{username}/texture/delete` | Forward to upstream `POST /texture/delete`. |
-| `GET` | `/auth/captcha` | Get a graphic captcha for verification. |
-| `POST` | `/auth/send-reset-code` | Request a password reset code (email). |
-| `GET` | `/sdk/haskinproxy.js` | JS SDK consumed by the WEBUI dashboard. |
-| `GET` | `/customskinloader` | CustomSkinLoader setup page (iframe). |
+
+The CustomSkinLoader setup page is not served as a runtime route anymore: it
+is shipped as a compile-time SDK package (`sdk/` in this repo, embedded into
+the binary and uploaded to HRPAuth on startup, see
+[HRPAuth sdk-package.md](../HRPAuth/sdk-package.md)).
 
 ### Texture Management Passthrough
 
