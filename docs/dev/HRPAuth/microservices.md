@@ -79,6 +79,45 @@ Every extension participant registers its presence here. On the frontend side, *
 
 Repeated heartbeats keep `first_seen`, refresh `last_seen`, and may update all optional fields. Expired records are cleaned lazily on access.
 
+## Internal Service Authentication
+
+HRPAuth uses a dual-layered authentication mechanism for microservice communication:
+
+1.  **OAuth2 (Standard Auth)**: Used for all microservice -> HRPAuth Core API calls. Microservices must provide a Bearer token obtained via the `client_credentials` grant.
+2.  **Internal Key (Temporary Secret)**: Used for HRPAuth Core -> microservice callback calls. This key is dynamic, short-lived, and exists only in memory.
+
+### Temporary Key Acquisition (`POST /services/auth-key`)
+
+After a microservice has registered its presence, it must request a temporary internal key from HRPAuth.
+
+- **Auth**: Bearer token (OAuth2 Client Credentials).
+- **Request Body**:
+  ```json
+  { "name": "texture-service" }
+  ```
+- **Logic**:
+    - HRPAuth verifies the service name matches the `client_id` or is a known registered service.
+    - HRPAuth generates a new 64-character random token.
+    - The token is stored in the `PresenceRegistry` (memory + Redis) associated with the service.
+    - **Overwriting**: If a key already exists for the service name, it is overwritten by the new one, immediately invalidating the old instance's key.
+- **Response**:
+  ```json
+  {
+    "success": true,
+    "message": "Internal key generated/updated",
+    "data": { "internal_key": "..." }
+  }
+  ```
+
+### Heartbeat & Key Revocation
+
+HRPAuth Core runs a background worker to ensure microservices are alive and holding the correct key.
+
+- **Interval**: Every 10 minutes.
+- **Action**: HRPAuth sends a `GET /internal/heartbeat` request to each microservice that has an active `InternalKey`.
+- **Validation**: The request includes the `X-Internal-Key` header. The microservice must respond with `200 OK`.
+- **Revocation**: If the request fails (timeout, connection refused, or `401 Unauthorized`), HRPAuth **immediately revokes the key** in the registry. The service must re-register and re-fetch a key to resume operations.
+
 ## Compile-time SDK Aggregation
 
 The runtime JS SDK model is **removed**. The legacy endpoints `GET /services/list` (frontend SDK discovery) and `GET /services/sdk/:name` (SDK relaying) are gone, and the frontend (HRPAuth-Web) no longer discovers or loads SDK modules at runtime — there is no `window['<service-name>-sdk']` contract anymore. Frontend SDKs are delivered as **source packages** and aggregated into a generated frontend build at compile time. The authoritative contract is the [SDK Package Contract](sdk-package.md).

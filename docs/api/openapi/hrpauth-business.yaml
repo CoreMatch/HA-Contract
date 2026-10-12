@@ -693,6 +693,39 @@ paths:
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
+  /services/auth-key:
+    post:
+      summary: Request a temporary internal key for core callbacks
+      description: >
+        Requires OAuth2 service credentials. The key is generated and stored
+        in memory, overwriting any previous key for the same service name.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  description: Unique service name
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      internal_key: { type: string }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
   /services/route:
     post:
       summary: Register routing rules (pre/post) for a registered service

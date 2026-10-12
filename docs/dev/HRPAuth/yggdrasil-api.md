@@ -174,9 +174,16 @@ Creates a game-specific account and default profile for an existing core user.
 
 Internal endpoint called by HRPAuth core when a user's name is updated.
 
-- **Auth**: `X-Internal-Key` header.
+- **Auth**: `X-Internal-Key` header (dynamic temporary key).
 - **Body**: `{ "core_user_id": "<uuid>", "new_username": "<string>" }`.
 - **Effect**: Updates all profiles associated with the `core_user_id` to the new username.
+
+### Internal Heartbeat (`GET /internal/heartbeat`)
+
+Used by HRPAuth core to verify service health and internal key validity.
+
+- **Auth**: `X-Internal-Key` header.
+- **Response**: `204 No Content` or `200 OK` on success; `401 Unauthorized` if the key is invalid.
 
 ### Proxy Registration (`POST /internal/proxy-register`)
 
