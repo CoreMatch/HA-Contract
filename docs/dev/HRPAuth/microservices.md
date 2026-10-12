@@ -30,7 +30,7 @@ Certain domain-specific logic is moved into independent services to keep the HRP
 - **Role**: Implements Minecraft Yggdrasil protocols and game-specific account management.
 - **Mapping**: Establishes a 1:1 mapping between HRPAuth core users and game accounts via `core_user_id`.
 - **Inheritance**: Game accounts inherit the core service's `username` at registration.
-- **Sync**: Listens to core service username updates via internal sync APIs to maintain consistency.
+- **Sync**: Pulls user data (like `username`) lazily from HRPAuth core via internal APIs and caches it in Redis; no longer relies on real-time push events to maintain consistency.
 
 ## Service Registration (`POST /services/presence`)
 
@@ -47,6 +47,11 @@ Every extension participant registers its presence here. On the frontend side, *
     "frontend_areas": ["skin", "user"]
   },
   "security_level": 1,
+  "root_metadata": {
+    "yggdrasil": {
+      "serverName": "My Auth Server"
+    }
+  },
   "interacts_with": ["audit-service"]
 }
 ```
@@ -59,7 +64,8 @@ Every extension participant registers its presence here. On the frontend side, *
 | `scope.name` | Scope name of this service. |
 | `scope.frontend_areas` | Frontend mount areas this service covers. **Non-empty means the service is visible to the WebUI host**; omitted/empty means frontend-invisible (internal only). For first-party frontend integration, these areas are mount zones inside one WebUI, not multiple independent WebUIs or SDK hosts. |
 | `sdk_url` | **Removed.** This field was the legacy URL of a runtime JS usage file under the old SDK relay model. It is no longer part of `PresenceRequest` / `PresenceRecord`; SDKs are now delivered as source packages (see [SDK Package Contract](sdk-package.md)) and aggregated into the frontend at compile time, so no runtime URL is recorded anymore. |
-| `security_level` | Auth level of this service: `0` none / `1` user / `2` ops. Default `0`, clamped to `0..2`. |
+| `security_level` | Auth level of this service: `0` none / `1` user / `2` ops. Default `0`, clamped to `0..2`. Used by the universal relay to enforce authentication. |
+| `root_metadata` | Optional JSON object to be injected into the HRPAuth Core root (`/`) endpoint response. Allows microservices to provide top-level metadata (e.g., Yggdrasil server information). |
 | `interacts_with` | Optional list of other services this service interacts with. By default a service is implicitly treated as interacting with the main service only. |
 
 ### Response
@@ -109,7 +115,30 @@ After a microservice has registered its presence, it must request a temporary in
   }
   ```
 
-### Heartbeat & Key Revocation
+## Internal Service APIs
+
+These endpoints are provided by HRPAuth Core for microservices to query core data.
+
+### Get User Info (`GET /services/users/:uuid`)
+
+Retrieves basic user information by UUID.
+
+- **Auth**: Bearer token (OAuth2 Client Credentials) with **Ops (Level 2)** permissions.
+- **Response**:
+  ```json
+  {
+    "success": true,
+    "message": "success",
+    "data": {
+      "uid": 123,
+      "uuid": "...",
+      "email": "user@example.com",
+      "username": "CurrentName"
+    }
+  }
+  ```
+
+## Heartbeat & Key Revocation
 
 HRPAuth Core runs a background worker to ensure microservices are alive and holding the correct key.
 

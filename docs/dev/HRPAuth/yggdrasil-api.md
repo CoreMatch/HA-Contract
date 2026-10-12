@@ -170,13 +170,14 @@ Creates a game-specific account and default profile for an existing core user.
     3. Inherits the `username` from the core service for the default profile.
     4. Binds `mojang_uuid` if provided and valid.
 
-### Username Sync (`POST /internal/sync-username`)
+### Data Consistency (Lazy Loading)
 
-Internal endpoint called by HRPAuth core when a user's name is updated.
+The Yggdrasil service no longer receives push events for username changes or account deletions. Instead, it follows a **lazy loading** pattern:
 
-- **Auth**: `X-Internal-Key` header (dynamic temporary key).
-- **Body**: `{ "core_user_id": "<uuid>", "new_username": "<string>" }`.
-- **Effect**: Updates all profiles associated with the `core_user_id` to the new username.
+1.  **Cache Check**: When a profile name is needed (e.g., during `/authenticate` or `/sessionserver` calls), the service checks Redis for a cached `username` associated with the `core_user_id`.
+2.  **Pull from Core**: If not cached, the service calls HRPAuth Core's `GET /services/users/:uuid` internal API.
+3.  **Update & Cache**: The retrieved name is stored in Redis (TTL: 10 minutes) and the local database is updated to reflect the change.
+4.  **Auto-Cleanup**: If HRPAuth Core returns a `404 Not Found`, the Yggdrasil service assumes the core account has been deleted and triggers local account deletion.
 
 ### Internal Heartbeat (`GET /internal/heartbeat`)
 
@@ -196,29 +197,3 @@ Used by WinnerProxy to create a game account without an HRPAuth core identity.
     2. Stores the provided `password` (hashed) for local Yggdrasil auth.
     3. Account is subject to bot cleanup if not claimed within 30 days.
 
-### Claim Account (`POST /internal/claim-account`)
-
-Binds an existing proxy game account to a newly created HRPAuth core identity.
-
-- **Auth**: `X-Internal-Key` header.
-- **Body**: `{ "mojang_uuid": "<string>", "core_user_id": "<uuid>" }`.
-- **Logic**:
-    1. Finds the proxy account by `mojang_uuid` where `cbh = 0`.
-    2. Updates `core_user_id` and sets `cbh = 1`.
-    3. The account is now a full human account and no longer subject to bot cleanup.
-
-### Invalidate Tokens (`POST /internal/invalidate-tokens`)
-
-Revokes all Yggdrasil access tokens for the game account linked to a core user.
-
-- **Auth**: `X-Internal-Key` header.
-- **Body**: `{ "core_user_id": "<uuid>" }`.
-- **Effect**: Marks all active tokens for the linked game account as `invalid` without deleting the account itself. Used by Core `DELETE /user` so the cooling-period account cannot keep using stale Yggdrasil tokens.
-
-### Delete Account (`POST /internal/delete-account`)
-
-Internal endpoint to delete a game account when a core user is deleted.
-
-- **Auth**: `X-Internal-Key` header.
-- **Body**: `{ "core_user_id": "<uuid>" }`.
-- **Effect**: Deletes the account and all associated profiles/tokens/sessions.
