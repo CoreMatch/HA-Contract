@@ -6,9 +6,26 @@ info:
 servers:
   - url: /
 paths:
+  /texture/get:
+    post:
+      summary: Get current profile texture state for the authenticated account
+      description: >
+        Returns the caller's manageable Minecraft profiles and each profile's
+        currently active skin/cape bindings. This endpoint does not expose any
+        per-account texture library history.
+      security:
+        - BearerAuth: []
+      responses:
+        '200': { description: Profiles and their current texture bindings }
+        '401': { $ref: '#/components/responses/Error' }
   /texture/upload/{uuid}:
     post:
-      summary: Upload texture and generate preview for a specific profile
+      summary: Upload and activate a texture for a specific profile
+      description: >
+        Validates a PNG upload, stores the original texture, generates a WebP
+        preview for the profile management UI, and updates the profile's active
+        textures property. This endpoint is for current profile management, not
+        texture-library ingestion.
       security:
         - BearerAuth: []
       parameters:
@@ -29,7 +46,10 @@ paths:
         '500': { $ref: '#/components/responses/Error' }
   /texture/delete/{uuid}/{type}:
     delete:
-      summary: Delete a texture for a specific profile
+      summary: Delete the active texture binding for a specific profile
+      description: >
+        Removes the current skin or cape binding from the target profile. This
+        does not represent texture-library asset deletion.
       security:
         - BearerAuth: []
       parameters:
@@ -51,7 +71,10 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
   /previews/{fileName}:
     get:
-      summary: Get preview file
+      summary: Get generated preview file for profile texture management
+      description: >
+        Streams the generated WebP preview used by the profile texture
+        management UI.
       parameters:
         - in: path
           name: fileName

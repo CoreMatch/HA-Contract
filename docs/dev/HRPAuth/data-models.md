@@ -60,27 +60,7 @@ Table name: `profiles`
 - **Token**: Yggdrasil protocol access tokens.
 - **Session**: Game server join sessions.
 - **ProfileKey**: Minecraft 1.19+ chat-signing keys.
-- **TextureListSkin / TextureListCape**: Metadata for stored textures.
-
-### Texture Library
-
-Table names: `texture_list_skin`, `texture_list_cape`
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | uint | Primary key, auto-increment |
-| `hash` | string(64) | SHA-256 hash of the texture |
-| `account_id` | int | Reference to `accounts.id` |
-| `name` | string(255) | Display name of the texture |
-| `description` | text | Texture description |
-| `tags` | text | Comma-separated tags |
-| `width` | int | Image width |
-| `height` | int | Image height |
-| `preview_file` | string(255) | Name of the generated WebP preview file |
-| `created_at` | datetime | Creation time |
-| `updated_at` | datetime | Update time |
-
-> Unique constraint: `(account_id, hash)` to prevent duplicate textures per account.
+- **Texture Files / Preview Files**: Stored on disk under the Yggdrasil service's configured texture storage for current profile management. They are not modeled as per-account texture-library tables.
 
 ## Field Semantics
 

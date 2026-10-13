@@ -80,7 +80,6 @@ The following error codes are the stable registry for current HA business APIs. 
 | `service_not_registered` | Service not registered; send `/services/presence` first |
 | `relay_failed` | Relay forwarding to microservice failed |
 | `relay_not_found` | Relay rule not found for deletion |
-| `sdk_not_found` | Service not registered or has no `sdk_url` declared (legacy runtime SDK relay model) |
 | `sdk_package_conflict` | A SDK package with the same name already exists (HTTP 409) |
 | `sdk_package_not_found` | Requested SDK package does not exist (HTTP 404) |
 | `sdk_package_invalid` | SDK package archive is malformed or unreadable (HTTP 400) |

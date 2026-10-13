@@ -11,11 +11,11 @@ This is the single source of truth for the HA Business API, and it also records 
 
 This project implements the following external standards. For detailed protocol definitions, please refer to [docs/references/](../references/).
 
-1. **Yggdrasil API / authlib-injector**: Implementation of the official Minecraft authentication protocol and its injector compatibility layer. Endpoints and request/response schemas for the Yggdrasil surface (`/authserver/*`, `/sessionserver/*`, `/api/profiles/*`, `/api/user/profile/*`, `/textures/*`, `/skins/MinecraftSkins/*`, `/minecraftservices/*`, meta `GET /`) are documented in [`../dev/HRPAuth/yggdrasil-api.md`](../dev/HRPAuth/yggdrasil-api.md).
+1. **Yggdrasil API / authlib-injector**: Implementation of the official Minecraft authentication protocol and its injector compatibility layer. The protocol-facing read surface (`/authserver/*`, `/sessionserver/*`, `/api/profiles/*`, `/textures/*`, `/skins/MinecraftSkins/*`, `/minecraftservices/*`, meta `GET /`) is documented in [`../dev/HRPAuth/yggdrasil-api.md`](../dev/HRPAuth/yggdrasil-api.md). The companion business wrapper surface exposed by `HRPAuth-Yggdrasil-API` (`/texture/get`, `/texture/upload/{uuid}`, `/texture/delete/{uuid}/{type}`, `/register`, `/internal/*`, Mojang proxy endpoints) is specified separately in [`openapi/hrpauth-yggdrasil-business.yaml`](./openapi/hrpauth-yggdrasil-business.yaml).
 2. **CustomSkinAPI**: Implementation of the skin library standard interface.
 3. **HASkinProxy (Protocol Translation)**: A dedicated service that bridges Yggdrasil API to CustomSkinAPI for CSL-compatible clients.
 
-> Note: the Yggdrasil surface is intentionally **not** part of the OpenAPI `hrpauth-business.yaml` file — that file covers only the first-party business endpoints (`/login`, `/oauth/*`, `/texture/*`, etc.). Anything that a Minecraft client would call via authlib-injector is documented separately under `docs/dev/HRPAuth/yggdrasil-api.md`.
+> Note: the Yggdrasil surface is intentionally **not** part of the core OpenAPI `hrpauth-business.yaml` file — that file covers only HRPAuth Core business endpoints. `HRPAuth-Yggdrasil-API` business wrappers live in `openapi/hrpauth-yggdrasil-business.yaml`, while the protocol surface remains documented separately under `docs/dev/HRPAuth/yggdrasil-api.md`.
 
 ## Unified Constraints
 
@@ -60,8 +60,8 @@ During the transition period, some success fields will be mirrored at the top le
 
 ## File Descriptions
 
-- `openapi/hrpauth-business.yaml`: HRPAuth Business API specification
-- `openapi/haskinlib-business.yaml`: HASkinLib Business API specification
+- `openapi/hrpauth-business.yaml`: HRPAuth Core Business API specification
+- `openapi/hrpauth-yggdrasil-business.yaml`: HRPAuth-Yggdrasil-API business wrapper specification
 - `error-codes.md`: Unified error code registry
 
 ## Anti-Drift

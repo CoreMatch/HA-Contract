@@ -1,6 +1,10 @@
 # Yggdrasil API Reference
 
-This document is the single source of truth for the **Yggdrasil-compatible** HTTP surface exposed by the **HRPAuth-Yggdrasil-API** service. This service is decoupled from the HRPAuth core and focuses entirely on Minecraft-related logic.
+This document is the single source of truth for the **Yggdrasil-compatible**
+HTTP surface exposed by the **HRPAuth-Yggdrasil-API** service, plus the
+service's current-profile texture management wrappers used by first-party UI
+flows. This service is decoupled from the HRPAuth core and focuses entirely on
+Minecraft-related logic.
 
 > Reference target: [authlib-injector Yggdrasil Server Technical Specification](https://yushijinhun.github.io/authlib-injector/) and [wiki.vg Authentication](https://wiki.vg/Authentication).
 
@@ -11,7 +15,7 @@ This document is the single source of truth for the **Yggdrasil-compatible** HTT
 3. [Meta — `GET /`](#3-meta--get-)
 4. [Authserver](#4-authserver)
 5. [Sessionserver](#5-sessionserver)
-6. [Profile and Texture](#6-profile-and-texture)
+6. [Profile and Texture Management](#6-profile-and-texture-management)
 7. [Legacy Skin API](#7-legacy-skin-api)
 8. [Minecraft Services (Profile Keys)](#8-minecraft-services-profile-keys)
 9. [Account Registration and Sync](#9-account-registration-and-sync)
@@ -129,15 +133,21 @@ The response also carries `X-Authlib-Injector-API-Location: /` so that authlib-i
 }
 ```
 
-## 6. Profile and Texture
+## 6. Profile and Texture Management
 
 | Endpoint | Auth | Notes |
 |----------|------|-------|
 | `POST /api/profiles/minecraft` | none | Body: 纯 JSON 数组 `["name1","name2",...]`（authlib-injector / wiki.vg 标准）。响应为纯数组 `[{"id","name"}]`，仅返回命中的档案；未命中任何档案时返回 `[]`。非法请求体返回 `IllegalArgumentException`。 |
-| `PUT /api/user/profile/:uuid/:textureType` | `Authorization: Bearer <accessToken>` | `textureType ∈ {skin, cape}`. Multipart with `file` (PNG, validated to be 64x32/64x64 for skin or 64x32/22x17 for cape) and optional `model` (`slim` or empty). PNG is re-encoded to strip metadata. `textures` property is re-signed with the Yggdrasil private key. Non-standard dimensions or oversized textures are allowed with a `X-Texture-Warnings` response header when warnings are generated. |
-| `DELETE /api/user/profile/:uuid/:textureType` | `Authorization: Bearer <accessToken>` | Clears the texture. The property is dropped when the payload becomes empty; otherwise only the requested texture type is removed and the payload is re-signed. |
+| `POST /texture/get` | `Authorization: Bearer <accessToken>` | Returns the caller's manageable profiles and each profile's currently active texture bindings. This response is **current-state only** and does not include per-account texture history. |
+| `POST /texture/upload/:uuid` | `Authorization: Bearer <accessToken>` | WebUI-facing wrapper for current profile texture management. Multipart with `file` (PNG) and form fields `type ∈ {skin,cape}` plus optional `model=default|slim` for skins. Stores the original PNG, regenerates the profile `textures` property, and generates a WebP preview for the management UI. Non-standard but proportional dimensions may yield warnings in the JSON response. |
+| `DELETE /texture/delete/:uuid/:textureType` | `Authorization: Bearer <accessToken>` | Removes the currently active `skin` or `cape` binding from the target profile and re-signs the remaining payload if needed. This is a profile-state operation, not texture-library asset deletion. |
 | `GET /textures/:hash` | none | Streams `<storage>/textures/<hash>` as `image/png`. `404 NotFoundException` if the file is missing. |
-| `GET /previews/:fileName` | none | Streams generated WebP preview file. |
+| `GET /previews/:fileName` | none | Streams the generated WebP preview file used by the profile texture management UI. |
+
+The standard write endpoints `PUT/DELETE /api/user/profile/:uuid/:textureType`
+are not exposed directly by the current service implementation. WebUI-facing
+texture writes are provided by the business wrappers above, while the Yggdrasil
+read surfaces remain standard (`/sessionserver/...`, `/textures/:hash`).
 
 ## 7. Legacy Skin API
 
@@ -196,4 +206,3 @@ Used by WinnerProxy to create a game account without an HRPAuth core identity.
     1. Creates an account with `cbh = 0` (Created By Human = false).
     2. Stores the provided `password` (hashed) for local Yggdrasil auth.
     3. Account is subject to bot cleanup if not claimed within 30 days.
-

@@ -54,16 +54,25 @@ The service is configured via a `config.yaml` file. Default values are generated
 | `GET` | `/health` | Liveness probe. |
 | `GET` | `/{username}` | CSL profile (read-through cache). |
 | `GET` | `/textures/{hash}` | Raw texture bytes (read-through cache). |
-| `POST` | `/{username}/texture/delete` | Forward to upstream `POST /texture/delete`. |
+| `POST` | `/{username}/texture/delete` | Legacy passthrough for upstreams that still expose `POST /texture/delete`. |
 
 The CustomSkinLoader setup page is not served as a runtime route anymore: it
 is shipped as a compile-time SDK package (`sdk/` in this repo, embedded into
 the binary and uploaded to HRPAuth on startup, see
 [HRPAuth sdk-package.md](../HRPAuth/sdk-package.md)).
 
-### Texture Management Passthrough
+### Texture Management Passthrough (Legacy Compatibility)
 
-`POST /{username}/texture/delete` is a transparent forwarder to HRPAuth's `POST /texture/delete`. The proxy itself does **not** authenticate requests; the `Authorization` header and the request body (containing the bearer token, `profile_id`, `texture_type`, optional `auth_type` / `uid` / `email`) are forwarded verbatim. The upstream response (status code and JSON body) is returned to the client unchanged.
+`POST /{username}/texture/delete` is a transparent forwarder to an upstream
+legacy business endpoint `POST /texture/delete`. The proxy itself does **not**
+authenticate requests; the `Authorization` header and the request body are
+forwarded verbatim. The upstream response (status code and JSON body) is
+returned to the client unchanged.
+
+This passthrough is **not part of the current `HRPAuth-Yggdrasil-API` active
+contract**. The current Yggdrasil service exposes profile-state deletion as
+`DELETE /texture/delete/{uuid}/{type}`. Until HASkinProxy is migrated, this
+endpoint should be treated as compatibility-only for legacy upstreams.
 
 `:username` is used only to evict local cache entries on success:
 
