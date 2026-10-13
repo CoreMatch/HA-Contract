@@ -99,6 +99,13 @@ example-service-sdk.tar.gz
       "path": "/example"
     }
   ],
+  "profile_cards": [
+    {
+      "title": "Example Profile Card",
+      "module": "src/profile/ExampleProfileCard",
+      "priority": 100
+    }
+  ],
   "dependencies": {
     "some-lib": "^1.0.0"
   },
@@ -113,7 +120,7 @@ example-service-sdk.tar.gz
 | `schema_version` | int | yes | Manifest schema version. Currently `1`. |
 | `name` | string | yes | Unique service name. `[a-z0-9]([a-z0-9-]*[a-z0-9])?`, max 64 chars. Uniquely identifies the package on HRPAuth. |
 | `version` | string | yes | Semantic version (`major.minor.patch`). |
-| `routes` | array | yes | Non-empty list of route entries (see below). |
+| `routes` | array | conditional | Non-empty list of route entries (see below). Required unless the package explicitly declares at least one `profile_cards` entry. |
 | `routes[].path` | string | yes | Route path, MUST start with `/`, MUST NOT end with `/` (except root `/`), MUST NOT contain `?`/`#`/`..` segments. Becomes a React Router path. |
 | `routes[].module` | string | yes | Relative path to a TS/TSX module inside the package (extension optional). The module MUST have a **default export** React component (used with `React.lazy`). MUST be inside the package (no `..`, no absolute path). |
 | `routes[].title` | string | no | Optional document title hint. |
@@ -123,11 +130,37 @@ example-service-sdk.tar.gz
 | `dashboard` | object/array | no | When present, adds one or more sidebar items on the Dashboard page. Can be a single object or an array of objects. |
 | `dashboard[].label` | string | yes* | Dashboard display label. |
 | `dashboard[].path` | string | yes* | Target route path, MUST reference an entry in `routes`. |
+| `profile_cards` | object/array | no | When present, adds one or more cards to the host Profile page. Can be a single object or an array of objects. |
+| `profile_cards[].title` | string | yes* | Card title rendered by the host Profile page. |
+| `profile_cards[].module` | string | yes* | Relative path to a TS/TSX module inside the package (extension optional). The module MUST have a **default export** React component, and is rendered as the card body inside the host-provided card shell. MUST be inside the package (no `..`, no absolute path). |
+| `profile_cards[].priority` | int | no | Optional explicit display priority. Higher numbers render closer to the top. When omitted, the card falls back to SDK aggregation/load order. |
 | `dependencies` | object | no | npm dependencies to merge into the generated frontend `package.json`. Keys are package names, values are npm version ranges. |
 | `run_scripts` | bool | no | Whether npm lifecycle scripts (`preinstall`/`postinstall`/…) of the merged dependency tree may execute during install. **Default `false`** (install runs with `--ignore-scripts`). The handler may additionally enforce a configured npm blacklist. |
 
 > `menu.path` / `dashboard.path` reference **routes declared by the same
 > service**. Cross-service references are not allowed.
+
+> `profile_cards` are independent mount points and do **not** need a matching
+> route entry.
+
+> A package MUST declare at least one integration surface: either `routes`, or
+> `profile_cards`, or both. If `profile_cards` is absent, `routes` remains
+> required.
+
+### Profile Card Priority Contract
+
+- `profile_cards[].priority` is the **resolved final priority value** seen by
+  the host after the SDK provider applies its own deployment configuration.
+- Every SDK provider that declares `profile_cards` **MUST** expose a clear
+  deployment-facing configuration item so the deployer can set the priority for
+  each card.
+- If the deployer does not set a priority, the SDK provider may:
+  - provide a default priority value, or
+  - omit `priority` entirely.
+- Host rendering order is:
+  1. cards with explicit `priority`, sorted by descending numeric value
+  2. cards without `priority`, sorted by SDK aggregation/load order
+  3. ties keep stable SDK aggregation/load order
 
 ### Conflict Policy
 
@@ -144,9 +177,10 @@ example-service-sdk.tar.gz
 3. `manifest.json` must parse and satisfy the schema above.
 4. All file paths must be relative, inside the package, free of `..` and
    absolute segments; no symlinks/hard links.
-5. `routes[].module` must resolve inside the package.
-6. Package size must not exceed `max_package_size`.
-7. Duplicate `name` → `409 sdk_package_conflict`.
+5. At least one of `routes` / `profile_cards` must be non-empty.
+6. `routes[].module` and `profile_cards[].module` must resolve inside the package.
+7. Package size must not exceed `max_package_size`.
+8. Duplicate `name` → `409 sdk_package_conflict`.
 
 ## Generated Frontend Contract (HA-WebUI-SDKHandler)
 
@@ -159,6 +193,7 @@ The handler produces the following generated modules under
 | `sdk-routes.tsx` | `sdkRoutes: RouteObject[]` (lazy components) | `App.tsx` route tree |
 | `sdk-navbar.tsx` | `sdkNavbarItems: SdkNavbarItem[]` | `Navbar.tsx` |
 | `sdk-dashboard.tsx` | `sdkDashboardItems: SdkDashboardItem[]` | `Dashboard.tsx` |
+| `sdk-profile-cards.tsx` | `sdkProfileCards: SdkProfileCardItem[]` | `Profile.tsx` |
 
 Type contracts are defined in `HRPAuth-Web/src/types/generated-sdk.ts`
 (human-maintained, stable):
@@ -170,6 +205,7 @@ export interface SdkManifestEntry {
   routes: { path: string; module: string; title?: string }[];
   menu?: { label: string; path: string }[];
   dashboard?: { label: string; path: string }[];
+  profileCards?: { title: string; module: string; priority?: number }[];
   runScripts: boolean;
   sha256: string;
 }
@@ -184,6 +220,14 @@ export interface SdkDashboardItem {
   key: string;      // service name
   label: string;
   element: React.ReactNode; // lazy component rendering route content
+}
+
+export interface SdkProfileCardItem {
+  key: string;      // service name or service name + index
+  title: string;
+  priority?: number;
+  loadOrder: number; // stable aggregation order from SDK handler
+  element: React.ReactNode; // lazy component rendering card body
 }
 ```
 

@@ -222,6 +222,13 @@ Each package declares its frontend integration surface declaratively in a root-l
       "path": "/texture"
     }
   ],
+  "profile_cards": [
+    {
+      "title": "Texture Studio",
+      "module": "src/profile/TextureStudioCard",
+      "priority": 100
+    }
+  ],
   "dependencies": {
     "some-lib": "^1.0.0"
   },
@@ -236,7 +243,10 @@ The following endpoints are **removed** and must not be used:
 - `GET /services/list` — runtime frontend SDK discovery.
 - `GET /services/sdk/:name` — runtime JS SDK relaying.
 
-The frontend has no runtime SDK module loader anymore; frontend integration surfaces (routes, navbar menu, dashboard items) are declared in `manifest.json` and materialized into the compiled bundle by the SDK handler.
+The frontend has no runtime SDK module loader anymore; frontend integration surfaces (routes, navbar menu, dashboard items, Profile cards) are declared in `manifest.json` and materialized into the compiled bundle by the SDK handler.
+
+`routes` remain required for ordinary page-style SDKs. A package may omit
+`routes` only when it explicitly declares one or more `profile_cards` entries.
 
 ## Route Rules (`POST /services/route`)
 
