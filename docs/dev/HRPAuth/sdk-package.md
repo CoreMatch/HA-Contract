@@ -87,14 +87,18 @@ example-service-sdk.tar.gz
       "title": "Example"
     }
   ],
-  "menu": {
-    "label": "Example",
-    "path": "/example"
-  },
-  "dashboard": {
-    "label": "Example",
-    "path": "/example"
-  },
+  "menu": [
+    {
+      "label": "Example",
+      "path": "/example"
+    }
+  ],
+  "dashboard": [
+    {
+      "label": "Example",
+      "path": "/example"
+    }
+  ],
   "dependencies": {
     "some-lib": "^1.0.0"
   },
@@ -113,12 +117,12 @@ example-service-sdk.tar.gz
 | `routes[].path` | string | yes | Route path, MUST start with `/`, MUST NOT end with `/` (except root `/`), MUST NOT contain `?`/`#`/`..` segments. Becomes a React Router path. |
 | `routes[].module` | string | yes | Relative path to a TS/TSX module inside the package (extension optional). The module MUST have a **default export** React component (used with `React.lazy`). MUST be inside the package (no `..`, no absolute path). |
 | `routes[].title` | string | no | Optional document title hint. |
-| `menu` | object | no | When present, adds a navbar item. |
-| `menu.label` | string | yes* | Navbar display label. |
-| `menu.path` | string | yes* | Target route path, MUST reference an entry in `routes`. |
-| `dashboard` | object | no | When present, adds a sidebar item on the Dashboard page that embeds the target route component in the main area. |
-| `dashboard.label` | string | yes* | Dashboard display label. |
-| `dashboard.path` | string | yes* | Target route path, MUST reference an entry in `routes`. |
+| `menu` | object/array | no | When present, adds one or more navbar items. Can be a single object or an array of objects. |
+| `menu[].label` | string | yes* | Navbar display label. |
+| `menu[].path` | string | yes* | Target route path, MUST reference an entry in `routes`. |
+| `dashboard` | object/array | no | When present, adds one or more sidebar items on the Dashboard page. Can be a single object or an array of objects. |
+| `dashboard[].label` | string | yes* | Dashboard display label. |
+| `dashboard[].path` | string | yes* | Target route path, MUST reference an entry in `routes`. |
 | `dependencies` | object | no | npm dependencies to merge into the generated frontend `package.json`. Keys are package names, values are npm version ranges. |
 | `run_scripts` | bool | no | Whether npm lifecycle scripts (`preinstall`/`postinstall`/…) of the merged dependency tree may execute during install. **Default `false`** (install runs with `--ignore-scripts`). The handler may additionally enforce a configured npm blacklist. |
 
@@ -164,8 +168,8 @@ export interface SdkManifestEntry {
   name: string;
   version: string;
   routes: { path: string; module: string; title?: string }[];
-  menu?: { label: string; path: string };
-  dashboard?: { label: string; path: string };
+  menu?: { label: string; path: string }[];
+  dashboard?: { label: string; path: string }[];
   runScripts: boolean;
   sha256: string;
 }

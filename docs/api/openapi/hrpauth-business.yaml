@@ -1133,9 +1133,13 @@ components:
           items:
             $ref: '#/components/schemas/SdkRouteMeta'
         menu:
-          $ref: '#/components/schemas/SdkMenuMeta'
+          type: array
+          items:
+            $ref: '#/components/schemas/SdkMenuMeta'
         dashboard:
-          $ref: '#/components/schemas/SdkDashboardMeta'
+          type: array
+          items:
+            $ref: '#/components/schemas/SdkDashboardMeta'
         dependencies:
           type: object
           additionalProperties:

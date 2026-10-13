@@ -208,14 +208,18 @@ Each package declares its frontend integration surface declaratively in a root-l
       "title": "Texture Studio"
     }
   ],
-  "menu": {
-    "label": "Texture Studio",
-    "path": "/texture"
-  },
-  "dashboard": {
-    "label": "Texture Studio",
-    "path": "/texture"
-  },
+  "menu": [
+    {
+      "label": "Texture Studio",
+      "path": "/texture"
+    }
+  ],
+  "dashboard": [
+    {
+      "label": "Texture Studio",
+      "path": "/texture"
+    }
+  ],
   "dependencies": {
     "some-lib": "^1.0.0"
   },
