@@ -141,8 +141,13 @@ The response also carries `X-Authlib-Injector-API-Location: /` so that authlib-i
 | `POST /texture/get` | `Authorization: Bearer <accessToken>` | Returns the caller's manageable profiles and each profile's currently active texture bindings. This response is **current-state only** and does not include per-account texture history. |
 | `POST /texture/upload/:uuid` | `Authorization: Bearer <accessToken>` | WebUI-facing wrapper for current profile texture management. Multipart with `file` (PNG) and form fields `type ∈ {skin,cape}` plus optional `model=default|slim` for skins. Stores the original PNG, regenerates the profile `textures` property, and generates a WebP preview for the management UI. Non-standard but proportional dimensions may yield warnings in the JSON response. |
 | `DELETE /texture/delete/:uuid/:textureType` | `Authorization: Bearer <accessToken>` | Removes the currently active `skin` or `cape` binding from the target profile and re-signs the remaining payload if needed. This is a profile-state operation, not texture-library asset deletion. |
+| `GET /texture/avatar/:uuid` | none | Returns the current local skin's front face and head overlay as `image/png`; existing skins are rendered on first access. Returns `400` for an invalid UUID, `404` when no local skin is bound, and `500` for storage or rendering errors. This does not change the account avatar. |
 | `GET /textures/:hash` | none | Streams `<storage>/textures/<hash>` as `image/png`. `404 NotFoundException` if the file is missing. |
 | `GET /previews/:fileName` | none | Streams the generated WebP preview file used by the profile texture management UI. |
+
+Skin uploads generate a face avatar. On deletion or replacement, the old
+texture and avatar are eligible for background cleanup after seven days, only
+when no active or unexpired binding references the same texture.
 
 The standard write endpoints `PUT/DELETE /api/user/profile/:uuid/:textureType`
 are not exposed directly by the current service implementation. WebUI-facing

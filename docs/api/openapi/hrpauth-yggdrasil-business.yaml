@@ -18,14 +18,62 @@ paths:
       responses:
         '200': { description: Profiles and their current texture bindings }
         '401': { $ref: '#/components/responses/Error' }
+  /player/profile:
+    get:
+      summary: Get the authenticated user's game profile
+      description: Uses the HRPAuth Core access token; returns null without creating a local account or profile when none exists.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Existing profile, or null when the account has not created one
+        '401': { $ref: '#/components/responses/Error' }
+    post:
+      summary: Manually create the authenticated user's game profile
+      description: >
+        Validates the HRPAuth Core access token and, only on this explicit
+        request, creates a missing local account mapping and profile atomically.
+        Creates at most one profile for the caller. The profile UUID may be
+        randomly generated, supplied by the caller, or looked up from a Mojang
+        username. It does not change accounts.mojang_uuid. Mojang username
+        lookup is public and does not verify ownership. Creation is rejected
+        when the UUID is already used by a local profile or linked to another
+        local account.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode:
+                  type: string
+                  enum: [random, custom, mojang]
+                uuid:
+                  type: string
+                  description: Required for custom mode; 32 hexadecimal characters, hyphens optional.
+                username:
+                  type: string
+                  description: Required for mojang mode; a premium Minecraft username.
+      responses:
+        '201': { description: Profile created }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
   /texture/upload/{uuid}:
     post:
       summary: Upload and activate a texture for a specific profile
       description: >
         Validates a PNG upload, stores the original texture, generates a WebP
-        preview for the profile management UI, and updates the profile's active
-        textures property. This endpoint is for current profile management, not
-        texture-library ingestion.
+        preview for the profile management UI, generates a PNG face avatar for
+        skins, and updates the profile's active textures property. Skins must be
+        large enough to extract the face and head overlay. This endpoint is for
+        current profile management, not texture-library ingestion.
       security:
         - BearerAuth: []
       parameters:
@@ -69,6 +117,29 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+  /texture/avatar/{uuid}:
+    get:
+      summary: Get the current skin's face avatar for a profile
+      description: >
+        Returns a PNG of the skin's front face with its head overlay, or 404
+        when the profile has no local skin. Existing local skins are rendered
+        on first access. This does not change the account avatar.
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+          description: Profile UUID, 32 hexadecimal characters with optional hyphens.
+      responses:
+        '200':
+          description: PNG face avatar
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
   /previews/{fileName}:
     get:
       summary: Get generated preview file for profile texture management

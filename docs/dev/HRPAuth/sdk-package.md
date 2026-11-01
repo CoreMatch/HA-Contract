@@ -99,6 +99,12 @@ example-service-sdk.tar.gz
       "path": "/example"
     }
   ],
+  "critical_operations": [
+    {
+      "label": "Review sensitive settings",
+      "path": "/example"
+    }
+  ],
   "profile_cards": [
     {
       "title": "Example Profile Card",
@@ -130,6 +136,9 @@ example-service-sdk.tar.gz
 | `dashboard` | object/array | no | When present, adds one or more sidebar items on the Dashboard page. Can be a single object or an array of objects. |
 | `dashboard[].label` | string | yes* | Dashboard display label. |
 | `dashboard[].path` | string | yes* | Target route path, MUST reference an entry in `routes`. |
+| `critical_operations` | object/array | no | Adds one or more route links to the host Account Security page's Critical Operations section. Can be a single object or an array of objects. |
+| `critical_operations[].label` | string | yes* | Display label for the operation link. MUST NOT be blank. |
+| `critical_operations[].path` | string | yes* | Target route path, MUST reference an entry in this package's `routes`. |
 | `profile_cards` | object/array | no | When present, adds one or more cards to the host Profile page. Can be a single object or an array of objects. |
 | `profile_cards[].title` | string | yes* | Card title rendered by the host Profile page. |
 | `profile_cards[].module` | string | yes* | Relative path to a TS/TSX module inside the package (extension optional). The module MUST have a **default export** React component, and is rendered as the card body inside the host-provided card shell. MUST be inside the package (no `..`, no absolute path). |
@@ -137,8 +146,9 @@ example-service-sdk.tar.gz
 | `dependencies` | object | no | npm dependencies to merge into the generated frontend `package.json`. Keys are package names, values are npm version ranges. |
 | `run_scripts` | bool | no | Whether npm lifecycle scripts (`preinstall`/`postinstall`/…) of the merged dependency tree may execute during install. **Default `false`** (install runs with `--ignore-scripts`). The handler may additionally enforce a configured npm blacklist. |
 
-> `menu.path` / `dashboard.path` reference **routes declared by the same
-> service**. Cross-service references are not allowed.
+> `menu.path`, `dashboard.path`, and `critical_operations.path` reference
+> **routes declared by the same service**. Cross-service references are not
+> allowed.
 
 > `profile_cards` are independent mount points and do **not** need a matching
 > route entry.
@@ -178,9 +188,10 @@ example-service-sdk.tar.gz
 4. All file paths must be relative, inside the package, free of `..` and
    absolute segments; no symlinks/hard links.
 5. At least one of `routes` / `profile_cards` must be non-empty.
-6. `routes[].module` and `profile_cards[].module` must resolve inside the package.
-7. Package size must not exceed `max_package_size`.
-8. Duplicate `name` → `409 sdk_package_conflict`.
+6. `menu.path`, `dashboard.path`, and `critical_operations.path` must reference a route in the same package.
+7. `routes[].module` and `profile_cards[].module` must resolve inside the package.
+8. Package size must not exceed `max_package_size`.
+9. Duplicate `name` → `409 sdk_package_conflict`.
 
 ## Generated Frontend Contract (HA-WebUI-SDKHandler)
 
@@ -193,6 +204,7 @@ The handler produces the following generated modules under
 | `sdk-routes.tsx` | `sdkRoutes: RouteObject[]` (lazy components) | `App.tsx` route tree |
 | `sdk-navbar.tsx` | `sdkNavbarItems: SdkNavbarItem[]` | `Navbar.tsx` |
 | `sdk-dashboard.tsx` | `sdkDashboardItems: SdkDashboardItem[]` | `Dashboard.tsx` |
+| `sdk-critical-operations.ts` | `sdkCriticalOperations: SdkCriticalOperationItem[]` | `AccountSecurity.tsx` |
 | `sdk-profile-cards.tsx` | `sdkProfileCards: SdkProfileCardItem[]` | `Profile.tsx` |
 
 Type contracts are defined in `HRPAuth-Web/src/types/generated-sdk.ts`
@@ -220,6 +232,12 @@ export interface SdkDashboardItem {
   key: string;      // service name
   label: string;
   element: React.ReactNode; // lazy component rendering route content
+}
+
+export interface SdkCriticalOperationItem {
+  key: string;      // service name + operation index
+  label: string;
+  path: string;     // route path declared by the same SDK
 }
 
 export interface SdkProfileCardItem {

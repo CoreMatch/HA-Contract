@@ -1140,6 +1140,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SdkDashboardMeta'
+        critical_operations:
+          type: array
+          items:
+            $ref: '#/components/schemas/SdkCriticalOperationMeta'
         dependencies:
           type: object
           additionalProperties:
@@ -1178,3 +1182,13 @@ components:
         path:
           type: string
           description: Must reference a route path
+    SdkCriticalOperationMeta:
+      type: object
+      required: [label, path]
+      properties:
+        label:
+          type: string
+          description: Display label shown in Account Security Critical Operations
+        path:
+          type: string
+          description: Must reference a route path declared by the same SDK package

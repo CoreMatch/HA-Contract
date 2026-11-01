@@ -170,7 +170,7 @@ POST /services/sdk-packages  ──►     validate + store (fs + Redis)
 
 ### Upload
 
-A satellite service uploads a self-contained SDK package (a `tar.gz` or `zip` archive with exactly one root-level `manifest.json`) to HRPAuth via `POST /services/sdk-packages` (multipart/form-data, ops level 2 auth). HRPAuth validates the archive and the manifest, records the metadata (`name`/`version`/`sha256`/`size`/`routes`/`menu`/`dashboard`/`dependencies`/`run_scripts`), and stores the package under `StorageDir/<name>/archive` with a `.meta.json` sidecar. Uploading a package whose `name` already exists is **rejected with `409 sdk_package_conflict`**; replacing a package requires deleting it first (`DELETE /services/sdk-packages/{name}`).
+A satellite service uploads a self-contained SDK package (a `tar.gz` or `zip` archive with exactly one root-level `manifest.json`) to HRPAuth via `POST /services/sdk-packages` (multipart/form-data, ops level 2 auth). HRPAuth validates the archive and the manifest, records the metadata (`name`/`version`/`sha256`/`size`/`routes`/`menu`/`dashboard`/`critical_operations`/`dependencies`/`run_scripts`), and stores the package under `StorageDir/<name>/archive` with a `.meta.json` sidecar. Uploading a package whose `name` already exists is **rejected with `409 sdk_package_conflict`**; replacing a package requires deleting it first (`DELETE /services/sdk-packages/{name}`).
 
 ### Pull & Build
 
@@ -243,7 +243,7 @@ The following endpoints are **removed** and must not be used:
 - `GET /services/list` — runtime frontend SDK discovery.
 - `GET /services/sdk/:name` — runtime JS SDK relaying.
 
-The frontend has no runtime SDK module loader anymore; frontend integration surfaces (routes, navbar menu, dashboard items, Profile cards) are declared in `manifest.json` and materialized into the compiled bundle by the SDK handler.
+The frontend has no runtime SDK module loader anymore; frontend integration surfaces (routes, navbar menu, dashboard items, Critical Operations links, Profile cards) are declared in `manifest.json` and materialized into the compiled bundle by the SDK handler.
 
 `routes` remain required for ordinary page-style SDKs. A package may omit
 `routes` only when it explicitly declares one or more `profile_cards` entries.

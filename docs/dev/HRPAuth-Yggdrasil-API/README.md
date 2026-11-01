@@ -58,9 +58,10 @@ Allows external proxies (like `WinnerProxy`) to create game accounts for users w
 - **Marker**: Accounts created this way are flagged as `cbh=0` (Created By Human = false) and are subject to the ecosystem's bot cleanup policy (30-day claim window).
 
 ### 3.2 Texture Standards
-- **Validation**: Skins (64x32/64x64 PNG), Capes (64x32/22x17 PNG).
-- **Warning Header**: Non-standard dimensions trigger a `X-Texture-Warnings` response header.
-- **Business Scope**: `/texture/get`, `/texture/upload/:uuid`, `DELETE /texture/delete/:uuid/:type`, and `GET /previews/:fileName` belong to **current profile texture management**. They are not a texture discovery or per-account texture-library surface.
+- **Validation**: Standard skin PNG sizes are 64x32 and 64x64; standard cape PNG sizes are 64x32 and 22x17. Non-standard dimensions can be accepted with warnings in the upload response, but a skin must be large enough to extract its face and head overlay.
+- **Business Scope**: `/texture/get`, `/texture/upload/:uuid`, `DELETE /texture/delete/:uuid/:type`, `GET /texture/avatar/:uuid`, and `GET /previews/:fileName` belong to **current profile texture management**. They are not a texture discovery or per-account texture-library surface.
+- **Skin Avatar**: `GET /texture/avatar/:uuid` is public and returns `image/png`, not a JSON success envelope. It renders the current local skin's front face with the head overlay; the UUID may contain hyphens. It returns `400` for an invalid UUID, `404` when no local skin is bound, and `500` on storage or rendering failure. It does not change the account avatar.
+- **Lifecycle**: Skin upload generates the avatar; an existing skin's avatar is generated on first access if needed. Deleting or replacing a skin removes the active binding immediately; the old texture and avatar become eligible for background cleanup after seven days, provided no active or unexpired binding references the same texture.
 
 ---
 
