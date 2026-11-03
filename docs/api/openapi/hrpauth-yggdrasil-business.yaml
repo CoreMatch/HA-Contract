@@ -174,6 +174,10 @@ paths:
   /skin/{username}:
     get:
       summary: Legacy Skin API (CustomSkinAPI compatible)
+      description: >
+        Also served under the alias path
+        `GET /skins/MinecraftSkins/{username}` for authlib-injector legacy
+        skin API compatibility.
       parameters:
         - in: path
           name: username
@@ -251,7 +255,110 @@ paths:
       responses:
         '200': { description: png file }
         '404': { $ref: '#/components/responses/Error' }
+  /player:
+    get:
+      summary: Get the game account summary for the authenticated user
+      description: >
+        Resolves the HRPAuth Core Bearer token to the local game account and
+        returns its summary fields.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Success; `data` contains `uid`, `account_id`, `mbe`, `mojang_uuid`, `cbh`
+        '401': { $ref: '#/components/responses/Error' }
+  /player/mojang-bind-enable:
+    post:
+      summary: Enable the Mojang bind flow for the authenticated account
+      description: >
+        Sets `mbe=true` and schedules a 15-minute automatic revert if the
+        binding is not completed.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Success; `data` is the updated player summary (`uid`, `account_id`, `mbe`, `mojang_uuid`, `cbh`)
+        '401': { $ref: '#/components/responses/Error' }
+  /player/mojang-bind-disable:
+    post:
+      summary: Disable the Mojang bind flow for the authenticated account
+      description: Sets `mbe=false`.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Success; `data` is the updated player summary (`uid`, `account_id`, `mbe`, `mojang_uuid`, `cbh`)
+        '401': { $ref: '#/components/responses/Error' }
+  /register:
+    post:
+      summary: Create a game account for an existing HRPAuth Core user
+      description: >
+        Verifies the user's core credentials and creates the local game
+        account plus its first profile. Subject to login rate limiting.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, password]
+              properties:
+                identifier:
+                  type: string
+                  description: Core user email or username
+                password:
+                  type: string
+                mojang_uuid:
+                  type: string
+                  description: Optional Mojang UUID to link at registration time
+      responses:
+        '200':
+          description: Success; `data` contains `account_id` and `profile` (`id`, `name`)
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+  /internal/proxy-register:
+    post:
+      summary: Register a proxy (bot) game account (internal, service-to-service)
+      description: >
+        Authenticated via the `X-Internal-Key` header. Creates a
+        proxy-registered account (`cbh=0`) used by proxy flows.
+      parameters:
+        - $ref: '#/components/parameters/InternalKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username: { type: string }
+                password: { type: string }
+                mojang_uuid: { type: string }
+      responses:
+        '200':
+          description: Success; `data` contains `account_id` and `profile_id`
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /internal/heartbeat:
+    get:
+      summary: Liveness probe for internal callbacks (internal, service-to-service)
+      description: Authenticated via the `X-Internal-Key` header.
+      parameters:
+        - $ref: '#/components/parameters/InternalKeyHeader'
+      responses:
+        '200': { description: Success }
+        '401': { $ref: '#/components/responses/Error' }
 components:
+  parameters:
+    InternalKeyHeader:
+      name: X-Internal-Key
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Temporary internal key issued by HRPAuth Core (`POST /services/auth-key`)
   securitySchemes:
     BearerAuth:
       type: http

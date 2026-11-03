@@ -13,18 +13,6 @@ paths:
       responses:
         '200':
           description: Success
-  /login:
-    post:
-      summary: Deprecated legacy login endpoint
-      deprecated: true
-      responses:
-        '410': { $ref: '#/components/responses/Error' }
-  /loginbymt:
-    post:
-      summary: Deprecated legacy Manage Token login endpoint
-      deprecated: true
-      responses:
-        '410': { $ref: '#/components/responses/Error' }
   /oauth/login-ticket:
     post:
       summary: Verify password and issue a short-lived login ticket or first-party tokens
@@ -646,15 +634,6 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
-  /change-profile-name:
-    post:
-      summary: Change profile name via Bearer token
-      responses:
-        '200': { description: Success }
-        '400': { $ref: '#/components/responses/Error' }
-        '401': { $ref: '#/components/responses/Error' }
-        '404': { $ref: '#/components/responses/Error' }
-        '409': { $ref: '#/components/responses/Error' }
   /captcha:
     post:
       summary: Generate captcha
@@ -912,6 +891,118 @@ paths:
                 format: binary
         '400': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+  /internal/verify-credentials:
+    post:
+      summary: Verify a user's credentials (internal, service-to-service)
+      description: >
+        Requires ops (level 2) auth. Used by satellite services to verify an
+        email/username + password pair against the core user database. The
+        200 body is the raw user identity object (not wrapped in the unified
+        envelope); failures return a plain `{"error": "..."}` body.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, password]
+              properties:
+                identifier:
+                  type: string
+                  description: User email or username
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Matched user identity (`UUID`, `Email`, `Username`)
+        '401':
+          description: Credentials invalid
+  /internal/verify-token:
+    post:
+      summary: Resolve an OAuth2 access token to a user (internal, service-to-service)
+      description: >
+        Requires ops (level 2) auth. Used by satellite services to resolve a
+        site-side OAuth2 access token to the owning user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        '200':
+          description: Success; `data` contains `uid`, `uuid`, `email`, `username`
+        '401': { $ref: '#/components/responses/Error' }
+  /services/users/{uuid}:
+    get:
+      summary: Look up a user by UUID (internal, service-to-service)
+      description: >
+        Requires ops (level 2) auth. Used by satellite services to pull user
+        metadata from the core.
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success; `data` contains `uid`, `uuid`, `email`, `username`
+        '404': { $ref: '#/components/responses/Error' }
+  /services/hook:
+    post:
+      summary: Register webhook hook rules for a registered service
+      description: >
+        The service must be registered via `/services/presence` first. Hook
+        rules are invoked during the OAuth2 authorization flow in the phases
+        `auth.input`, `auth.risk`, and `auth.post_verify`, with capabilities
+        `observe`, `patch`, or `veto` and fail policies `ignore` (default),
+        `fail_open`, or `fail_closed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  description: Registered service name
+                hooks:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      paths:
+                        type: array
+                        items: { type: string }
+                        description: Matched request paths; a trailing `*` means prefix match
+                      phase:
+                        type: string
+                        enum: [auth.input, auth.risk, auth.post_verify]
+                      capability:
+                        type: string
+                        enum: [observe, patch, veto]
+                      priority:
+                        type: integer
+                      fail_policy:
+                        type: string
+                        enum: [ignore, fail_open, fail_closed]
+                      patch_allowlist:
+                        type: array
+                        items: { type: string }
+                      url:
+                        type: string
+                        description: Callback URL invoked for matched requests
+      responses:
+        '200':
+          description: Success; `data` contains `service` and accepted rule `count`
+        '400': { $ref: '#/components/responses/Error' }
 components:
   parameters:
     ApiKeyHeader:

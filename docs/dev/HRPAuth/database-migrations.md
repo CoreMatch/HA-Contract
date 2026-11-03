@@ -14,19 +14,10 @@ This document explains the current database schema management, migration command
 | Path | Purpose |
 |------|---------|
 | `cmd/migrate/main.go` | Migration command entry point |
-| `database/migrations/000001_baseline.up.sql` | Merged baseline: Final Schema for 5 tables |
+| `database/migrations/000001_baseline.up.sql` | Squashed baseline: current schema for `users`, `oauth2_clients`, `oauth2_authorization_codes`, `oauth2_access_tokens`, `oauth2_refresh_tokens`, `deleted_accounts`, `webauthn_credentials` |
 | `database/migrations/000001_baseline.down.sql` | Baseline rollback |
-| `database/migrations/000002_oauth2.up.sql` | OAuth2 schema (clients, tokens, codes) |
-| `database/migrations/000003_add_2fa_to_users.up.sql` | Add 2FA column to users table |
-| `database/migrations/000004_profile_keys.up.sql` | Profile keys table (Minecraft 1.19+ chat-signing) |
-| `database/migrations/000005_add_delete_when_to_profile_properties.up.sql` | Add delete_when to profile_properties |
-| `database/migrations/000006_drop_remember_token.up.sql` | Drop remember_token from users |
-| `database/migrations/000007_add_deleted_at_to_users.up.sql` | Add deleted_at to users |
-| `database/migrations/000008_create_deleted_accounts_table.up.sql` | Create deleted_accounts table |
-| `database/migrations/000009_add_webauthn_support.up.sql` | Add WebAuthn support |
-| `database/migrations/000010_add_email_2fa_support.up.sql` | Add Email 2FA support |
-| `database/migrations/000011_add_recovery_key_support.up.sql` | Add Recovery Key support |
-| `database/migrations/000012_remove_minecraft_logic.up.sql` | Decouple: Remove Minecraft-specific tables and fields |
+
+> The historical step-by-step migrations (`000002`–`000012`, including OAuth2 schema, 2FA, profile keys, WebAuthn, email 2FA, recovery key, and the Minecraft-logic removal) were squashed into the single baseline above on 2026-10-14 (`b8a745c`). Minecraft-specific tables no longer belong to the core schema; they live in HRPAuth-Yggdrasil-API.
 
 ## HRPAuth-Yggdrasil-API Migrations
 

@@ -9,7 +9,7 @@ This document defines the **External Interaction Contract** for the `HRPAuth-Ygg
 ### 1.1 Yggdrasil Protocol (Minecraft Standard)
 This service is the authoritative provider for Yggdrasil-compatible endpoints.
 - **Surface**: `/authserver/*`, `/sessionserver/*`, `/api/profiles/*`, `/textures/*`.
-- **Reference**: Full endpoint details are in [yggdrasil-api.md](file:///home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/HA-Contract/docs/dev/HRPAuth/yggdrasil-api.md).
+- **Reference**: Full endpoint details are in [yggdrasil-api.md](../HRPAuth/yggdrasil-api.md).
 - **UUID Constraint**: All UUIDs in paths and JSON bodies MUST be **32-character, unhyphenated, lowercase hex**.
 
 ### 1.2 HA Business API (Unified Standard)

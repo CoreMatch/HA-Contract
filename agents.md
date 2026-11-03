@@ -1,21 +1,23 @@
 # Agents Guide
 
-This document instructs AI agents on how to work within the **HA-Contract** monorepo. Every agent operating in this repository MUST read this file before starting any task.
+This document instructs AI agents on how to work within the **HA-Contract** repository. Every agent operating in this repository MUST read this file before starting any task.
 
 ---
 
 ## Repository Overview
 
-HA-Contract is the single-source-of-truth contract and service collection for the [CoreMatch](https://github.com/CoreMatch) HA (High-performance Authentication) system. It contains **five sub-projects** and a centralized documentation layer.
+HA-Contract is the single-source-of-truth **contract and documentation center** for the [CoreMatch](https://github.com/CoreMatch) HA (High-performance Authentication) system. The services themselves live in **separate sibling repositories**; this repository contains only contracts, documentation, and helper scripts (the legacy root-level symlinks into a local monorepo were removed on 2026-11-03).
 
-| Sub-Project | Path | Purpose | Tech Stack |
+| Service | Repository | Purpose | Tech Stack |
 |---|---|---|---|
-| **HRPAuth** | `HRPAuth/` | Core auth service (Business API + Yggdrasil) | Go 1.26+, Gin, MySQL, Redis, GORM |
-| **HASkinLib** | `HASkinLib/` | Skin and texture library | Go 1.25+, Gin, MySQL (shared), GORM |
-| **WinnerProxy** | `WinnerProxy/` | Server-join proxy (HRPAuth or Mojang upstream) | Go 1.26+, Gin, freecache |
-| **HASkinProxy** | `HASkinProxy/` | Yggdrasil-to-CSL compatibility proxy | Go 1.21+, Gin, freecache |
-| **HRPAuth-Web** | `HRPAuth-Web/` | Frontend SPA for the auth service | TypeScript, React 19, MUI v7, Vite 7 |
-| **Docs & Scripts** | `docs/`, `scripts/` | API specs, dev guides, CI helpers | OpenAPI YAML, Shell |
+| **HRPAuth** | [`CoreMatch/HRPAuth`](https://github.com/CoreMatch/HRPAuth) | Core auth service (Business API, OAuth2 authorization server) | Go 1.26+, Gin, MySQL, Redis, GORM |
+| **HRPAuth-Yggdrasil-API** | [`CoreMatch/HRPAuth-Yggdrasil-API`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API) | Yggdrasil protocol provider and game account management (split out of HRPAuth in 2026-10) | Go, Gin, MySQL, Redis, GORM |
+| **HASkinLib** | [`CoreMatch/HASkinLib`](https://github.com/CoreMatch/HASkinLib) | Skin and texture library | Go 1.25+, Gin, MySQL (shared), GORM |
+| **WinnerProxy** | [`CoreMatch/WinnerProxy`](https://github.com/CoreMatch/WinnerProxy) | Server-join proxy (HRPAuth or Mojang upstream) | Go 1.26+, Gin, freecache |
+| **HASkinProxy** | [`CoreMatch/HASkinProxy`](https://github.com/CoreMatch/HASkinProxy) | Yggdrasil-to-CSL compatibility proxy | Go 1.21+, Gin, freecache |
+| **HRPAuth-WebUI** | [`CoreMatch/HRPAuth-WebUI`](https://github.com/CoreMatch/HRPAuth-WebUI) | Frontend SPA for the auth service | TypeScript, React 19, MUI v7, Vite 7 |
+| **HA-WebUI-SDKHandler** | [`CoreMatch/HA-WebUI-SDKHandler`](https://github.com/CoreMatch/HA-WebUI-SDKHandler) | Compile-time SDK aggregation build service | Go 1.25+, Gin |
+| **Docs & Scripts** | `docs/`, `scripts/` in this repository | API specs, dev guides, CI helpers | OpenAPI YAML, Shell |
 
 ---
 
@@ -35,12 +37,12 @@ HA-Contract is the single-source-of-truth contract and service collection for th
 
 ### 2. Documentation Directories
 
-Each sub-project contains an `HRPAuth-Wiki/` directory. Per project rules:
+Documentation lives in two independent places:
 
-- `HA-Contract/` directory docs → **for AI agents**
-- `HRPAuth-Wiki/` directory docs → **for human developers**
+- `HA-Contract/docs/` (this repository) → **for AI agents** and as the authoritative contract source
+- [`CoreMatch/HRPAuth-Wiki`](https://github.com/CoreMatch/HRPAuth-Wiki) → **for human developers** (separate content repository)
 
-Agents should consume docs from `HA-Contract/docs/` and the relevant sub-project's root. Do not modify `HRPAuth-Wiki/` directories.
+Agents should consume docs from `HA-Contract/docs/` and the relevant service repository's root. Do not modify `HRPAuth-Wiki` content as part of contract work.
 
 ### 3. Unified Response Format
 
@@ -94,9 +96,9 @@ HRPAuth exposes a microservice extension layer (relay, pre-routing, post-routing
 
 ### 8. Configuration Conventions
 
-- HRPAuth uses versioned `config.yaml` with auto-migration (currently schema v9). When adding new config fields, increment the version and add a migration function.
+- HRPAuth uses versioned `config.yaml` with auto-migration (currently schema v11). When adding new config fields, increment the version and add a migration function.
 - HASkinProxy, WinnerProxy use simple `config.yaml` with auto-generation on first run.
-- HRPAuth-Web uses `public/config.json` (runtime) and `config/backend-dev.json` (dev proxy).
+- HRPAuth-WebUI uses `public/config.json` (runtime) and `config/backend-dev.json` (dev proxy).
 
 ### 9. Build and CI
 
@@ -107,7 +109,7 @@ HRPAuth exposes a microservice extension layer (relay, pre-routing, post-routing
 
 ---
 
-## How to Work on Each Sub-Project
+## How to Work on Each Service
 
 ### HRPAuth (Core Auth)
 
@@ -116,7 +118,7 @@ HRPAuth exposes a microservice extension layer (relay, pre-routing, post-routing
 - Entry point: `main.go`
 - Routes are defined in `main.go`. After adding/changing routes, run the anti-drift script.
 - Migrations live in `database/migrations/` (golang-migrate format).
-- Yggdrasil API is separate from Business API. Yggdrasil routes follow the external spec; Business routes follow `docs/api/openapi/hrpauth-business.yaml`.
+- The Yggdrasil protocol surface no longer lives here; it is served by `HRPAuth-Yggdrasil-API`. Business routes follow `docs/api/openapi/hrpauth-business.yaml`.
 
 ### HASkinLib (Skin Library)
 
@@ -125,11 +127,11 @@ HRPAuth exposes a microservice extension layer (relay, pre-routing, post-routing
 - Shares HRPAuth's MySQL database. Reads `users`, `oauth2_access_tokens`, `profiles` tables.
 - Own tables: `texture_list_skin`, `texture_list_cape`.
 - Generates WebP previews from uploaded textures.
-- Business API spec: `docs/api/openapi/haskinlib-business.yaml`.
+- Business API spec: **pending** — no `haskinlib-business.yaml` exists in `docs/api/openapi/` yet; the current API reference is `HASkinLib/docs/skinlib-api.md` in the service repository.
 
 ### WinnerProxy (Server Join Proxy)
 
-**Key directories**: `upstream/`, `controllers/`, `models/`
+**Key directories**: `internal/handler/`, `internal/proxy/`, `internal/hrpauth/`, `internal/cache/`, `internal/router/`
 
 - Abstracts upstream via `UpstreamService` interface (`HrpauthService` / `MojangService`).
 - Uses freecache for in-memory caching.
@@ -141,9 +143,9 @@ HRPAuth exposes a microservice extension layer (relay, pre-routing, post-routing
 
 - Translates Yggdrasil API → CustomSkinLoader JSON format.
 - Registers with HRPAuth via the microservice extension layer.
-- Business API spec: `docs/api/openapi/haskinproxy-business.yaml`.
+- Business API spec: **pending** — no `haskinproxy-business.yaml` exists in `docs/api/openapi/` yet; see `docs/dev/HASkinProxy/README.md` in this repository.
 
-### HRPAuth-Web (Frontend SPA)
+### HRPAuth-WebUI (Frontend SPA)
 
 **Key directories**: `src/`, `public/`, `config/`
 

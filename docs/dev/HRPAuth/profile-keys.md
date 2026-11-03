@@ -17,7 +17,7 @@ Profile Keys implement the Minecraft 1.19+ chat-signing feature. When `yggdrasil
 
 ## 1. Storage
 
-Persistent table `profile_keys`, one row per user. Model: [`models/models.go::ProfileKey`](../../models/models.go). Migration: `database/migrations/000004_profile_keys.up.sql`.
+Persistent table `profile_keys`, one row per user. Model: [`models/models.go::ProfileKey`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API/blob/main/models/models.go). Schema: HRPAuth-Yggdrasil-API migration `database/migrations/000001_init.up.sql`.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -34,7 +34,7 @@ The UNIQUE index on `user_id` guarantees at most one active key pair per user. E
 
 ## 2. Key Pair Generation
 
-Implementation: [`services/profile_key_service.go::IssueOrRotate`](../../services/profile_key_service.go).
+Implementation: [`services/profile_key_service.go::IssueOrRotate`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API/blob/main/services/profile_key_service.go).
 
 - Algorithm: **RSA 2048** (per the authlib-injector / Mojang reference).
 - PEM format: PKCS#1 (`BEGIN RSA PRIVATE KEY` / `BEGIN RSA PUBLIC KEY`).
@@ -52,7 +52,7 @@ Payload layout (matches the wiki.vg / authlib-injector reference):
 <string representation of expiresAt in Unix milliseconds> + <PEM-encoded public key>
 ```
 
-Algorithm: **SHA1withRSA**, using the **same** key pair used by [`SignTextureValue`](../../services/texture_service.go). This means clients verify the Profile Key signature with the well-known `signaturePublickey` exposed at `GET /`, no extra public key distribution step is required.
+Algorithm: **SHA1withRSA**, using the **same** key pair used by [`SignTextureValue`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API/blob/main/services/texture_service.go). This means clients verify the Profile Key signature with the well-known `signaturePublickey` exposed at `GET /`, no extra public key distribution step is required.
 
 ## 4. `POST /minecraftservices/player/certificates`
 
@@ -125,7 +125,7 @@ There is no background sweeper for expired `profile_keys` rows in the current im
 
 ## Related Code
 
-- [`services/profile_key_service.go`](../../services/profile_key_service.go) — service layer
-- [`controllers/yggdrasil_controller.go::PlayerCertificates`](../../controllers/yggdrasil_controller.go) — `/player/certificates` handler
-- [`controllers/yggdrasil_controller.go::PublicKeys`](../../controllers/yggdrasil_controller.go) — `/publickeys` handler
-- [`main.go`](../../main.go) — route registration
+- [`services/profile_key_service.go`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API/blob/main/services/profile_key_service.go) — service layer
+- [`controllers/yggdrasil_controller.go::PlayerCertificates`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API/blob/main/controllers/yggdrasil_controller.go) — `/player/certificates` handler
+- [`controllers/yggdrasil_controller.go::PublicKeys`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API/blob/main/controllers/yggdrasil_controller.go) — `/publickeys` handler
+- [`main.go`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API/blob/main/main.go) — route registration

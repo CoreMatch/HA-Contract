@@ -6,6 +6,7 @@ This project is the core contract and service collection of the [CoreMatch](http
 
 - [HRPAuth](https://github.com/CoreMatch/HRPAuth): Core authentication service (Generic Auth)
 - [HRPAuth-Yggdrasil-API](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API): Yggdrasil API provider and game account management (Minecraft-specific)
+- [HASkinLib](https://github.com/CoreMatch/HASkinLib): Skin and texture library service
 - [WinnerProxy](https://github.com/CoreMatch/WinnerProxy): Proxy service
 - [HASkinProxy](https://github.com/CoreMatch/HASkinProxy): Yggdrasil-to-CSL compatibility proxy
 - [HRPAuth-WebUI](https://github.com/CoreMatch/HRPAuth-WebUI): Frontend interface for the authentication service
