@@ -22,10 +22,12 @@ To prevent documentation drift from the actual project, this project adopts a un
 ### Interface Definitions (OpenAPI)
 - [HRPAuth Business API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/hrpauth-business.yaml)
 - [HRPAuth Yggdrasil Business API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/hrpauth-yggdrasil-business.yaml)
+- [HASkinLib Business API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/haskinlib-business.yaml)
 
 ### Development and Internal Documentation
 - [HRPAuth Development Guide](https://github.com/CoreMatch/HA-Contract/tree/main/docs/dev/HRPAuth/): Includes configuration, data models, migrations, Token mechanisms, etc.
 - [HASkinProxy Development Guide](https://github.com/CoreMatch/HA-Contract/tree/main/docs/dev/HASkinProxy/): Technical details on the Yggdrasil-to-CSL proxy.
+- [WinnerProxy Service Contract](https://github.com/CoreMatch/HA-Contract/tree/main/docs/dev/WinnerProxy/): Inbound routes and current outbound calls.
 
 ### External Reference Standards (Immutable)
 - [External API Standards](https://github.com/CoreMatch/HA-Contract/tree/main/docs/references/): Contains external protocol standards such as CustomSkinAPI, Yggdrasil API (authlib-injector), etc.

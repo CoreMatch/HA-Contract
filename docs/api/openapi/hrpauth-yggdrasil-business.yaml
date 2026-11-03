@@ -5,6 +5,26 @@ info:
   description: Unified specification for HRPAuth-Yggdrasil-API business interfaces (textures, game accounts, Mojang proxy).
 servers:
   - url: /
+x-planned-endpoints:
+  # Endpoints that appear in this file's history but have no registered route
+  # or handler in the current implementation. They are listed here for
+  # reference only and are not part of the current specification.
+  - path: /admin/claim-user
+    method: POST
+    status: not implemented (no route in HRPAuth-Yggdrasil-API or HRPAuth core)
+    notes: >
+      Intended request body: {username, email, password}, Bearer auth.
+      An orphan service method (AuthService.ClaimAccount) exists in
+      HRPAuth-Yggdrasil-API but has no caller. This endpoint is not tracked
+      in the HA-Contract agents.md Roadmap.
+  - path: /admin/force-bind
+    method: POST
+    status: not implemented (no route in HRPAuth-Yggdrasil-API or HRPAuth core)
+    notes: >
+      Intended request body: {username, email, password, manage_token},
+      Bearer auth. Tracked in HA-Contract agents.md Roadmap item 2.1
+      ("HA backend handler not yet implemented"); the HRPAuth-Spigot plugin
+      already ships the matching client command (ForceBindCommand).
 paths:
   /texture/get:
     post:
@@ -74,6 +94,14 @@ paths:
         skins, and updates the profile's active textures property. Skins must be
         large enough to extract the face and head overlay. This endpoint is for
         current profile management, not texture-library ingestion.
+
+        Current behavior: multipart form with fields `file` (required),
+        `type` (default `skin`) and `model` (default `default`). All
+        service-layer failures — including invalid access token, non-owned
+        profile, and texture validation errors — are returned as
+        `400 texture_upload_failed`. There is no upload rate limiting, and the
+        `max_texture_file_size` limit is not active in the default
+        configuration.
       security:
         - BearerAuth: []
       parameters:
@@ -84,13 +112,10 @@ paths:
             type: string
           description: Profile UUID
       responses:
-        '200': { description: Successfully updated existing record }
-        '201': { description: Successfully created new record }
+        '200':
+          description: Success; `data` contains `warnings`
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
-        '403': { $ref: '#/components/responses/Error' }
-        '413': { $ref: '#/components/responses/Error' }
-        '429': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
   /texture/delete/{uuid}/{type}:
     delete:
@@ -98,6 +123,11 @@ paths:
       description: >
         Removes the current skin or cape binding from the target profile. This
         does not represent texture-library asset deletion.
+
+        Current behavior: a missing or invalid access token returns
+        `401 oauth_login_required`; a profile owned by another account returns
+        `403 profile_access_denied`; unknown `type` values and missing
+        properties/textures surface as `500 texture_delete_failed`.
       security:
         - BearerAuth: []
       parameters:
@@ -114,9 +144,9 @@ paths:
             enum: [skin, cape]
       responses:
         '200': { description: Texture deleted }
-        '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
-        '404': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
   /texture/avatar/{uuid}:
     get:
       summary: Get the current skin's face avatar for a profile
@@ -189,61 +219,31 @@ paths:
           description: png file
         '204':
           description: No texture for user
-  /admin/claim-user:
-    post:
-      summary: Operator claim of a proxy-registered game account (cbh=0)
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [username, email, password]
-              properties:
-                username: { type: string }
-                email: { type: string }
-                password: { type: string }
-      responses:
-        '200': { description: Success }
-        '400': { $ref: '#/components/responses/Error' }
-        '401': { $ref: '#/components/responses/Error' }
-  /admin/force-bind:
-    post:
-      summary: Force-transfer Mojang UUID from proxy account to target account
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [username, email, password, manage_token]
-              properties:
-                username: { type: string }
-                email: { type: string }
-                password: { type: string }
-                manage_token: { type: string }
-      responses:
-        '200': { description: Success }
-        '400': { $ref: '#/components/responses/Error' }
-        '401': { $ref: '#/components/responses/Error' }
   /mojang/profile/{uuid}:
     get:
       summary: Proxy Mojang profile lookup
+      description: >
+        Proxies sessionserver.mojang.com and reports whether the profile has a
+        cape. Current behavior: always returns HTTP 200; failures are expressed
+        as `success: false` with a `code` (e.g. `invalid_mojang_uuid`), and the
+        response body is emitted without the unified `meta.request_id` field.
       parameters:
         - in: path
           name: uuid
           required: true
           schema: { type: string }
       responses:
-        '200': { description: Success }
-        '404': { $ref: '#/components/responses/Error' }
+        '200':
+          description: >
+            `success: true` with `id`, `name`, `has_cape`; or `success: false`
+            with a `code` for invalid/unresolvable UUIDs
   /texture/mojang/{uuid}:
     get:
-      summary: Proxy Mojang texture download
+      summary: Redirect to the Mojang texture for a UUID
+      description: >
+        Current behavior: resolves the Mojang profile and returns
+        `302 Found` pointing at the texture URL on textures.minecraft.net
+        (intended for direct `<img>` loading).
       parameters:
         - in: path
           name: uuid
@@ -253,8 +253,9 @@ paths:
           name: type
           schema: { type: string, enum: [skin, cape] }
       responses:
-        '200': { description: png file }
-        '404': { $ref: '#/components/responses/Error' }
+        '302': { description: Redirect to the Mojang texture URL }
+        '400': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
   /player:
     get:
       summary: Get the game account summary for the authenticated user

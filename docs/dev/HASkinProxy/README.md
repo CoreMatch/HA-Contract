@@ -45,7 +45,7 @@ The service is configured via a `config.yaml` file. Default values are generated
 - **Caching**: freecache
 - **Compliance**:
   - Upstream: [Yggdrasil API](https://github.com/yushijinhun/authlib-injector/wiki/Yggdrasil-API-Reference)
-  - Downstream: [CustomSkinAPI](file:///home/lnb/HASkinProxy/HA-Contract/docs/references/CustomSkinAPI.md)
+  - Downstream: [CustomSkinAPI](../../references/CustomSkinAPI.md)
 
 ## Endpoints
 
@@ -73,6 +73,11 @@ This passthrough is **not part of the current `HRPAuth-Yggdrasil-API` active
 contract**. The current Yggdrasil service exposes profile-state deletion as
 `DELETE /texture/delete/{uuid}/{type}`. Until HASkinProxy is migrated, this
 endpoint should be treated as compatibility-only for legacy upstreams.
+
+The forwarded request targets `{upstream.base_url}/yggdrasil-api/texture/delete`
+(i.e. through the HRPAuth core `/yggdrasil-api` relay prefix). Against the
+current HA upstream this path is not registered, so the forwarder receives a
+404.
 
 `:username` is used only to evict local cache entries on success:
 

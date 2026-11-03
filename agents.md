@@ -89,15 +89,16 @@ HRPAuth exposes a microservice extension layer (relay, pre-routing, post-routing
 
 ### 7. Sub-Project Coupling Awareness
 
-**HASkinLib shares HRPAuth's MySQL database directly.** Any schema migration in HRPAuth (new columns, renames, dropped tables) WILL break HASkinLib if not coordinated. When modifying HRPAuth models:
-
-1. Check HASkinLib's `models/models.go` to see which HRPAuth tables it reads.
-2. Ensure backward compatibility or coordinate the migration with HASkinLib.
+**HASkinLib uses its own MySQL database** (startup refuses a shared HRPAuth
+database layout) and authenticates users by calling HRPAuth core HTTP APIs
+(`POST /internal/verify-token`, `GET /services/users/{uuid}`). Coupling is at
+the HTTP contract level: changes to those core endpoints or to the user
+identity fields they return affect HASkinLib.
 
 ### 8. Configuration Conventions
 
 - HRPAuth uses versioned `config.yaml` with auto-migration (currently schema v11). When adding new config fields, increment the version and add a migration function.
-- HASkinProxy, WinnerProxy use simple `config.yaml` with auto-generation on first run.
+- HASkinProxy uses a simple `config.yaml` with auto-generation on first run; WinnerProxy uses `config.yml` with auto-generation on first run.
 - HRPAuth-WebUI uses `public/config.json` (runtime) and `config/backend-dev.json` (dev proxy).
 
 ### 9. Build and CI
@@ -124,10 +125,10 @@ HRPAuth exposes a microservice extension layer (relay, pre-routing, post-routing
 
 **Key directories**: `controllers/`, `models/`, `services/`
 
-- Shares HRPAuth's MySQL database. Reads `users`, `oauth2_access_tokens`, `profiles` tables.
-- Own tables: `texture_list_skin`, `texture_list_cape`.
+- Uses its own MySQL database (config schema v6, versioned with backup support); user authentication goes through HRPAuth core HTTP APIs (`/internal/verify-token`, `/services/users/{uuid}`), not shared tables.
+- Own tables: `hasl_texture_list_skin`, `hasl_texture_list_cape` (table prefix configurable).
 - Generates WebP previews from uploaded textures.
-- Business API spec: **pending** — no `haskinlib-business.yaml` exists in `docs/api/openapi/` yet; the current API reference is `HASkinLib/docs/skinlib-api.md` in the service repository.
+- Business API spec: `docs/api/openapi/haskinlib-business.yaml` in this repository (rebuilt 2026-11-04 from the current implementation); see also `HASkinLib/docs/skinlib-api.md` in the service repository.
 
 ### WinnerProxy (Server Join Proxy)
 

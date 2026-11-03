@@ -164,8 +164,8 @@ POST /services/sdk-packages  ──►     validate + store (fs + Redis)
                                                                          copy template
                                                                          extract + inject SDKs
                                                                          merge npm deps
-                                                                         npm install + tsc + vite build
-                                                                         publish artifacts atomically ──► HRPAuth-Web (dist, atomic `current` switch)
+                                                                         tsc + vite build
+                                                                         publish to artifacts dir ──► HRPAuth-Web (dist)
 ```
 
 ### Upload
@@ -174,7 +174,7 @@ A satellite service uploads a self-contained SDK package (a `tar.gz` or `zip` ar
 
 ### Pull & Build
 
-The SDK handler (`HA-WebUI-SDKHandler`) talks to **HRPAuth only**: it polls `GET /services/sdk-packages` (ETag change detection) for the current package set and downloads each archive via `GET /services/sdk-packages/{name}/download`. For every build it copies the current frontend template, injects all SDK sources into `src/generated/services/<name>/`, merges npm dependencies, compiles (`npm install` → `tsc -b` → `vite build`), and publishes the resulting static assets by atomically switching the `current` directory. **On failure the previous published version keeps serving traffic.**
+The SDK handler (`HA-WebUI-SDKHandler`) talks to **HRPAuth only**: it polls `GET /services/sdk-packages` for the current package set and downloads each archive via `GET /services/sdk-packages/{name}/download`. HRPAuth signs the list response with an `ETag` (sha256 of the package list) and answers `304 Not Modified` on a matching `If-None-Match`. The handler sends its own fingerprint of the previously parsed list (sha256 over the parsed package metadata) as `If-None-Match`, and after every `200` it recomputes that fingerprint from the parsed response rather than storing the server-sent `ETag` header; a build is triggered when the fingerprint changes. For every build it copies the current frontend template, injects all SDK sources into `src/generated/services/<name>/`, merges npm dependencies, and compiles (`npm run build`, or `tsc -b` + `vite build` when the template has no build script; dependencies are installed once at template setup, not per build). Publishing replaces the configured fixed artifacts directory (`.tmp` staging, remove-then-rename); see `sdk-package.md` Build Policy for the exact current behavior.
 
 ### Trust Boundary
 
@@ -245,8 +245,8 @@ The following endpoints are **removed** and must not be used:
 
 The frontend has no runtime SDK module loader anymore; frontend integration surfaces (routes, navbar menu, dashboard items, Critical Operations links, Profile cards) are declared in `manifest.json` and materialized into the compiled bundle by the SDK handler.
 
-`routes` remain required for ordinary page-style SDKs. A package may omit
-`routes` only when it explicitly declares one or more `profile_cards` entries.
+`routes` are required for every package: HRPAuth core upload validation rejects
+a missing or empty `routes` array even when `profile_cards` is declared.
 
 ## Route Rules (`POST /services/route`)
 

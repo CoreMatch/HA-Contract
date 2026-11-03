@@ -26,7 +26,11 @@ or a future deployment-init protocol.
 
 `HA-Services-Deployer` exposes:
 
-- `GET /api/v1/manifest`
+- `GET /healthz` — liveness probe
+- `GET /api/v1/healthz` — liveness probe (API-prefixed; consumed by HA-Services-MaintenanceView)
+- `GET /api/v1/manifest` — full manifest (structure defined below)
+- `GET /api/v1/projects` — release-oriented projection of the manifest: only artifacts with `role: "binary"`, top-level key `projects` (no `schema_version`). Envelope: `{"success": true, "message": "projects loaded", "data": {"generated_at": "...", "projects": [...]}}`. HA-Services-MaintenanceView uses this endpoint as its primary data source; `GET /api/v1/manifest` is passed through to its frontend without parsing.
+- `GET /api/v1/artifacts/:service/*filepath` — artifact download (path traversal guarded)
 
 The HA deployer service returns the manifest inside its standard HTTP envelope:
 

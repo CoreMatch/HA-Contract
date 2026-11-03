@@ -32,7 +32,7 @@ All non-Yggdrasil endpoints (e.g., `/texture/get`, `/texture/upload/:uuid`, `/re
 
 ### 2.1 Microservice Handshake
 The service integrates with HRPAuth Core via the **Microservice Extension Layer**:
-- **Presence**: Registers via `POST /services/presence` with `frontend_areas: ["skin", "user"]`.
+- **Presence**: Registers via `POST /services/presence` with `security_level: 0`, scope name `yggdrasil-api`, `frontend_areas: ["webui-dash"]`, and a `root_metadata.yggdrasil` block that the core merges into its `GET /` response.
 - **SDK Aggregation**: Delivers its frontend integration (Texture Management, Mojang Binding) as a source package via `POST /services/sdk-packages`.
 - **Relay**: Declares relay rules via `POST /services/relay` to expose business endpoints through the HRPAuth Core gateway.
 
@@ -52,10 +52,11 @@ The service maintains game-account consistency by pulling data from HRPAuth Core
 ## 3. Cross-Project Conventions
 
 ### 3.1 Proxy Registration Protocol
-Allows external proxies (like `WinnerProxy`) to create game accounts for users who do not yet have a core identity:
+Creates a game account without an HRPAuth core identity:
 - **Endpoint**: `POST /internal/proxy-register`.
 - **Auth**: `X-Internal-Key` (Internal Auth).
 - **Marker**: Accounts created this way are flagged as `cbh=0` (Created By Human = false) and are subject to the ecosystem's bot cleanup policy (30-day claim window).
+- **Current caller status**: WinnerProxy does not use this endpoint; its registration client calls `POST /register` instead (see `docs/dev/HRPAuth/yggdrasil-api.md`, Account Registration and Sync).
 
 ### 3.2 Texture Standards
 - **Validation**: Standard skin PNG sizes are 64x32 and 64x64; standard cape PNG sizes are 64x32 and 22x17. Non-standard dimensions can be accepted with warnings in the upload response, but a skin must be large enough to extract its face and head overlay.
@@ -65,7 +66,33 @@ Allows external proxies (like `WinnerProxy`) to create game accounts for users w
 
 ---
 
-## 4. Anti-Drift Compliance
+## 4. Configuration
+
+The service reads `config.yaml` from its working directory (auto-generated on
+first start). Current schema version: **3** (`ConfigVersion`, migration chain
+1→3). Top-level sections:
+
+| Section | Keys | Notes |
+|---|---|---|
+| `version` | | Schema version string |
+| `site` | `name`, `implementation`, `version` | Service identity |
+| `server` | `port`, `cors_origin` | HTTP listener |
+| `callback` | `url` | Backend callback URL |
+| `database` | `host`, `db_name`, `user`, `password`, `charset`, `table_prefix` | Own MySQL database |
+| `redis` | `host`, `port`, `password`, `db`, `prefix` | |
+| `core_api` | `base_url`, `client_id`, `client_secret` | HRPAuth core connection (OAuth2 service credentials) |
+| `security` | `rate_limit_max_attempts`, `rate_limit_window_sec` | Login rate limiting |
+| `microservice` | `name`, `ttl_seconds`, `relay_url`, `relay_path_prefix`, `profile_cards` | Presence/relay registration; `relay_path_prefix` defaults to `/yggdrasil-api`; `profile_cards` maps card names to priorities |
+| `yggdrasil.server` | `name`, `implementation`, `version`, `links.homepage`, `links.register`, `skin_domains`, `signature_public_key_path`, `signature_private_key_path`, `textures_storage` | Signature keys are read from PEM **files** (path keys) |
+| `yggdrasil.security` | `token_expiry_days`, `session_expiry_seconds`, `max_texture_width`, `max_texture_height`, `max_texture_file_size`, `max_tokens_per_user` | `max_texture_file_size` is parsed but not written into the generated default config (value 0 disables the check) |
+| `yggdrasil.feature_flags` | `non_email_login`, `legacy_skin_api`, `no_mojang_namespace`, `enable_mojang_anti_features`, `enable_profile_key`, `username_check`, `enable_ip_check` | See `docs/dev/HRPAuth/feature-flags.md` |
+
+Runtime values pulled from HRPAuth core at startup (`Runtime.SiteURL`,
+`Runtime.FrontendURL`, `Runtime.InternalKey`) are not configuration keys.
+
+---
+
+## 5. Anti-Drift Compliance
 To prevent documentation drift, any change to API routes or response structures MUST be verified by running:
 ```bash
 ./scripts/check-business-api-drift.sh

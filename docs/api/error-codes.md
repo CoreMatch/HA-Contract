@@ -23,7 +23,7 @@ The following error codes are the stable registry for current HA business APIs. 
 | `email_already_registered` | Email is already registered |
 | `invalid_mojang_uuid` | Invalid Mojang UUID format |
 | `mojang_uuid_required_for_existing_user` | `mojang_uuid` missing for existing user |
-| `username_already_bound` | Username is already bound and cannot be claimed |
+| `username_already_bound` | Username is already bound and cannot be claimed (constant defined in HRPAuth-Yggdrasil-API; no current code path returns it) |
 | `captcha_disabled` | Graphical captcha is disabled |
 | `captcha_invalid` | Graphical captcha is invalid or expired |
 | `verification_code_already_sent` | Verification code sent too frequently |
@@ -37,6 +37,8 @@ The following error codes are the stable registry for current HA business APIs. 
 | `profile_name_conflict` | Profile name conflict |
 | `profile_not_found` | Profile does not exist |
 | `profile_access_denied` | No permission to access or modify profile |
+| `profile_already_exists` | A profile has already been created for this account (HRPAuth-Yggdrasil-API) |
+| `profile_uuid_conflict` | Requested profile UUID is already used by another local profile (HRPAuth-Yggdrasil-API) |
 | `totp_secret_required` | TOTP secret missing |
 | `totp_not_configured` | TOTP not configured |
 | `invalid_passcode` | Incorrect TOTP passcode |
@@ -76,7 +78,11 @@ The following error codes are the stable registry for current HA business APIs. 
 | `oauth_login_required` | Missing Bearer access token |
 | `login_ticket_required` | Missing login ticket |
 | `invalid_login_ticket` | Login ticket is invalid or expired |
-| `endpoint_deprecated` | Endpoint has been removed from active auth flow |
+| `endpoint_deprecated` | Endpoint has been removed from active auth flow (constant defined in HRPAuth core; no endpoint currently returns it) |
+| `hook_denied` | A registered webhook hook vetoed the request (HRPAuth core OAuth2 flow) |
+| `hook_failed` | A required webhook hook failed and the fail policy closed the request (HRPAuth core OAuth2 flow) |
+| `database_not_ready` | Database middleware rejected the request before the schema was ready (HRPAuth core; returned without the unified `error` alias and `meta` fields) |
+| `route_not_found` | No registered route matched the request (HRPAuth core NoRoute handler) |
 | `service_not_registered` | Service not registered; send `/services/presence` first |
 | `relay_failed` | Relay forwarding to microservice failed |
 | `relay_not_found` | Relay rule not found for deletion |
@@ -88,10 +94,10 @@ The following error codes are the stable registry for current HA business APIs. 
 | `sdk_package_too_large` | SDK package exceeds the configured size limit (HTTP 413) |
 | `insufficient_auth_level` | Credential present but below the required auth level |
 | `internal_error` | Unclassified internal error |
-| `oauth_state_mismatch` | OAuth2 state parameter mismatch (CSRF / replay protection) |
-| `oauth_token_expired` | OAuth2 access token expired; client should call `/api/auth/refresh` |
-| `oauth_refresh_failed` | OAuth2 refresh token is invalid, expired, or revoked |
-| `oauth_revoke_failed` | OAuth2 token revocation request failed |
+| `oauth_state_mismatch` | OAuth2 state parameter mismatch (CSRF / replay protection). Defined in this registry only; no current implementation returns it. |
+| `oauth_token_expired` | OAuth2 access token expired. Defined in this registry only; no current implementation returns it (expired tokens surface as `oauth_invalid_grant`). |
+| `oauth_refresh_failed` | OAuth2 refresh token is invalid, expired, or revoked. Defined in this registry only; no current implementation returns it (refresh failures surface as `oauth_invalid_grant`). |
+| `oauth_revoke_failed` | OAuth2 token revocation request failed. Defined in this registry only; no current implementation returns it. |
 | `mca_invalid_request` | MatchCoreArena: general parameter error |
 | `mca_user_not_found` | MatchCoreArena: user does not exist |
 | `mca_friend_not_found` | MatchCoreArena: friend relationship does not exist |
