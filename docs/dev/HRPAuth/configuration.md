@@ -2,12 +2,12 @@
 
 When the project is first started, a default configuration file `config.yaml` will be automatically generated in the root directory if it does not already exist.
 
-> Detailed implementation: [`config/config.go`](../../config/config.go) · [`controllers/startup_controller.go`](../../controllers/startup_controller.go) · [`config/migrations.go`](../../config/migrations.go)
+> Detailed implementation: [`config/config.go`](https://github.com/CoreMatch/HRPAuth/blob/main/config/config.go) · [`controllers/startup_controller.go`](https://github.com/CoreMatch/HRPAuth/blob/main/controllers/startup_controller.go) · [`config/migrations.go`](https://github.com/CoreMatch/HRPAuth/blob/main/config/migrations.go)
 
 ## Complete `config.yaml` Example
 
 ```yaml
-version: "10"
+version: "11"
 site:
   name: "HRPAuth"
   implementation: "HRPAuth"
@@ -25,6 +25,9 @@ database:
   user: "root"
   password: ""
   charset: "utf8mb4"
+  retry_interval_sec: 3
+  max_retries: 5
+  next_round_delay_min: 5
 verification_code:
   code_ttl: 600
   storage_dir: "./cache/verification_codes"
@@ -59,11 +62,12 @@ yggdrasil_api:
 sdk_packages:
   storage_dir: "./data/sdk_packages"
   max_package_size: 20971520
+  max_packages: 128
 ```
 
 ## Version Control and Auto-Migration
 
-The top-level `version` field in the configuration file indicates the **schema version**. When the program starts, it automatically upgrades the configuration based on the version, using **chain-linked version-by-version migration** (each version has its own migration function, see [`config/migrations.go`](../../config/migrations.go)):
+The top-level `version` field in the configuration file indicates the **schema version**. When the program starts, it automatically upgrades the configuration based on the version, using **chain-linked version-by-version migration** (each version has its own migration function, see [`config/migrations.go`](https://github.com/CoreMatch/HRPAuth/blob/main/config/migrations.go)):
 
 | Version | Changes |
 |---------|---------|
@@ -75,8 +79,9 @@ The top-level `version` field in the configuration file indicates the **schema v
 | `6` | Added top-level `storage` section with `orphan_file_expiry_days` (default 7) |
 | `7` | Added `oauth2.super_client_extra_scopes` for database scope delegation |
 | `8` | Decouple yggdrasil: introduced `core_api` and `yggdrasil_api` sections for service-to-service communication. |
-| `9` | Added top-level `sdk_packages` section for compile-time SDK aggregation. |
-| `10` (Current) | **Removed static `internal_key`** from `core_api` and `yggdrasil_api`. Internal service authentication now uses dynamic temporary keys via OAuth2. |
+| `9` | Added top-level `sdk_packages` section for compile-time SDK aggregation (defaults: `storage_dir`, `max_package_size`, `max_packages`). |
+| `10` | **Removed static `internal_key`** from `core_api` and `yggdrasil_api`. Internal service authentication now uses dynamic temporary keys via OAuth2. |
+| `11` (Current) | Added database connection retry settings: `database.retry_interval_sec` (default 3), `database.max_retries` (default 5), `database.next_round_delay_min` (default 5). |
 
 Migration Behavior:
 
@@ -93,7 +98,7 @@ Migration Behavior:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `version` | string | Configuration schema version (current `"10"`) |
+| `version` | string | Configuration schema version (current `"11"`) |
 
 ### `site` — Site Information
 
@@ -124,13 +129,16 @@ Migration Behavior:
 
 ### `database` — MySQL
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `database.host` | string | Host address |
-| `database.db_name` | string | Database name |
-| `database.user` | string | Username |
-| `database.password` | string | Password |
-| `database.charset` | string | Character set, recommended `utf8mb4` |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `database.host` | string | — | Host address |
+| `database.db_name` | string | — | Database name |
+| `database.user` | string | — | Username |
+| `database.password` | string | — | Password |
+| `database.charset` | string | — | Character set, recommended `utf8mb4` |
+| `database.retry_interval_sec` | int | `3` | Interval between database connection retries (seconds) |
+| `database.max_retries` | int | `5` | Maximum number of connection retries before giving up |
+| `database.next_round_delay_min` | int | `5` | Delay before the next retry round (minutes); `0` disables further retry rounds |
 
 ### `verification_code` — Email Verification Code Storage
 
@@ -221,6 +229,7 @@ Migration Behavior:
 |-------|------|---------|-------------|
 | `sdk_packages.storage_dir` | string | `"./data/sdk_packages"` | Directory where uploaded SDK package archives and metadata are stored |
 | `sdk_packages.max_package_size` | int | `20971520` | Maximum accepted SDK package size in bytes (20 MiB by default) |
+| `sdk_packages.max_packages` | int | `128` | Maximum number of SDK packages kept in the store |
 
 **Current status**:
 

@@ -1,6 +1,6 @@
 # Microservice Extension Layer
 
-This document describes the microservice extension mechanism of HRPAuth. It covers service registration, compile-time SDK aggregation, route rules, relay rules, request orchestration, and the three-level auth model.
+This document describes the microservice extension mechanism of HRPAuth. It covers service registration, compile-time SDK aggregation, route rules, relay rules, webhook hook rules, request orchestration, and the three-level auth model.
 
 ## Design Positioning
 
@@ -317,6 +317,35 @@ Longest `dest` prefix wins. `dest` is normalized to start with `/` and have no t
 GET /services/relay          # all rules
 GET /services/relay?name=    # filtered by service
 ```
+
+## Hook Rules (`POST /services/hook`)
+
+A microservice can register webhook hooks that are invoked during the OAuth2 authorization flow. Registration requires the service to be registered via `/services/presence` first. Rules are stored per service (Redis-backed, 30-day TTL) and replacing the rule set for a service overwrites the previous one.
+
+```json
+{
+  "name": "my-service",
+  "hooks": [
+    {
+      "paths": ["/oauth/token"],
+      "phase": "auth.input",
+      "capability": "observe",
+      "priority": 10,
+      "fail_policy": "ignore",
+      "patch_allowlist": [],
+      "url": "https://my-service.example.com/hooks/auth"
+    }
+  ]
+}
+```
+
+- `paths`: request paths to match; a trailing `*` means prefix match.
+- `phase`: one of `auth.input`, `auth.risk`, `auth.post_verify`.
+- `capability`: one of `observe` (notification only), `patch` (may patch allowed fields), `veto` (may reject the flow).
+- `fail_policy`: `ignore` (default), `fail_open`, or `fail_closed` — behavior when the hook callback fails.
+- `priority`: lower values run first; ties are ordered by service name.
+
+The hook callback receives a JSON payload describing the request (`id`, `path`, `method`), the auth context (e.g. `email`, `user_uuid`, `available_factors`), and the policy context (`patch_allowlist`, `capabilities`), and answers with `{"result": "...", "patch": {...}}`.
 
 ## Request Orchestration
 

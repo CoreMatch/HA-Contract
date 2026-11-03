@@ -277,7 +277,7 @@ Table name: `profile_keys`
 | `refreshed_after` | datetime | Earliest moment the client may request a new key pair (issued + 40h) |
 | `created_at` / `updated_at` | datetime | GORM-managed |
 
-> See [`profile-keys.md`](./profile-keys.md) for the full flow and [`services/profile_key_service.go`](../../services/profile_key_service.go) for the service implementation. The schema is brought in by `database/migrations/000004_profile_keys.up.sql`.
+> See [`profile-keys.md`](./profile-keys.md) for the full flow and [`services/profile_key_service.go`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API/blob/main/services/profile_key_service.go) for the service implementation. The `profile_keys` table is owned by HRPAuth-Yggdrasil-API (its `database/migrations/000001_init.up.sql`).
 
 ## WebAuthnCredential
 

@@ -30,11 +30,11 @@ The handler accepts both `/skins/MinecraftSkins/notch` and `/skins/MinecraftSkin
 ## Implementation Notes
 
 - Storage location is read from `yggdrasil.server.textures_storage` (default `./`).
-- The resolved texture file path is `<storage>/textures/<hash>`, where `<hash>` is the SHA-256 of the validated PNG (computed and persisted by [`TextureService.SaveTexture`](../../services/texture_service.go)).
+- The resolved texture file path is `<storage>/textures/<hash>`, where `<hash>` is the SHA-256 of the validated PNG (computed and persisted by [`TextureService.SaveTexture`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API/blob/main/services/texture_service.go)).
 - The endpoint never serves a non-PNG file: `Content-Type: image/png` is set unconditionally and the PNG validity is enforced upstream by `ValidateTexture`.
 
 ## Related Code
 
-- [`services/texture_service.go::GetSkinTexturePathByProfileName`](../../services/texture_service.go) — name → PNG path resolver
-- [`controllers/yggdrasil_controller.go::LegacySkin`](../../controllers/yggdrasil_controller.go) — handler
-- [`main.go`](../../main.go) — route registration
+- [`services/texture_service.go::GetSkinTexturePathByProfileName`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API/blob/main/services/texture_service.go) — name → PNG path resolver
+- [`controllers/yggdrasil_controller.go::LegacySkin`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API/blob/main/controllers/yggdrasil_controller.go) — handler
+- [`main.go`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API/blob/main/main.go) — route registration

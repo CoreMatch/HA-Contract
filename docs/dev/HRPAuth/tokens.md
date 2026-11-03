@@ -2,6 +2,8 @@
 
 This document clarifies all Tokens and their lifecycles involved in the project. **This is the most complex part of the project**, and it is strongly recommended that any integrator read it in full.
 
+> Since the 2026-10 service split, the Yggdrasil token system (sections 1–5 and 6.1) is implemented by the [`HRPAuth-Yggdrasil-API`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API) service; the OAuth2 token system (sections 6.2–6.3) remains in the [`HRPAuth`](https://github.com/CoreMatch/HRPAuth) core.
+
 > This document merges the sections "Token System Overview" and "Token State Machine and Lifecycle" from the original `API_DOC.md`.
 
 ## Contents
@@ -170,7 +172,7 @@ B will now also be rejected by `/validate` and `/join`, but retains the ability 
 
 ### 6.1 Yggdrasil Token Cleanup
 
-`runOnce` in [`controllers/token_cleanup_controller.go`](../controllers/token_cleanup_controller.go) is triggered at `main.go` startup + every 1 hour. Logic in [`services/auth_service.go`](../services/auth_service.go):
+`runOnce` in [`controllers/token_cleanup_controller.go`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API/blob/main/controllers/token_cleanup_controller.go) is triggered at `main.go` startup + every 1 hour. Logic in [`services/auth_service.go`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API/blob/main/services/auth_service.go):
 
 - DELETE rows where `state='invalid'`.
 - DELETE rows where `issued_at + expires_in_days*86400000 < now()` (covers expired valid / temporarily_invalid rows).
@@ -180,7 +182,7 @@ B will now also be rejected by `/validate` and `/join`, but retains the ability 
 
 ### 6.2 OAuth2 Token Cleanup
 
-`runOnce` in [`controllers/oauth2_cleanup_controller.go`](../controllers/oauth2_cleanup_controller.go) is triggered at `main.go` startup + every 24 hours. Logic in [`services/oauth2_service.go`](../services/oauth2_service.go):
+`runOnce` in [`controllers/oauth2_cleanup_controller.go`](https://github.com/CoreMatch/HRPAuth/blob/main/controllers/oauth2_cleanup_controller.go) is triggered at `main.go` startup + every 24 hours. Logic in [`services/oauth2_service.go`](https://github.com/CoreMatch/HRPAuth/blob/main/services/oauth2_service.go):
 
 **Access Token** (`oauth2_access_tokens`):
 - DELETE rows where `expires_at < now()` — token 已过期。
@@ -226,7 +228,7 @@ UPDATE oauth2_refresh_tokens
 
 Per the authlib-injector wiki (§令牌): *"a user can have multiple tokens simultaneously, but the server should also limit the number of tokens. When the token count exceeds the limit (e.g. 10), the oldest token should be revoked before the new one is issued."*
 
-This is enforced in [`services/auth_service.go::EnforceTokenLimit`](../services/auth_service.go), called immediately before `CreateToken` in both `/authenticate` and `/refresh`.
+This is enforced in [`services/auth_service.go::EnforceTokenLimit`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API/blob/main/services/auth_service.go), called immediately before `CreateToken` in both `/authenticate` and `/refresh`.
 
 ### Algorithm
 
@@ -251,7 +253,7 @@ Notes:
 - Only `state = 'valid'` rows count toward the limit. `temporarily_invalid` and `invalid` rows are ignored.
 - Revocation selects by `ORDER BY issued_at ASC LIMIT N`, so the *oldest* tokens are dropped first (largest grace period for the client to refresh and reclaim).
 - Because the revoke runs **before** the new INSERT, the user is always left with exactly `limit` valid rows after the call.
-- The limit is read from `yggdrasil.security.max_tokens_per_user`. Setting it to `0` falls back to the default `10` (defensive default — see [`config/config.go`](../config/config.go)).
+- The limit is read from `yggdrasil.security.max_tokens_per_user` in the HRPAuth-Yggdrasil-API configuration. Setting it to `0` falls back to the default `10` (defensive default — see [`config/config.go`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API/blob/main/config/config.go)).
 
 ### Interaction with Mutual Kicking
 
