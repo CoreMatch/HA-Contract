@@ -44,10 +44,10 @@ Standard Yggdrasil error envelope:
 |------|---------|---------|
 | 400 | `BadRequestException` | Malformed request (missing fields, bad query params, etc.). |
 | 400 | `IllegalArgumentException` | Generic argument rejection. |
-| 400 | `ProfileNotFoundException` | `GET /sessionserver/session/minecraft/profile/:uuid` could not find the UUID. |
 | 401 | `UnauthorizedOperationException` | Texture upload/delete with no/invalid `Authorization: Bearer <accessToken>`. |
 | 403 | `ForbiddenOperationException` | Wrong credentials, invalid token, rate limited, or feature disabled. |
 | 404 | `NotFoundException` | `GET /textures/:hash` hash not on disk. |
+| 404 | `ProfileNotFoundException` | `GET /sessionserver/session/minecraft/profile/:uuid` could not find the UUID. |
 | 404 | `MethodNotAllowedException` | Wrong HTTP method for a known path. |
 
 The `/minecraftservices/player/certificates` endpoint additionally emits a **Mojang-style** error envelope (`path` + `errorType` + `error` + `errorMessage`) for the `401 Unauthorized` case to match what the Minecraft client expects.
@@ -60,27 +60,45 @@ The `/minecraftservices/player/certificates` endpoint additionally emits a **Moj
 
 ```json
 {
-  "meta": {
-    "serverName":            "<yggdrasil.server.name || site.name>",
-    "implementationName":    "<yggdrasil.server.implementation || site.implementation>",
-    "implementationVersion": "<yggdrasil.server.version || site.version>",
-    "links": {
-      "homepage": "<from yggdrasil.server.links.homepage || frontend.url>",
-      "register": "<from yggdrasil.server.links.register || frontend.url + '/register'>"
-    },
-    "feature.non_email_login":             true,
-    "feature.legacy_skin_api":             true,
-    "feature.no_mojang_namespace":         false,
-    "feature.enable_mojang_anti_features": false,
-    "feature.enable_profile_key":          false,
-    "feature.username_check":              true
+  "status":  "online",
+  "success": true,
+  "message": "HRPAuth Yggdrasil API Provider is running.",
+  "site": {
+    "name":        "<site.name>",
+    "url":         "<runtime site URL pulled from HRPAuth core>",
+    "version":     "<site.version>",
+    "server_time": "<YYYY-MM-DD HH:MM:SS>"
   },
-  "skinDomains":        ["<domain>", ".<domain>"],
-  "signaturePublickey": "<PEM public key from yggdrasil.server.signature_public_key>"
+  "yggdrasil": {
+    "meta": {
+      "serverName":            "<yggdrasil.server.name>",
+      "implementationName":    "<yggdrasil.server.implementation>",
+      "implementationVersion": "<yggdrasil.server.version>",
+      "links": {
+        "homepage": "<runtime frontend URL when available, else yggdrasil.server.links.homepage>",
+        "register": "<runtime frontend URL + /register when available, else yggdrasil.server.links.register>"
+      },
+      "feature.non_email_login":             true,
+      "feature.legacy_skin_api":             true,
+      "feature.no_mojang_namespace":         false,
+      "feature.enable_mojang_anti_features": false,
+      "feature.enable_profile_key":          false,
+      "feature.username_check":              true
+    },
+    "skinDomains":        ["<domain>", ".<domain>"],
+    "signaturePublickey": "<PEM public key loaded from yggdrasil.server.signature_public_key_path>"
+  }
 }
 ```
 
-`skinDomains` defaults to `[callback.url domain, .callback.url domain]` when `yggdrasil.server.skin_domains` is empty.
+The Yggdrasil metadata is nested under the `yggdrasil` key; the top level
+additionally carries `status`, `success`, `message`, and `site`. The core
+service merges this whole `yggdrasil` object into its own `GET /` response via
+presence `root_metadata`.
+
+`skinDomains` defaults to `[<site URL domain>, .<site URL domain>]` (derived
+from the runtime site URL pulled from HRPAuth core) when
+`yggdrasil.server.skin_domains` is empty.
 
 The response also carries `X-Authlib-Injector-API-Location: /` so that authlib-injector ALI resolution points back at the same root.
 
@@ -89,9 +107,9 @@ The response also carries `X-Authlib-Injector-API-Location: /` so that authlib-i
 | Endpoint | Auth | Notes |
 |----------|------|-------|
 | `POST /authserver/authenticate` | none | Username/password + `agent`. Body: `{username, password, agent:{name,version}, clientToken?, requestUser?}`. Rate-limited by `security.rate_limit_*`. |
-| `POST /authserver/refresh` | none | Body: `{accessToken, clientToken, selectedProfile?, requestUser?}`. **Response no longer includes `availableProfiles`** — only `accessToken`, `clientToken`, `selectedProfile` and (when `requestUser=true`) `user`. This matches the authlib-injector wiki response schema. |
+| `POST /authserver/refresh` | none | Body: `{accessToken, clientToken, selectedProfile?, requestUser?}`. **Response no longer includes `availableProfiles`** — only `accessToken`, `clientToken` and `selectedProfile`. `requestUser` is accepted but the current implementation never returns a `user` object. |
 | `POST /authserver/validate` | none | Body: `{accessToken, clientToken?}`. Returns `204 No Content` on success, `403` otherwise. |
-| `POST /authserver/invalidate` | none | Body: `{accessToken, clientToken?}`. Always returns `204`. |
+| `POST /authserver/invalidate` | none | Body: `{accessToken, clientToken?}`. Returns `204` after invalidating; an unparseable JSON body returns `403 ForbiddenOperationException`. |
 | `POST /authserver/signout` | none | Body: `{username, password}`. **Rate-limited** with the same Redis counter as `/authenticate` to prevent password enumeration via this endpoint. Always returns `204`. |
 
 ### Successful `/authenticate` Response
@@ -115,7 +133,7 @@ The response also carries `X-Authlib-Injector-API-Location: /` so that authlib-i
 |----------|-------|
 | `POST /sessionserver/session/minecraft/join` | Body: `{accessToken, selectedProfile, serverId}`. Records a session keyed by `(profile_id, server_id)` with TTL = `yggdrasil.security.session_expiry_seconds`. |
 | `GET /sessionserver/session/minecraft/hasJoined?username=&serverId=&ip=` | Returns `204` on miss; otherwise a profile object including `textures` and (when applicable) the `textures` property signature. `ip` is only enforced when `yggdrasil.feature_flags.enable_ip_check = true`. |
-| `GET /sessionserver/session/minecraft/profile/:uuid?unsigned=true` | Returns the profile plus properties; `signature` is included only when `unsigned=false`. `204` on miss. |
+| `GET /sessionserver/session/minecraft/profile/:uuid?unsigned=true` | Returns the profile plus properties; `signature` is included only when `unsigned=false`. Misses return `404 ProfileNotFoundException`. A lowercase alias route `GET /sessionserver/session/minecraft/hasjoined` is also registered for `hasJoined`. |
 
 `hasJoined` response:
 
@@ -199,15 +217,27 @@ The Yggdrasil service no longer receives push events for username changes or acc
 Used by HRPAuth core to verify service health and internal key validity.
 
 - **Auth**: `X-Internal-Key` header.
-- **Response**: `204 No Content` or `200 OK` on success; `401 Unauthorized` if the key is invalid.
+- **Response**: `200 OK` with the standard success envelope (message "I am alive") on success; `401` with `invalid_credentials` if the key is invalid.
 
 ### Proxy Registration (`POST /internal/proxy-register`)
 
-Used by WinnerProxy to create a game account without an HRPAuth core identity.
+Available for creating a game account without an HRPAuth core identity.
 
 - **Auth**: `X-Internal-Key` header.
 - **Body**: `{ "username": "<string>", "password": "<string>", "mojang_uuid": "<string>" }`.
+- **Response**: `200` with `data: {account_id, profile_id}`; `400` for an invalid body; `401` for an invalid internal key; `500` on failure.
 - **Logic**:
     1. Creates an account with `cbh = 0` (Created By Human = false).
     2. Stores the provided `password` (hashed) for local Yggdrasil auth.
     3. Account is subject to bot cleanup if not claimed within 30 days.
+
+> Current WinnerProxy behavior: WinnerProxy does not call this endpoint. Its
+> proxy registration issues `POST /register` against the upstream with an
+> OAuth2 Bearer token and body `{username, password, email: "",
+> mojang_uuid}`, and its batch profile query targets
+> `POST {upstream}/yggdrasil/api/profiles/minecraft`. Upstream `/register`
+> requires the `identifier` field, and the upstream batch path has no
+> `/yggdrasil` prefix, so these two outbound calls do not succeed against the
+> current upstream as of 2026-11-04. WinnerProxy also retains client methods
+> for `POST /user/declare-email` and `POST /user/mojang-bind-enable` with no
+> active call sites; both endpoints no longer exist on the core.

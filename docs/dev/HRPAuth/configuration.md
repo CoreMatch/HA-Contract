@@ -53,6 +53,11 @@ security:
   rate_limit_window_sec: 600     # Login failure window (seconds)
   enable_captcha: true           # Enable graphical captcha (mandatory validation for /register)
   captcha_ttl: 300               # Captcha TTL (seconds), stored in Redis
+webauthn:
+  rp_display_name: ""            # Defaults to site.name
+  rp_id: ""                      # Defaults to the domain derived from rp_origins
+  rp_origins: []                 # Defaults to the callback/frontend URLs
+  session_ttl_sec: 300
 core_api:
   base_url: "http://localhost:2778"
   client_id: "hrpauth-internal-super"
@@ -119,7 +124,7 @@ Migration Behavior:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `callback.url` | string | Backend callback address (appears as `backend.url` in `GET /status`) |
+| `callback.url` | string | Backend callback address (appears as `site.url` in the `GET /` status response) |
 
 ### `frontend` — Frontend Address
 
@@ -182,6 +187,15 @@ Migration Behavior:
 > ⚠️ **Historical Migration Note**: In earlier versions, `enable_captcha` and `captcha_ttl` were under `yggdrasil.security.*`. **They have now been migrated to the top-level `security.*`**, and the old paths no longer take effect. When upgrading from an old version, the `v2→v3` chain migration will automatically complete this field migration, requiring no manual intervention.
 
 > Password migration note: during BlessingSkin import, bcrypt hashes may be copied directly, while non-bcrypt sources are converted into the fixed marker `BS2HA$RESET_REQUIRED` and must use password reset later. See [`data-models.md`](./data-models.md) and [`bs2ha-migration.md`](./bs2ha-migration.md).
+
+### `webauthn` — WebAuthn Relying Party
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `webauthn.rp_display_name` | string | `site.name` | Relying party display name |
+| `webauthn.rp_id` | string | derived from `rp_origins` | Relying party ID (domain) |
+| `webauthn.rp_origins` | array | derived from callback/frontend URLs | Allowed origins for WebAuthn ceremonies |
+| `webauthn.session_ttl_sec` | int | `300` | WebAuthn ceremony session TTL (seconds) |
 
 ### `oauth2` — Site-side OAuth2 Configuration
 

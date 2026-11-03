@@ -1,0 +1,180 @@
+openapi: 3.1.0
+info:
+  title: HASkinLib Business API
+  version: 1.0.0
+  description: >
+    Unified specification for HASkinLib business interfaces. Rebuilt
+    2026-11-04 from the current implementation (the previous version of this
+    file was removed in HA-Contract commit badff2a, 2026-10-07).
+
+    Authentication model: HASkinLib has no local credential store. Endpoints
+    marked with BearerAuth validate the OAuth2 access token by calling the
+    HRPAuth core service (`POST /internal/verify-token`, then
+    `GET /services/users/{uuid}`) and act on the resulting user identity.
+servers:
+  - url: /
+paths:
+  /example:
+    get:
+      summary: Example interface
+      responses:
+        '200': { description: Success }
+  /texture/upload:
+    post:
+      summary: Upload texture and generate preview
+      description: >
+        Multipart upload. The authenticated user's UID is taken from the
+        verified Bearer token; there is no `uid` request parameter. Form
+        fields: `file` (PNG, required), `type` (`skin` or `cape`), `model`
+        (skin model), `name`, `description`, `tags`. Uploading an existing
+        `(uid, hash)` combination updates the stored record instead of
+        creating a new one.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, type]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                type:
+                  type: string
+                  enum: [skin, cape]
+                model:
+                  type: string
+                name:
+                  type: string
+                description:
+                  type: string
+                tags:
+                  type: string
+      responses:
+        '200': { description: Successfully updated existing record }
+        '201': { description: Successfully created new record }
+        '400':
+          description: >
+            Validation failure; `code` is one of `invalid_texture_type`,
+            `invalid_texture_model`, `invalid_texture_file`,
+            `invalid_texture_size`, `texture_name_required`,
+            `texture_file_required`
+        '401': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /texture/listpreview:
+    get:
+      summary: Get preview list
+      responses:
+        '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /texture/preview/{preview_file}:
+    get:
+      summary: Get preview file
+      parameters:
+        - in: path
+          name: preview_file
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: webp file
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /texture/pull/{hash}:
+    get:
+      summary: Pull original texture file
+      parameters:
+        - in: path
+          name: hash
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: png file
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+  /profile/textures:
+    get:
+      summary: Get current user's texture list
+      security:
+        - BearerAuth: []
+      responses:
+        '200': { description: Success }
+        '401': { $ref: '#/components/responses/Error' }
+  /texture/delete:
+    post:
+      summary: Delete a texture owned by the current user
+      description: |
+        Removes the texture record matching the authenticated user's UID plus
+        `(type, hash)` from the database and forcibly cleans up the original
+        PNG file and the WebP preview file from disk. Even if other users
+        still reference the same hash, the files are removed; their DB records
+        are left untouched.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [type, hash]
+              properties:
+                type:
+                  type: string
+                  enum: [skin, cape]
+                hash:
+                  type: string
+                  description: SHA-256 hash (64-char hex)
+      responses:
+        '200': { description: Texture deleted }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: >
+        OAuth2 access token issued by HRPAuth core; validated server-side via
+        the core's internal endpoints, not against a local database.
+  responses:
+    Error:
+      description: Standard error response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+  schemas:
+    Meta:
+      type: object
+      required: [request_id]
+      properties:
+        request_id:
+          type: string
+    ErrorEnvelope:
+      type: object
+      required: [success, message, code, error, meta]
+      properties:
+        success:
+          type: boolean
+          const: false
+        message:
+          type: string
+        code:
+          type: string
+        error:
+          type: string
+        meta:
+          $ref: '#/components/schemas/Meta'

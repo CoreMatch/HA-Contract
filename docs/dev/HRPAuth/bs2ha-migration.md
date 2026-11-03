@@ -13,20 +13,22 @@ The first supported migration path is:
   - the BlessingSkin `textures/` storage directory (optional; skip texture migration if missing)
   - HRPAuth callback base URL
   - HRPAuth Yggdrasil signing private key (optional; defaults to auto-generating a new key)
-  - a baseline HRPAuth SQL file (optional; provides table structure and constraints)
+  - a baseline HRPAuth core SQL file (`--ha-baseline-sql`, optional; provides table structure and constraints)
+  - a baseline HRPAuth-Yggdrasil-API SQL file (`--ygg-baseline-sql`, optional)
 - Output:
-  - an HRPAuth-compatible SQL import file
+  - an HRPAuth **core** SQL import file (`--ha-out-sql`; `users` rows)
+  - an HRPAuth **Yggdrasil-API** SQL import file (`--ygg-out-sql`; `accounts`, `profiles`, `profile_properties` rows)
   - a migration report describing transformed rows, skipped rows, generated placeholders, and texture/signature status
 
 The tool is offline and file-based. It does not depend on direct access to the source BlessingSkin database.
 
 ## Table Coverage
 
-The migration tool targets the following HRPAuth tables:
+Following the 2026-10 service split, the migration tool writes to two
+databases:
 
-- `users`
-- `profiles`
-- `profile_properties`
+- HRPAuth core: `users`
+- HRPAuth-Yggdrasil-API: `accounts`, `profiles`, `profile_properties`
 
 The tool does **not** import runtime-only tables such as:
 
@@ -46,11 +48,10 @@ BlessingSkin `users.uid` is preserved as HRPAuth `users.uid`.
 For each imported user:
 
 - `users.uuid` MUST be newly generated as a 32-character lowercase hex string.
-- `email`, `password`, `permission`, `ip`, `last_sign_at`, `register_at`, `verified`, and `remember_token` are migrated when available.
+- `email`, `password`, `permission`, `ip`, `last_sign_at`, `register_at`, and `verified` are migrated when available.
 - `regip` SHOULD default to the BlessingSkin `ip` value when no better registration IP source exists.
-- `cbh` MUST be `1` for migrated BlessingSkin users.
-- `mbe` MUST default to `0`.
-- `mojang_uuid`, `totp`, and `2FA` MUST remain unset unless a later migration phase explicitly provides them.
+- In the Yggdrasil-API `accounts` row created for each imported user: `cbh` MUST be `1`, `mbe` MUST default to `0`, and `mojang_uuid` remains unset.
+- `totp` and `2FA` MUST remain unset unless a later migration phase explicitly provides them.
 
 ## Imported Username
 

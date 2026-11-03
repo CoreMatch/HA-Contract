@@ -9,10 +9,24 @@ servers:
 paths:
   /status:
     get:
-      summary: Get service status
+      summary: Redirect to the service status endpoint
+      description: Returns `307 Temporary Redirect` to `GET /`.
+      responses:
+        '307':
+          description: Redirect to `GET /`
+  /:
+    get:
+      summary: Get service status and aggregated root metadata
+      description: >
+        Returns site information plus any top-level metadata keys contributed
+        by registered microservices via their presence `root_metadata`.
       responses:
         '200':
-          description: Success
+          description: >
+            Success; body contains `success`, `message`,
+            `site` (`name`, `implementation`, `version`, `url`,
+            `frontend_url`), `meta.request_id`, and zero or more service
+            contributed top-level keys (e.g. `yggdrasil`)
   /oauth/login-ticket:
     post:
       summary: Verify password and issue a short-lived login ticket or first-party tokens
@@ -109,15 +123,34 @@ paths:
         '200':
           description: Password reset successful
         '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
   /register:
     post:
-      summary: Register user or proxy-register via Bearer service token
+      summary: Register a new user (anonymous WebUI registration)
+      description: >
+        Creates a user from `email` + `username` + `password` with captcha
+        verification when enabled. There is no Bearer/service-token branch;
+        game-account (proxy) registration lives in HRPAuth-Yggdrasil-API.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, username, password]
+              properties:
+                email: { type: string, format: email }
+                username: { type: string, minLength: 3 }
+                password: { type: string, minLength: 6 }
+                captcha_token: { type: string }
+                captcha_code: { type: string }
       responses:
-        '200': { description: Success }
+        '200':
+          description: Success; `data` contains `uid` and `uuid`
         '400': { $ref: '#/components/responses/Error' }
-        '401': { $ref: '#/components/responses/Error' }
-        '403': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
   /logout:
     get:
       summary: Revoke current Bearer access token
@@ -152,6 +185,7 @@ paths:
       responses:
         '200': { description: Success }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
     delete:
       summary: Request account deletion (enter cooling period)
@@ -176,13 +210,17 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
   /user/declare-email:
     post:
-      summary: Declare email via Bearer service token
+      summary: Declare email for a user (removed endpoint)
+      deprecated: true
+      description: >
+        This endpoint is NOT registered by the current HRPAuth core
+        (removed in commit 9ab4e64, 2026-10-06); calls receive the standard
+        404 `route_not_found` response. It is kept in this file only as a
+        migration reference: the WinnerProxy client still contains a
+        `DeclareEmail` method targeting this path (no active call site as of
+        2026-11-04).
       responses:
-        '200': { description: Success }
-        '400': { $ref: '#/components/responses/Error' }
-        '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
-        '409': { $ref: '#/components/responses/Error' }
   /user/security/change-email/send-code:
     post:
       summary: Send verification code to current email for email change
@@ -191,6 +229,8 @@ paths:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
   /user/security/change-email/webauthn-begin:
     post:
       summary: Start WebAuthn sudo authentication for email change
@@ -201,12 +241,12 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
   /user/security/change-email:
     post:
-      summary: Change user email and optionally password
+      summary: Change user email
       description: >
-        Requires `user.security.manage` scope. Supports two verification paths:
-        1. Password + 1 factor (TOTP, Email Code, or WebAuthn).
-        2. Any 2 factors (TOTP, Email Code, WebAuthn).
-        If path 2 is used, current password is not required and a new password can be set.
+        Requires `user.security.manage` scope. The request must carry at least
+        one verified second factor (TOTP, email code, WebAuthn sudo flow, or
+        recovery key); there is no password-based path and no password change
+        in this endpoint.
       requestBody:
         required: true
         content:
@@ -216,8 +256,6 @@ paths:
               required: [new_email]
               properties:
                 new_email: { type: string, format: email }
-                current_password: { type: string }
-                new_password: { type: string, minLength: 6 }
                 totp_code: { type: string }
                 email_code: { type: string }
                 recovery_key: { type: string }
@@ -227,10 +265,12 @@ paths:
                     flow_id: { type: string }
                     credential: { type: object, additionalProperties: true }
       responses:
-        '200': { description: Success }
+        '200':
+          description: Success; `data` contains the updated `email`
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
   /user/security/recovery-key/create:
     post:
       summary: Create initial recovery key
@@ -758,11 +798,11 @@ paths:
       description: >
         Uploads a new SDK package archive (tar.gz / zip) as multipart/form-data.
         The single file field is `package`. On success the package metadata is
-        returned with HTTP 201. Only the package owner / operator with a valid
-        API key may upload.
+        returned with HTTP 201. Requires an ops-level (level 2) OAuth2 Bearer
+        token.
       operationId: uploadSdkPackage
-      parameters:
-        - $ref: '#/components/parameters/ApiKeyHeader'
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -801,8 +841,8 @@ paths:
         matches the current ETag, the server responds 304 Not Modified without a
         body.
       operationId: listSdkPackages
-      parameters:
-        - $ref: '#/components/parameters/ApiKeyHeader'
+      security:
+        - BearerAuth: []
       responses:
         '200':
           description: Array of package metadata
@@ -831,8 +871,8 @@ paths:
     get:
       summary: Get a single SDK package metadata
       operationId: getSdkPackage
-      parameters:
-        - $ref: '#/components/parameters/ApiKeyHeader'
+      security:
+        - BearerAuth: []
         - $ref: '#/components/parameters/PackageNamePath'
       responses:
         '200':
@@ -853,8 +893,8 @@ paths:
     delete:
       summary: Delete an SDK package
       operationId: deleteSdkPackage
-      parameters:
-        - $ref: '#/components/parameters/ApiKeyHeader'
+      security:
+        - BearerAuth: []
         - $ref: '#/components/parameters/PackageNamePath'
       responses:
         '200':
@@ -878,8 +918,8 @@ paths:
     get:
       summary: Download the raw SDK package archive
       operationId: downloadSdkPackage
-      parameters:
-        - $ref: '#/components/parameters/ApiKeyHeader'
+      security:
+        - BearerAuth: []
         - $ref: '#/components/parameters/PackageNamePath'
       responses:
         '200':
@@ -914,9 +954,12 @@ paths:
                   type: string
       responses:
         '200':
-          description: Matched user identity (`UUID`, `Email`, `Username`)
+          description: >
+            Matched user identity serialized from the internal `UserInfo`
+            struct without JSON tags, so the keys are the Go field names:
+            `UUID`, `Email`, `Username`, `Password` (bcrypt hash).
         '401':
-          description: Credentials invalid
+          description: 'Credentials invalid; body is `{"error": "invalid credentials"}`'
   /internal/verify-token:
     post:
       summary: Resolve an OAuth2 access token to a user (internal, service-to-service)
@@ -1004,14 +1047,12 @@ paths:
           description: Success; `data` contains `service` and accepted rule `count`
         '400': { $ref: '#/components/responses/Error' }
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: OAuth2 Bearer token with ops (level 2) privileges
   parameters:
-    ApiKeyHeader:
-      name: X-API-Key
-      in: header
-      required: true
-      schema:
-        type: string
-      description: API key granting access to SDK package management endpoints
     PackageNamePath:
       name: name
       in: path
@@ -1144,6 +1185,12 @@ components:
           items:
             type: string
           description: Other services this service interacts with
+        root_metadata:
+          type: object
+          additionalProperties: true
+          description: >
+            Top-level keys the service wants exposed on the core `GET /`
+            response; each entry is merged into the root response object
     RouteRule:
       type: object
       required: [scope, paths]

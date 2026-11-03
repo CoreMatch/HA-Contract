@@ -14,7 +14,8 @@ packages, aggregated into a generated frontend, and compiled by the SDK handler.
 - HRPAuth **validates** every uploaded package (archive safety, manifest
   correctness, conflict policy) before accepting it.
 - The SDK handler aggregates all accepted packages into a fresh frontend build
-  and publishes the compiled static assets atomically.
+  and publishes the compiled static assets to its configured artifacts
+  directory.
 - Satellite services are deployed by the same operator as the WebUI; all
   satellite services are absolutely trusted by HRPAuth, and all authentication
   is performed by HRPAuth (Level 2 / Ops).
@@ -30,8 +31,8 @@ POST /services/sdk-packages  ──►     validate + store (fs + Redis)
                                                                         copy template
                                                                         extract + inject SDKs
                                                                         merge npm deps
-                                                                        npm install + tsc + vite build
-                                                                        publish artifacts atomically
+                                                                        tsc + vite build
+                                                                        publish to artifacts dir
 ```
 
 ## Package Format
@@ -126,7 +127,7 @@ example-service-sdk.tar.gz
 | `schema_version` | int | yes | Manifest schema version. Currently `1`. |
 | `name` | string | yes | Unique service name. `[a-z0-9]([a-z0-9-]*[a-z0-9])?`, max 64 chars. Uniquely identifies the package on HRPAuth. |
 | `version` | string | yes | Semantic version (`major.minor.patch`). |
-| `routes` | array | conditional | Non-empty list of route entries (see below). Required unless the package explicitly declares at least one `profile_cards` entry. |
+| `routes` | array | yes | Non-empty list of route entries (see below). HRPAuth core upload validation rejects every package whose `routes` is missing or empty, regardless of any `profile_cards`. |
 | `routes[].path` | string | yes | Route path, MUST start with `/`, MUST NOT end with `/` (except root `/`), MUST NOT contain `?`/`#`/`..` segments. Becomes a React Router path. |
 | `routes[].module` | string | yes | Relative path to a TS/TSX module inside the package (extension optional). The module MUST have a **default export** React component (used with `React.lazy`). MUST be inside the package (no `..`, no absolute path). |
 | `routes[].title` | string | no | Optional document title hint. |
@@ -144,18 +145,14 @@ example-service-sdk.tar.gz
 | `profile_cards[].module` | string | yes* | Relative path to a TS/TSX module inside the package (extension optional). The module MUST have a **default export** React component, and is rendered as the card body inside the host-provided card shell. MUST be inside the package (no `..`, no absolute path). |
 | `profile_cards[].priority` | int | no | Optional explicit display priority. Higher numbers render closer to the top. When omitted, the card falls back to SDK aggregation/load order. |
 | `dependencies` | object | no | npm dependencies to merge into the generated frontend `package.json`. Keys are package names, values are npm version ranges. |
-| `run_scripts` | bool | no | Whether npm lifecycle scripts (`preinstall`/`postinstall`/…) of the merged dependency tree may execute during install. **Default `false`** (install runs with `--ignore-scripts`). The handler may additionally enforce a configured npm blacklist. |
+| `run_scripts` | bool | no | Accepted in the manifest and carried through the handler's option plumbing, but the current build pipeline does not read it: dependency installation happens once at template setup (see Build Policy), and per-package script control is not applied. The handler does enforce a configured npm blacklist. |
 
 > `menu.path`, `dashboard.path`, and `critical_operations.path` reference
 > **routes declared by the same service**. Cross-service references are not
 > allowed.
 
-> `profile_cards` are independent mount points and do **not** need a matching
-> route entry.
-
-> A package MUST declare at least one integration surface: either `routes`, or
-> `profile_cards`, or both. If `profile_cards` is absent, `routes` remains
-> required.
+> `profile_cards` entries do not need a matching route entry of their own, but
+> the package must still declare a non-empty `routes` array (see above).
 
 ### Profile Card Priority Contract
 
@@ -201,11 +198,16 @@ The handler produces the following generated modules under
 | File | Exports | Consumer |
 |---|---|---|
 | `sdk-manifest.ts` | `sdkManifest: SdkManifestEntry[]` | diagnostics / metadata |
-| `sdk-routes.tsx` | `sdkRoutes: RouteObject[]` (lazy components) | `App.tsx` route tree |
+| `sdk-routes.tsx` | `sdkRouteElements: ReactNode[]` (`<Route>` elements for direct insertion into `<Routes>`) and `sdkRoutes: RouteObject[]` (lazy components) | `App.tsx` consumes `sdkRouteElements` in its route tree |
 | `sdk-navbar.tsx` | `sdkNavbarItems: SdkNavbarItem[]` | `Navbar.tsx` |
 | `sdk-dashboard.tsx` | `sdkDashboardItems: SdkDashboardItem[]` | `Dashboard.tsx` |
 | `sdk-critical-operations.ts` | `sdkCriticalOperations: SdkCriticalOperationItem[]` | `AccountSecurity.tsx` |
 | `sdk-profile-cards.tsx` | `sdkProfileCards: SdkProfileCardItem[]` | `Profile.tsx` |
+
+During injection the handler also rewrites cross-package relative imports:
+when an SDK source file imports a module that lies outside its own package
+directory (e.g. a bridge module reaching into host-relative paths), the import
+specifier is rewritten so the build resolves against the host tree.
 
 Type contracts are defined in `HRPAuth-Web/src/types/generated-sdk.ts`
 (human-maintained, stable):
@@ -254,16 +256,25 @@ Every SDK service directory is injected under
 
 ## Build Policy
 
-- `frontend-original/` (template) is **read-only**; every build fully copies it
-  to a fresh work directory.
-- All SDK packages are re-injected on every build (no incremental leftovers).
-- npm dependencies are merged from every manifest's `dependencies`.
-- `npm install` runs with `--ignore-scripts` unless the package declares
-  `run_scripts: true` (or the operator explicitly allows it).
-- Build pipeline: `npm install` → `tsc -b` → `vite build`.
-- On success, the new `dist` is published to a versioned artifact directory and
-  the `current` pointer is switched atomically.
-- On failure, the previous `current` artifact is kept serving traffic.
+Current behavior of `HA-WebUI-SDKHandler`:
+
+- The template directory (default `./HRPAuth-WebUI`, configurable via
+  `build.template_dir` / `build.template_git_url`) is cloned/pulled by the
+  handler and is read-write: the handler runs `git checkout .` + `git pull`
+  on it and runs `npm install` there once during template setup.
+- Every build copies the template (including its `node_modules`) into a fresh
+  work directory; all SDK packages are re-injected on every build (no
+  incremental leftovers).
+- npm dependencies from every manifest are merged into the work directory's
+  `package.json`; there is no per-build `npm install`, so dependencies that
+  are not already present in the template's `node_modules` are not installed.
+- Build pipeline: `npm run build` when the template defines a `build` script,
+  otherwise `tsc -b` followed by `vite build`.
+- Publishing writes to the configured fixed artifacts directory: the new
+  `dist` is copied to a `.tmp` sibling, the previous directory is removed,
+  and the `.tmp` directory is renamed into place. There is no versioned
+  artifact history and no separate `current` pointer; between the removal and
+  the rename the artifacts directory is absent.
 
 ## Error Codes
 

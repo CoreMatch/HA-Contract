@@ -88,7 +88,12 @@ Proxy-registered users are normally unable to log in to the business system beca
 | Request body | `username` (≥ 3 chars), `email` (must be unique), `password` (≥ 6 chars) |
 | Target | User with `username` equal to the request value AND `cbh=0` |
 
-Handler semantics (`controllers/auth_controller.go > ClaimUser`):
+Implementation status: as of 2026-11-04 no route or handler exists in either
+HRPAuth core or HRPAuth-Yggdrasil-API; HRPAuth-Yggdrasil-API contains an
+orphan service method (`AuthService.ClaimAccount`) with no caller. The table
+above and the steps below describe the intended semantics carried by this
+contract (see also `x-planned-endpoints` in
+`docs/api/openapi/hrpauth-yggdrasil-business.yaml`):
 
 1. Reject when target is missing or `cbh=1` (already a human account).
 2. UPDATE the same row with `email`, `password` (bcrypt), `cbh = 1`, `verified = 1`.
@@ -107,7 +112,10 @@ Players who have both a proxy-registered account (cbh=0, created by WinnerProxy)
 | Source account | User with `username` equal to the request value AND `cbh=0` |
 | Target account | User matching `email` + `password` (bcrypt verified) |
 
-Handler semantics:
+Implementation status: as of 2026-11-04 no route or handler exists in either
+HRPAuth core or HRPAuth-Yggdrasil-API (tracked in `agents.md` Roadmap item
+2.1; the HRPAuth-Spigot plugin already ships the client command). The steps
+below describe the intended semantics carried by this contract:
 
 1. Validate `manage_token` against server config.
 2. Find source account by `username` where `cbh=0`; reject if not found or has no `mojang_uuid`.
@@ -131,13 +139,14 @@ Side effects: the proxy-registered account is permanently deleted. The target ac
 ### `mbe` (Mojang Bind Enabled)
 
 - **Values**: `0` (default) = Prohibit Mojang players with the same name from binding via service proxy `/register` (**HA priority**, Mojang players receive 409 and are kicked); `1` = Allow binding.
-- **Write Endpoints**:
-  - `POST /user/mojang-bind-enable` → Player self-enable (Remember Token) or service enable (Manage Token + `uid`/`email`). Sets `mbe = 1`. Idempotent.
-  - `POST /user/mojang-bind-disable` → Player self-disable (Remember Token) or service disable (Manage Token + `uid`/`email`). Sets `mbe = 0`. Idempotent.
-- **Query**: `mbe` is included in the `POST /user` response as `data.mbe` (0 or 1).
+- **Write Endpoints** (HRPAuth-Yggdrasil-API, OAuth2 Bearer of the account owner):
+  - `POST /player/mojang-bind-enable` → Sets `mbe = 1` and starts the auto-disable countdown. Idempotent.
+  - `POST /player/mojang-bind-disable` → Sets `mbe = 0`. Idempotent.
+  - (The former core endpoints `POST /user/mojang-bind-enable` / `-disable` were removed from the core in 2026-10.)
+- **Query**: `mbe` is returned in the HRPAuth-Yggdrasil-API `GET /player` response (`data.mbe`). The core `POST /user` response does not include it.
 - **Only effective in service proxy `/register` decision tree 2.a**: Checked when a same-name WebUI user is hit and their `mojang_uuid IS NULL`.
 - **Once `mojang_uuid` is written, the semantics of `mbe` disappear** (subsequent same-name Mojang players will not trigger 2.a). On successful bind, `mbe` is **automatically reset to 0** together with the `mojang_uuid` write, so the field cleanly reflects the current authorization status.
-- **Auto-disable timeout**: After `POST /user/mojang-bind-enable` sets `mbe = 1`, a 15-minute countdown begins. If no bind (`mojang_uuid` write) occurs within that window, the system automatically resets `mbe = 0`. The timeout is cancelled on successful bind (which also resets `mbe = 0`), explicit disable, or re-enable (which restarts the timer). Implementation: `controllers/mbe_timeout_controller.go` — an in-memory event stack scanned every 30 seconds.
+- **Auto-disable timeout**: After `POST /player/mojang-bind-enable` sets `mbe = 1`, a 15-minute countdown begins. If no bind (`mojang_uuid` write) occurs within that window, the system automatically resets `mbe = 0`. The timeout is cancelled on successful bind (which also resets `mbe = 0`), explicit disable, or re-enable (which restarts the timer). Implementation: HRPAuth-Yggdrasil-API `controllers/mbe_timeout_controller.go` — an in-memory event stack scanned every 30 seconds.
 
 ### `password`
 
