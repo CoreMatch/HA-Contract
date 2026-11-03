@@ -99,9 +99,9 @@ paths:
         `type` (default `skin`) and `model` (default `default`). All
         service-layer failures — including invalid access token, non-owned
         profile, and texture validation errors — are returned as
-        `400 texture_upload_failed`. There is no upload rate limiting, and the
-        `max_texture_file_size` limit is not active in the default
-        configuration.
+        `400 texture_upload_failed`. There is no upload rate limiting.
+        Uploads larger than `yggdrasil.security.max_texture_file_size`
+        (default 512000 bytes) fail with `400 texture_upload_failed`.
       security:
         - BearerAuth: []
       parameters:

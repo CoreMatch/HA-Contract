@@ -84,7 +84,7 @@ first start). Current schema version: **3** (`ConfigVersion`, migration chain
 | `security` | `rate_limit_max_attempts`, `rate_limit_window_sec` | Login rate limiting |
 | `microservice` | `name`, `ttl_seconds`, `relay_url`, `relay_path_prefix`, `profile_cards` | Presence/relay registration; `relay_path_prefix` defaults to `/yggdrasil-api`; `profile_cards` maps card names to priorities |
 | `yggdrasil.server` | `name`, `implementation`, `version`, `links.homepage`, `links.register`, `skin_domains`, `signature_public_key_path`, `signature_private_key_path`, `textures_storage` | Signature keys are read from PEM **files** (path keys) |
-| `yggdrasil.security` | `token_expiry_days`, `session_expiry_seconds`, `max_texture_width`, `max_texture_height`, `max_texture_file_size`, `max_tokens_per_user` | `max_texture_file_size` is parsed but not written into the generated default config (value 0 disables the check) |
+| `yggdrasil.security` | `token_expiry_days`, `session_expiry_seconds`, `max_texture_width`, `max_texture_height`, `max_texture_file_size`, `max_tokens_per_user` | `max_texture_file_size` defaults to `512000` bytes when absent; an explicit value overrides it (`0` disables the check) |
 | `yggdrasil.feature_flags` | `non_email_login`, `legacy_skin_api`, `no_mojang_namespace`, `enable_mojang_anti_features`, `enable_profile_key`, `username_check`, `enable_ip_check` | See `docs/dev/HRPAuth/feature-flags.md` |
 
 Runtime values pulled from HRPAuth core at startup (`Runtime.SiteURL`,
