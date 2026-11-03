@@ -2,13 +2,12 @@
 
 ## Purpose
 
-`HA-Services-Deployer` publishes a machine-readable manifest that tells
-`HA-Services-MaintenanceView` which service releases are currently available for
-download.
+`HA-Services-Deployer` publishes a machine-readable manifest describing which
+service releases are currently available for download.
 
-Version manifest v1 is designed for:
+Version manifest v1 supports:
 
-- showing release status in HASMV
+- showing release status
 - comparing the deployed service state with the available upstream release
 - downloading the exact binary or package selected by the operator
 
@@ -19,17 +18,20 @@ Version manifest v1 is **not** responsible for:
 - local deployment path discovery
 - process stop/start policies
 
-Those concerns stay outside the manifest and are handled by HASMV runtime logic
-or a future deployment-init protocol.
+Those concerns stay outside the manifest and are handled by consumers or a
+future deployment-init protocol.
+
+> `HA-Services-MaintenanceView` exists in the ecosystem but is a
+> work-in-progress project and is not covered by this contract.
 
 ## Transport
 
 `HA-Services-Deployer` exposes:
 
 - `GET /healthz` — liveness probe
-- `GET /api/v1/healthz` — liveness probe (API-prefixed; consumed by HA-Services-MaintenanceView)
+- `GET /api/v1/healthz` — liveness probe (API-prefixed)
 - `GET /api/v1/manifest` — full manifest (structure defined below)
-- `GET /api/v1/projects` — release-oriented projection of the manifest: only artifacts with `role: "binary"`, top-level key `projects` (no `schema_version`). Envelope: `{"success": true, "message": "projects loaded", "data": {"generated_at": "...", "projects": [...]}}`. HA-Services-MaintenanceView uses this endpoint as its primary data source; `GET /api/v1/manifest` is passed through to its frontend without parsing.
+- `GET /api/v1/projects` — release-oriented projection of the manifest: only artifacts with `role: "binary"`, top-level key `projects` (no `schema_version`). Envelope: `{"success": true, "message": "projects loaded", "data": {"generated_at": "...", "projects": [...]}}`.
 - `GET /api/v1/artifacts/:service/*filepath` — artifact download (path traversal guarded)
 
 The HA deployer service returns the manifest inside its standard HTTP envelope:
@@ -112,9 +114,9 @@ This document defines the structure of the `data` object.
 | `sha256` | string | yes | Lowercase 64-character SHA-256 hex digest of the downloadable file bytes. |
 | `size_bytes` | int64 | yes | Artifact size in bytes. |
 
-## Comparison Contract for HASMV
+## Comparison Semantics
 
-HASMV should compare releases with the following rules:
+The manifest fields are intended to be compared as follows:
 
 1. Match a remote service by `services[].name`.
 2. Select candidate artifacts by `role` plus the local runtime's supported
@@ -129,7 +131,7 @@ still preserves correct binary replacement behavior.
 
 ## Download URL Resolution
 
-HASMV resolves a concrete download URL as:
+A concrete download URL resolves as:
 
 `{deployer_base_url}/api/v1/artifacts/{service.name}/{artifact.download_path}`
 
