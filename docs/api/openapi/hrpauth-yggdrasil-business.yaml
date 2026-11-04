@@ -254,7 +254,15 @@ paths:
       summary: Enable the Mojang bind flow for the authenticated account
       description: >
         Sets `mbe=true` and schedules a 15-minute automatic revert if the
-        binding is not completed.
+        binding is not completed. The window is completed when the player
+        joins the game with their Mojang account and the proxy registration
+        (`POST /internal/proxy-register`) collides with this account's
+        profile name: that request binds the Mojang UUID, resets `mbe=0`
+        and cancels the pending revert. If the window expires first, a
+        background sweep (30-second granularity) resets `mbe=0` while
+        `mojang_uuid` is still unset, and the player must enable the flow
+        again to retry. Accounts that already have a `mojang_uuid` are
+        returned unchanged (the flow cannot be re-enabled).
       security:
         - BearerAuth: []
       responses:
@@ -305,6 +313,26 @@ paths:
       description: >
         Authenticated via the `X-Internal-Key` header. Creates a
         proxy-registered account (`cbh=0`) used by proxy flows.
+
+        Username-collision decision tree (restored pre-split semantics):
+
+        - `mojang_uuid` already linked to an account: idempotent success
+          returning the existing account and profile.
+        - Username free: creates the proxy account (`cbh=0`).
+        - Username collides with an account that has no `mojang_uuid`:
+          with `mbe=1` (Mojang bind window open) the request completes the
+          bind flow instead of creating a new account — it sets
+          `mojang_uuid`, refreshes `last_sign_at`, resets `mbe=0` and
+          cancels the pending 15-minute revert, while `cbh`, `password`,
+          `core_user_id` and the profile are preserved and the supplied
+          `password` is discarded; it responds like a normal success with
+          the existing account's `account_id`/`profile_id`. With `mbe=0`
+          the request is rejected with `409 username_already_bound`
+          (HA accounts have priority; a Mojang player cannot take the
+          name).
+        - Username collides with an account already bound to a different
+          `mojang_uuid`: rejected with `409 username_already_bound`
+          regardless of `mbe`.
       parameters:
         - $ref: '#/components/parameters/InternalKeyHeader'
       requestBody:
@@ -322,6 +350,8 @@ paths:
           description: Success; `data` contains `account_id` and `profile_id`
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
+        '409':
+          description: '`username_already_bound` (username collides with an account that is not in an open mbe bind window)'
         '500': { $ref: '#/components/responses/Error' }
   /internal/heartbeat:
     get:
