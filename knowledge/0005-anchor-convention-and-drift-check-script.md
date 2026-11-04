@@ -29,9 +29,11 @@ preference:
    when line numbers must stay exact for a historical citation (frozen
    snapshots, quote verification, deleted code). Verified against that
    commit's tree, never the working tree.
-4. **Line anchor** — `path/to/file.ext:Lx-Ly`. Last resort for current-state
-   citations that have neither a symbol nor a key name; expected to drift and
-   to be repaired by the check below.
+4. **Line anchor** — `path/to/file.ext:Lx-Ly` (the markdown-link spelling
+   `path/to/file.ext#Lx-Ly` is recognized as equivalent). Last resort for
+   current-state citations that have neither a symbol nor a key name;
+   expected to drift and to be repaired by the check below. Colons inside
+   URLs (`http://host:port`) are never parsed as line anchors.
 
 Cross-repository citations are prefixed with `[xref]` on the same line and
 are skipped by the checker (it cannot verify other repositories from here).
@@ -46,6 +48,14 @@ a problem list, and exits non-zero on any failure:
 bash /home/lnb/Desktop/HA/HA-Contract/scripts/check-knowledge-anchors.sh
 ```
 
+The checker carries a self-test fixture (`scripts/tests/anchor-fixture/`,
+run with `--self-test`) covering URL false positives, the `#L` spelling,
+docker-tag/host-port/PHP-constant non-anchors, and each failure mode.
+`scripts/check-all-knowledge-anchors.sh` runs the same checker across every
+main checkout in the workspace that has a `knowledge/` directory and prints
+a per-repo summary (repo / anchors / problems / exit), exiting non-zero if
+any repository fails.
+
 ## Consequences
 - Costs and limitations:
   - Symbol anchors break on renames; the checker then reports the symbol as
@@ -57,6 +67,9 @@ bash /home/lnb/Desktop/HA/HA-Contract/scripts/check-knowledge-anchors.sh
     remains necessary.
   - Repositories without a local checkout of HA-Contract must copy the script
     or skip the check; the convention itself is repository-independent.
+  - Slash-less path tokens are only checked when the file exists, so a
+    mistyped root-level file name is not flagged (docker tags, host:port
+    pairs and similar non-path tokens are skipped by the same rule).
 
 ## Evidence
 - scripts/check-knowledge-anchors.sh (added by this commit; run from any
