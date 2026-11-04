@@ -29,6 +29,13 @@
 # Absolute paths (e.g. /home/lnb/RW-HPS/Go-Server/...) are checked directly.
 # Relative paths are resolved against the repository root.
 #
+# Environment:
+#   ANCHOR_ALLOW_MISSING_ABS_PATHS=1
+#       Skip absolute-path anchors whose target does not exist instead of
+#       reporting them. For single-repository environments (CI) where the
+#       sibling checkouts referenced by cross-repo absolute paths are absent.
+#       In a full workspace checkout, leave it unset so everything is checked.
+#
 # Self test:
 #   bash check-knowledge-anchors.sh --self-test
 #   runs the checker against scripts/tests/anchor-fixture and asserts the exact
@@ -57,7 +64,15 @@ fi
 
 problems=0
 checked=0
+skipped_abs=0
 report_lines=""
+
+missing_abs_skippable() { # $1=path; true when a missing absolute path may be skipped
+  case "$1" in
+    /*) [ "${ANCHOR_ALLOW_MISSING_ABS_PATHS:-0}" = "1" ] && return 0 ;;
+  esac
+  return 1
+}
 
 report() { # $1 = anchor description, $2 = problem
   report_lines+="PROBLEM: $2"$'\n'
@@ -86,6 +101,9 @@ check_line_anchor() { # $1=path $2=end-line $3=commit(or empty) $4=raw-anchor
   local p="$1" end="$2" commit="$3" raw="$4" n
   if [ -n "$commit" ]; then
     if ! git cat-file -e "$commit:$p" >/dev/null 2>&1; then
+      if [ ! -e "$p" ] && missing_abs_skippable "$p"; then
+        skipped_abs=$((skipped_abs + 1)); return
+      fi
       report "$raw" "time-point anchor: $p not found in commit $commit"
       return
     fi
@@ -96,6 +114,7 @@ check_line_anchor() { # $1=path $2=end-line $3=commit(or empty) $4=raw-anchor
     return
   fi
   if ! file_ok "$p"; then
+    if missing_abs_skippable "$p"; then skipped_abs=$((skipped_abs + 1)); return; fi
     report "$raw" "file not found: $p"
     return
   fi
@@ -108,6 +127,7 @@ check_line_anchor() { # $1=path $2=end-line $3=commit(or empty) $4=raw-anchor
 check_symbol_anchor() { # $1=path $2=symbol $3=raw
   local p="$1" sym="$2" raw="$3"
   if ! file_ok "$p"; then
+    if missing_abs_skippable "$p"; then skipped_abs=$((skipped_abs + 1)); return; fi
     report "$raw" "file not found: $p"
     return
   fi
@@ -119,6 +139,7 @@ check_symbol_anchor() { # $1=path $2=symbol $3=raw
 check_field_anchor() { # $1=path $2=key $3=raw
   local p="$1" key="$2" raw="$3"
   if ! file_ok "$p"; then
+    if missing_abs_skippable "$p"; then skipped_abs=$((skipped_abs + 1)); return; fi
     report "$raw" "file not found: $p"
     return
   fi
@@ -197,6 +218,7 @@ while IFS= read -r m; do
 done <<< "$(printf '%s\n' "$content" | grep -oE '[A-Za-z0-9_./~-]+#L[0-9]+(-L?[0-9]+)?( @ [0-9a-fA-F]{7,40})?' || true)"
 
 summary="anchors checked: $checked, problems: $problems"
+[ "$skipped_abs" -gt 0 ] && summary+=", skipped missing absolute paths: $skipped_abs"
 
 if [ "$SELFTEST" -eq 1 ]; then
   # Expected fixture outcome: exactly 5 problems (see tests/anchor-fixture),
