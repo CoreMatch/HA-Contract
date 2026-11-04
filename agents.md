@@ -16,7 +16,7 @@ This repository exists for **secondary development** on top of the HA platform. 
 | **HRPAuth-Yggdrasil-API** | [`CoreMatch/HRPAuth-Yggdrasil-API`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API) | Yggdrasil protocol provider and game account management (split out of HRPAuth in 2026-10) | Go, Gin, MySQL, Redis, GORM |
 | **HASkinLib** | [`CoreMatch/HASkinLib`](https://github.com/CoreMatch/HASkinLib) | Skin and texture library | Go 1.25+, Gin, MySQL (shared), GORM |
 | **WinnerProxy** | [`CoreMatch/WinnerProxy`](https://github.com/CoreMatch/WinnerProxy) | Server-join proxy (HRPAuth or Mojang upstream) | Go 1.26+, Gin, freecache |
-| **HASkinProxy** | [`CoreMatch/HASkinProxy`](https://github.com/CoreMatch/HASkinProxy) | Yggdrasil-to-CSL compatibility proxy | Go 1.21+, Gin, freecache |
+| **HASkinProxy** | [`CoreMatch/HASkinProxy`](https://github.com/CoreMatch/HASkinProxy) | Yggdrasil-to-CSL compatibility proxy | Go 1.24+, Gin, freecache |
 | **HRPAuth-WebUI** | [`CoreMatch/HRPAuth-WebUI`](https://github.com/CoreMatch/HRPAuth-WebUI) | Frontend SPA for the auth service | TypeScript, React 19, MUI v7, Vite 7 |
 | **HA-WebUI-SDKHandler** | [`CoreMatch/HA-WebUI-SDKHandler`](https://github.com/CoreMatch/HA-WebUI-SDKHandler) | Compile-time SDK aggregation build service | Go 1.25+, Gin |
 | **Docs & Scripts** | `docs/`, `scripts/` in this repository | API specs, dev guides, CI helpers | OpenAPI YAML, Shell |
@@ -33,7 +33,16 @@ Material that describes how the platform is operated rather than how it is built
 
 ## Mandatory Rules for All Agents
 
-### 1. Documentation Rules
+### 1. Documentation Directories
+
+Documentation lives in two independent places:
+
+- `HA-Contract/docs/` (this repository) → **for AI agents** and as the authoritative contract source
+- [`SamuelCheston/SamuelWiki`](https://github.com/SamuelCheston/SamuelWiki) → **for human developers** (separate content repository), and the home of all deployment and operations documentation
+
+Agents should consume docs from `HA-Contract/docs/` and the relevant service repository's root. Do not modify Wiki content as part of contract work.
+
+### 2. Documentation Rules
 
 - **Single Source of Truth**: All API definitions, error codes, and development specifications live in `docs/`. Do NOT rely on code comments or in-repo READMEs as the authoritative API source.
 - **OpenAPI specs** (`docs/api/openapi/`) define the contract. Code must match the spec, not the other way around.
@@ -44,15 +53,6 @@ Material that describes how the platform is operated rather than how it is built
   ```bash
   ./scripts/check-business-api-drift.sh
   ```
-
-### 2. Documentation Directories
-
-Documentation lives in two independent places:
-
-- `HA-Contract/docs/` (this repository) → **for AI agents** and as the authoritative contract source
-- [`SamuelCheston/SamuelWiki`](https://github.com/SamuelCheston/SamuelWiki) → **for human developers** (separate content repository), and the home of all deployment and operations documentation
-
-Agents should consume docs from `HA-Contract/docs/` and the relevant service repository's root. Do not modify Wiki content as part of contract work.
 
 ### 3. Unified Response Format
 
@@ -88,7 +88,7 @@ When creating new endpoints, declare the required auth level and document it in 
 
 ### 6. Microservice Extension Protocol
 
-HRPAuth exposes a microservice extension layer (relay, pre-routing, post-routing). If your sub-project needs to integrate with HRPAuth's WEBUI, follow the extension protocol:
+HRPAuth exposes a microservice extension layer (relay, pre-routing, post-routing). If your sub-project needs to integrate with HRPAuth's WebUI, follow the extension protocol:
 
 - Register via `POST /services/presence` (bonjour handshake).
 - Upload an SDK source package (tar.gz/zip with a root-level `manifest.json`, `schema_version=1`) to `POST /services/sdk-packages` to integrate into the WebUI at compile time.
@@ -99,11 +99,7 @@ HRPAuth exposes a microservice extension layer (relay, pre-routing, post-routing
 
 ### 7. Sub-Project Coupling Awareness
 
-**HASkinLib uses its own MySQL database** (startup refuses a shared HRPAuth
-database layout) and authenticates users by calling HRPAuth core HTTP APIs
-(`POST /internal/verify-token`, `GET /services/users/{uuid}`). Coupling is at
-the HTTP contract level: changes to those core endpoints or to the user
-identity fields they return affect HASkinLib.
+**HASkinLib uses its own MySQL database** (startup refuses a shared HRPAuth database layout) and authenticates users by calling HRPAuth core HTTP APIs (`POST /internal/verify-token`, `GET /services/users/{uuid}`). Coupling is at the HTTP contract level: changes to those core endpoints or to the user identity fields they return affect HASkinLib.
 
 ### 8. Configuration Conventions
 
@@ -114,8 +110,8 @@ identity fields they return affect HASkinLib.
 ### 9. Build and CI
 
 - **Go services**: `go build -o ./build/<name>` (each has a `build.sh`).
-- **HRPAuth-Web**: `npm run build` (Vite production build).
-- **CI**: GitHub Actions on HASkinLib (Go build) and HRPAuth-Web (npm test + publish).
+- **HRPAuth-WebUI**: `npm run build` (Vite production build).
+- **CI**: GitHub Actions on HASkinLib (Go build) and HRPAuth-WebUI (npm test + publish).
 
 ---
 
@@ -149,7 +145,7 @@ identity fields they return affect HASkinLib.
 
 ### HASkinProxy (CSL Compatibility)
 
-**Key directories**: `controllers/`, `services/`
+**Key directories**: `internal/handler/`, `internal/router/`, `internal/hrpauth/`, `internal/cache/`, `internal/model/`
 
 - Translates Yggdrasil API → CustomSkinLoader JSON format.
 - Registers with HRPAuth via the microservice extension layer.
@@ -172,15 +168,10 @@ identity fields they return affect HASkinLib.
 > If your task relates to a roadmap item, acknowledge it in your output.
 > If your task reveals a cross-project dependency or new requirement, propose adding it here and **ask the owner before modifying this section**.
 
-### Roadmap Items
-
 | # | Item | Owner | Depends On | Status | Notes |
 |---|---|---|---|---|---|
 | 1.1 | *Example: Ensure all business routes appear in OpenAPI specs* | *HRPAuth, HASkinLib* | *—* | *Pending* | *Use `check-business-api-drift.sh` to verify* |
 | 2.1 | `POST /admin/force-bind`: transfer `mojang_uuid` from proxy account (cbh=0) to manual account, delete proxy account | HRPAuth | — | Pending | Contract & wiki updated; Velocity plugin (`HRPAuth-Spigot`) `ForceBindCommand` implemented; HA backend handler not yet implemented |
-
-> Agents should add items to this table when a task reveals a cross-project dependency or a new requirement.
-> Always ask the owner before adding or modifying roadmap items.
 
 ---
 
@@ -190,9 +181,7 @@ Before starting any task, an agent MUST:
 
 1. **Read this file** (`agents.md`) to understand the project structure and rules.
 2. **Check the Roadmap** section above to see if your task relates to an existing item. If yes, acknowledge it.
-3. **Identify cross-project impact**: Does your change affect another sub-project? If yes, note the dependency in the Roadmap's Cross-Project Dependencies table and flag it.
+3. **Identify cross-project impact**: Does your change affect another sub-project? If yes, note the dependency in the Roadmap table and flag it.
 4. **Consult the relevant OpenAPI spec** in `docs/api/openapi/` before modifying any API route.
 5. **Run the anti-drift script** (`./scripts/check-business-api-drift.sh`) if you modified business API routes.
 6. **Ask the owner** before modifying this `agents.md` file or making breaking changes to shared interfaces.
-
-When proposing new roadmap items or cross-project dependencies, **always ask the owner first** before adding them.
