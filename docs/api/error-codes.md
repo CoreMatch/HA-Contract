@@ -60,6 +60,7 @@ The following error codes are the stable registry for current HA business APIs. 
 | `texture_delete_failed` | Texture deletion failed |
 | `texture_read_failed` | Texture read failed |
 | `texture_fetch_failed` | Failed to fetch texture from upstream (e.g. Mojang Session Server or texture CDN) |
+| `profile_query_failed` | Profile texture query failed (HASkinLib). Defined in the HASkinLib constant table; no handler currently returns it |
 | `upload_request_too_large` | Upload request is too large |
 | `upload_rate_limited` | Upload rate limited |
 | `texture_not_found` | Texture file does not exist |
@@ -93,12 +94,15 @@ The following error codes are the stable registry for current HA business APIs. 
 | `sdk_package_invalid_manifest` | SDK package `manifest.json` is missing or fails validation (HTTP 422) |
 | `sdk_package_invalid_path` | SDK package archive contains an illegal path (traversal / absolute / symlink) (HTTP 400) |
 | `sdk_package_too_large` | SDK package exceeds the configured size limit (HTTP 413) |
+| `sdk_not_found` | SDK package lookup failed. Defined in the HRPAuth core and Yggdrasil-API constant tables; no handler currently returns it (the sdk-package endpoints use `sdk_package_not_found`) |
 | `insufficient_auth_level` | Credential present but below the required auth level |
 | `internal_error` | Unclassified internal error |
-| `oauth_state_mismatch` | OAuth2 state parameter mismatch (CSRF / replay protection). Defined in this registry only; no current implementation returns it. |
-| `oauth_token_expired` | OAuth2 access token expired. Defined in this registry only; no current implementation returns it (expired tokens surface as `oauth_invalid_grant`). |
-| `oauth_refresh_failed` | OAuth2 refresh token is invalid, expired, or revoked. Defined in this registry only; no current implementation returns it (refresh failures surface as `oauth_invalid_grant`). |
-| `oauth_revoke_failed` | OAuth2 token revocation request failed. Defined in this registry only; no current implementation returns it. |
+| `oauth_state_mismatch` | OAuth2 state parameter mismatch (CSRF / replay protection). Defined in the HRPAuth core and MatchCoreArena registries; no current implementation returns it. |
+| `oauth_token_expired` | OAuth2 access token expired. Returned by MatchCoreArena's auth middleware (`401`); in the HRPAuth core expired tokens surface as `oauth_invalid_grant`. |
+| `oauth_refresh_failed` | OAuth2 refresh token is invalid, expired, or revoked. Returned by MatchCoreArena `POST /api/auth/refresh`; in the HRPAuth core refresh failures surface as `oauth_invalid_grant`. |
+| `oauth_revoke_failed` | OAuth2 token revocation request failed. Returned by MatchCoreArena `POST /api/auth/logout`. Defined in the HRPAuth core registry only; no core endpoint returns it. |
+| `oauth_rate_limited` | Too many auth requests; retry later (MatchCoreArena login-ticket flow). |
+| `oauth_hrpaauth_down` | HRPAuth upstream unavailable during an auth flow (MatchCoreArena; the code string carries the historical `hrpaauth` spelling). |
 | `mca_invalid_request` | MatchCoreArena: general parameter error |
 | `mca_user_not_found` | MatchCoreArena: user does not exist |
 | `mca_friend_not_found` | MatchCoreArena: friend relationship does not exist |
