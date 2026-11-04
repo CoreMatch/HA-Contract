@@ -1,0 +1,29 @@
+name: knowledge-anchors
+
+on:
+  push:
+  pull_request:
+
+# Minimal guard for the ADR-style knowledge base of this repository.
+# Runs the anchor checker's self-test and then the check against this
+# repository's own knowledge/ entries. The cross-repository batch runner
+# (check-all-knowledge-anchors.sh) is intentionally NOT run here: it needs
+# the sibling checkouts of the whole workspace, which CI does not have.
+#
+# ANCHOR_ALLOW_MISSING_ABS_PATHS=1 makes the checker skip absolute-path
+# anchors that point at sibling repositories absent from a single-repo CI
+# checkout; in a full workspace checkout the checker runs without that
+# variable and verifies those anchors too.
+
+jobs:
+  knowledge-anchors:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Checker self-test
+        run: bash scripts/check-knowledge-anchors.sh --self-test
+
+      - name: Check this repository's knowledge anchors
+        run: ANCHOR_ALLOW_MISSING_ABS_PATHS=1 bash scripts/check-knowledge-anchors.sh

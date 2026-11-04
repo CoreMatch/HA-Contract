@@ -78,6 +78,25 @@ extract its routes from the single file that registers them, add a
 (protocol aliases, tombstoned endpoints) in the script's inline exclusion
 blocks so they stay visible.
 
+## Knowledge Anchors (Drift Check)
+
+The ADR-style knowledge bases cite code with stable anchors (symbol / field /
+time-point / line — see [knowledge/0005](knowledge/0005-anchor-convention-and-drift-check-script.md)).
+[scripts/check-knowledge-anchors.sh](scripts/check-knowledge-anchors.sh)
+verifies every anchor mechanically, and CI enforces it on every push/PR via
+[.github/workflows/knowledge-anchors.yml](.github/workflows/knowledge-anchors.yml)
+(checker self-test + this repository's own anchors; the cross-repo batch is
+excluded because it needs the sibling checkouts). Local equivalents:
+
+```bash
+bash scripts/check-knowledge-anchors.sh --self-test
+bash scripts/check-knowledge-anchors.sh
+```
+
+In a full workspace checkout,
+[scripts/check-all-knowledge-anchors.sh](scripts/check-all-knowledge-anchors.sh)
+checks every repository's knowledge base in one pass.
+
 ## Archive Note
 
 Old and drifted documents have been moved to the [archive/docs/](https://github.com/CoreMatch/HA-Contract/tree/main/archive/docs/) directory and are no longer used as development references.

@@ -54,7 +54,11 @@ docker-tag/host-port/PHP-constant non-anchors, and each failure mode.
 `scripts/check-all-knowledge-anchors.sh` runs the same checker across every
 main checkout in the workspace that has a `knowledge/` directory and prints
 a per-repo summary (repo / anchors / problems / exit), exiting non-zero if
-any repository fails.
+any repository fails. CI (`.github/workflows/knowledge-anchors.yml`) runs
+the self-test plus this repository's own check on every push/PR; because a
+CI checkout has no sibling repositories, it sets
+`ANCHOR_ALLOW_MISSING_ABS_PATHS=1`, which skips absolute-path anchors whose
+target is absent (they stay fully enforced in a workspace checkout).
 
 ## Consequences
 - Costs and limitations:
