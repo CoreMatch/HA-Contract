@@ -48,19 +48,27 @@ by the author on 2026-11-04):
 
 ## Evidence
 
-- Singleton wiring (RW-HPS Go-Server, checked at commit `b0fbccfa`):
-  `internal/app/bootstrap.go:72` (`room.NewServerRoom(game.NewGameSession(
-  global.ConfigServer.ServerID, game.Backend))` — RoomID = ServerID), `:75`
-  (`room.SetDefault`); `internal/game/room/serverroom.go:407` (`SetDefault`),
-  `:414` (`Default`).
-- Decision record D-5 (author decision log `RW-HPS-GO-DECISIONS.md`, entry D-5,
+- Singleton wiring (RW-HPS Go-Server at `/home/lnb/RW-HPS/Go-Server`; anchors
+  verified at commit `baabca44` on 2026-11-05, original audit at `b0fbccfa`):
+  `/home/lnb/RW-HPS/Go-Server/internal/app/bootstrap.go::NewServerRoom`
+  (`room.NewServerRoom(game.NewGameSession(global.ConfigServer.ServerID,
+  game.Backend))` — RoomID = ServerID),
+  `/home/lnb/RW-HPS/Go-Server/internal/app/bootstrap.go::SetDefault`
+  (`room.SetDefault`);
+  `/home/lnb/RW-HPS/Go-Server/internal/game/room/serverroom.go::SetDefault`
+  (`SetDefault`),
+  `/home/lnb/RW-HPS/Go-Server/internal/game/room/serverroom.go::Default`
+  (`Default`).
+- Decision record D-5 (author decision log
+  `/home/lnb/SamuelPortal-docs/RW-HPS-GO-DECISIONS.md (field: D-5)`, entry D-5,
   `accepted`, author re-check 2026-11-04): singleton slot chosen over dependency
   injection; "若将来要支持一个 Go 进程多个独立房间，槽位要换成注册表" (multi-room
   would replace the slot with a registry).
-- Cascade routing (Cascade repository, checked locally):
-  `internal/backend/directory.go:220-258` (`RouteRoom`: snapshot room-code
-  ownership → longest prefix → default backend), `:78-96` (`validatePrefixes`,
-  overlapping prefixes rejected).
+- Cascade routing (Cascade repository at `/home/lnb/Cascade`, checked locally):
+  `/home/lnb/Cascade/internal/backend/directory.go::RouteRoom` (`RouteRoom`:
+  snapshot room-code ownership → longest prefix → default backend),
+  `/home/lnb/Cascade/internal/backend/directory.go::validatePrefixes`
+  (`validatePrefixes`, overlapping prefixes rejected).
 - Contract room facade: HA-Contract `docs/api/openapi/cascade-backend-v1.yaml`,
   paths `/rooms` and `/rooms/{code}...` (v1.2.0).
 - Cost analysis: Cascade/Go alignment research notes (`CASCADE-GO-RESEARCH.md`):
