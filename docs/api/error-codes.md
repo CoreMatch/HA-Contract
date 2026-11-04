@@ -107,3 +107,13 @@ The following error codes are the stable registry for current HA business APIs. 
 | `mca_team_name_taken` | MatchCoreArena: team name is already in use |
 | `mca_not_team_leader` | MatchCoreArena: only the team leader can perform this action |
 | `mca_match_not_found` | MatchCoreArena: match does not exist |
+| `cascade_room_conflict` | Cascade management API: a room code is claimed by more than one backend and cannot be routed |
+| `cascade_backend_unavailable` | Cascade management API: the owning backend is unhealthy or unreachable, so the request cannot be forwarded |
+| `cascade_invalid_internal_key` | Cascade management API: the `X-Internal-Key` header is missing or does not match the key issued by HRPAuth Core |
+| `cascade_database_not_configured` | Cascade management API: the endpoint needs the player-binding database, which is not available |
+
+Cascade note: the backend-facing `/v1` surface is governed by
+`docs/dev/Cascade/Cascade-Backend-v1.md`, whose stable `UPPER_SNAKE` error
+codes (`FORBIDDEN`, `SESSION_NOT_FOUND`, `ROOM_CONFLICT`, ...) are forwarded
+verbatim through the Cascade management API when a backend error is passed
+through; they are registered in that contract, not in this registry.
