@@ -7,6 +7,16 @@ info:
 servers:
   - url: /
 paths:
+  /health:
+    get:
+      summary: Liveness probe
+      description: >
+        Returns `200` with the unified success envelope and
+        `data.status = "ok"`. Performs no database access and no heavy work;
+        intended for container healthchecks and load balancers.
+      responses:
+        '200':
+          description: Service is alive.
   /status:
     get:
       summary: Redirect to the service status endpoint
