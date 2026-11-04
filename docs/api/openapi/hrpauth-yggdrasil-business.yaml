@@ -5,26 +5,6 @@ info:
   description: Unified specification for HRPAuth-Yggdrasil-API business interfaces (textures, game accounts, Mojang proxy).
 servers:
   - url: /
-x-planned-endpoints:
-  # Endpoints that appear in this file's history but have no registered route
-  # or handler in the current implementation. They are listed here for
-  # reference only and are not part of the current specification.
-  - path: /admin/claim-user
-    method: POST
-    status: not implemented (no route in HRPAuth-Yggdrasil-API or HRPAuth core)
-    notes: >
-      Intended request body: {username, email, password}, Bearer auth.
-      An orphan service method (AuthService.ClaimAccount) exists in
-      HRPAuth-Yggdrasil-API but has no caller. This endpoint is not tracked
-      in the HA-Contract agents.md Roadmap.
-  - path: /admin/force-bind
-    method: POST
-    status: not implemented (no route in HRPAuth-Yggdrasil-API or HRPAuth core)
-    notes: >
-      Intended request body: {username, email, password, manage_token},
-      Bearer auth. Tracked in HA-Contract agents.md Roadmap item 2.1
-      ("HA backend handler not yet implemented"); the HRPAuth-Spigot plugin
-      already ships the matching client command (ForceBindCommand).
 paths:
   /texture/get:
     post:
@@ -352,6 +332,102 @@ paths:
       responses:
         '200': { description: Success }
         '401': { $ref: '#/components/responses/Error' }
+  /admin/claim-user:
+    post:
+      summary: Claim a proxy-registered game account (plugin self-service)
+      description: >
+        Converts a proxy-registered game account (`cbh=0`) into a claimed
+        one (`cbh=1`). Authenticated with an OAuth2 service token Bearer
+        carrying the `user.claim.as-service` scope; called by the Velocity
+        plugin (`/ha reg`) on behalf of the player, who is identified by
+        their game profile name. The service provisions the core user
+        (email + bcrypt password, `verified=true`) through the core's
+        `POST /internal/claim-user`, then links the core user to the game
+        account and sets `cbh=1`. Email uniqueness is enforced against the
+        core user table by the core. The proxy account's `mojang_uuid` is
+        kept unchanged.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username:
+                  type: string
+                  description: Game profile name of the proxy account (min 3 chars)
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  description: Min 6 chars
+      responses:
+        '200':
+          description: Success; `data` contains `uid`, `username`, `email`
+        '400':
+          description: '`username_too_short` / `invalid_email` / `password_too_short`'
+        '401':
+          description: Missing or invalid bearer token
+        '403':
+          description: Not a service token or missing `user.claim.as-service` scope
+        '404':
+          description: '`user_not_found` (no game account for that profile name)'
+        '409':
+          description: '`user_not_claimable` (already claimed) / `email_already_registered` / `username_already_bound`'
+  /admin/force-bind:
+    post:
+      summary: Transfer a Mojang UUID from a proxy account to a manual account
+      description: >
+        Authenticated with an OAuth2 service token Bearer plus the operator
+        manage token in the body (`manage_token`). Transfers `mojang_uuid`
+        from the proxy-registered source account (`cbh=0`, matched by game
+        profile name) to the target account identified by core email +
+        password (verified through the core's
+        `POST /internal/verify-credentials`), then deletes the source
+        account together with its profiles, tokens and sessions. All
+        game-side writes happen in a single local transaction; the core
+        call is read-only. If the target core user has no game account yet,
+        one is created (`cbh=1`) as part of the same transaction. Called by
+        the Velocity plugin (`/ha forcebind`). Unknown target email and
+        wrong password are both reported as `403 invalid_credentials`
+        (merged relative to the legacy pre-split endpoint).
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password, manage_token]
+              properties:
+                username:
+                  type: string
+                  description: Game profile name of the proxy (source) account (min 3 chars)
+                email:
+                  type: string
+                  format: email
+                  description: Target (manual) account email
+                password:
+                  type: string
+                  description: Target account password (min 6 chars)
+                manage_token:
+                  type: string
+      responses:
+        '200':
+          description: Success; `data` contains the transferred `mojang_uuid`
+        '400':
+          description: '`username_too_short` / `invalid_email` / `password_too_short` / `no_mojang_uuid`'
+        '401':
+          description: Missing or invalid bearer token
+        '403':
+          description: '`invalid_manage_token` / `invalid_credentials` / not a service token'
+        '404':
+          description: '`user_not_found` (no proxy account for that profile name)'
 components:
   parameters:
     InternalKeyHeader:
