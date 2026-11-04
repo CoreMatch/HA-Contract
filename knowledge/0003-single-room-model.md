@@ -62,7 +62,7 @@ by the author on 2026-11-04):
   ownership → longest prefix → default backend), `:78-96` (`validatePrefixes`,
   overlapping prefixes rejected).
 - Contract room facade: HA-Contract `docs/api/openapi/cascade-backend-v1.yaml`,
-  paths `/rooms` and `/rooms/{code}...` (v1.1.1).
+  paths `/rooms` and `/rooms/{code}...` (v1.2.0).
 - Cost analysis: Cascade/Go alignment research notes (`CASCADE-GO-RESEARCH.md`):
   single-room vs multi-room listed as the largest structural gap (line 104);
   multi-room work "推翻 D-5 单例房间，波及 room.Default()、连接路由、检查线程、
