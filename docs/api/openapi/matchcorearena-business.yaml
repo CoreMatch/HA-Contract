@@ -9,9 +9,12 @@ info:
 servers:
   - url: /
 paths:
-  /status:
+  /api/status:
     get:
       summary: Get service status
+      description: >
+        Public liveness/status endpoint (no auth). Returns the unified
+        success envelope with the server `version` in `data`.
       tags: [System]
       responses:
         '200':
@@ -121,24 +124,12 @@ paths:
     post:
       summary: Revoke tokens and logout
       description: >
-        Revokes the current access_token and/or refresh_token.
-        Requires Bearer authentication.
+        Revokes the Bearer access token presented in the `Authorization`
+        header (the token resolved by the auth middleware). No request body
+        is accepted. Requires Bearer authentication.
       tags: [Auth]
       security:
         - BearerAuth: []
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                access_token:
-                  type: string
-                  description: Access token to revoke (optional, defaults to Bearer token)
-                refresh_token:
-                  type: string
-                  description: Refresh token to revoke (optional)
       responses:
         '200':
           description: Logout successful
@@ -171,21 +162,21 @@ paths:
                         $ref: '#/components/schemas/User'
         '401': { $ref: '#/components/responses/Error' }
 
-  /api/users/{uuid}:
+  /api/users/{uid}:
     get:
-      summary: Get user profile by UUID
+      summary: Get user profile by UID
       description: Returns a user's public profile.
       tags: [Users]
       security:
         - BearerAuth: []
       parameters:
         - in: path
-          name: uuid
+          name: uid
           required: true
           schema:
-            type: string
-            format: uuid
-          description: User UUID
+            type: integer
+            format: int64
+          description: Numeric user UID
       responses:
         '200':
           description: Success
@@ -261,7 +252,10 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
     post:
       summary: Send friend request
-      description: Sends a friend request to the target user.
+      description: >
+        Sends a friend request to the target user, identified by their HA
+        username (resolved to a UID through the HRPAuth core lookup, with a
+        Redis-cached resolution).
       tags: [Friends]
       security:
         - BearerAuth: []
@@ -271,12 +265,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [target_uuid]
+              required: [username]
               properties:
-                target_uuid:
+                username:
                   type: string
-                  format: uuid
-                  description: Target user's UUID
+                  description: Target user's HA username
       responses:
         '201':
           description: Friend request sent
@@ -518,12 +511,12 @@ paths:
           application/json:
             schema:
               type: object
-              required: [user_uuid]
+              required: [user_uid]
               properties:
-                user_uuid:
-                  type: string
-                  format: uuid
-                  description: UUID of the user to add
+                user_uid:
+                  type: integer
+                  format: int64
+                  description: Numeric UID of the user to add
                 role:
                   type: integer
                   enum: [0, 1]
@@ -546,7 +539,7 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
 
-  /api/teams/{id}/members/{uuid}/role:
+  /api/teams/{id}/members/{uid}/role:
     put:
       summary: Update team member role
       description: Changes a member's role. Requires leader role.
@@ -562,12 +555,12 @@ paths:
             format: int64
           description: Team ID
         - in: path
-          name: uuid
+          name: uid
           required: true
           schema:
-            type: string
-            format: uuid
-          description: Target user UUID
+            type: integer
+            format: int64
+          description: Target user UID
       requestBody:
         required: true
         content:
@@ -592,7 +585,7 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
 
-  /api/teams/{id}/members/{uuid}:
+  /api/teams/{id}/members/{uid}:
     delete:
       summary: Remove team member
       description: Removes a member from the team. Requires leader or vice-leader role.
@@ -608,12 +601,12 @@ paths:
             format: int64
           description: Team ID
         - in: path
-          name: uuid
+          name: uid
           required: true
           schema:
-            type: string
-            format: uuid
-          description: Target user UUID
+            type: integer
+            format: int64
+          description: Target user UID
       responses:
         '200':
           description: Member removed
@@ -630,7 +623,10 @@ paths:
   /api/matches:
     post:
       summary: Report match result
-      description: Records a completed match result.
+      description: >
+        Records a completed match result. The bearer token must carry the
+        `match:report` scope (system/admin reporters); without it the server
+        answers `403 oauth_insufficient_scope`.
       tags: [Matches]
       security:
         - BearerAuth: []

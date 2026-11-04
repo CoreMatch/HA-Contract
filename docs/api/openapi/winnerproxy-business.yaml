@@ -1,0 +1,118 @@
+openapi: 3.1.0
+info:
+  title: WinnerProxy Business API
+  version: 1.0.0
+  description: >
+    Unified specification for the WinnerProxy HTTP surface. WinnerProxy is a
+    Yggdrasil-compatible edge proxy in front of HRPAuth: launchers and game
+    servers hit its sessionserver endpoints, and HasJoined implements the
+    three-stage flow (HA hasJoined -> Mojang hasJoined -> proxy-register in
+    HA). Every Yggdrasil route is served twice: prefix-less (Mojang-style,
+    for launchers and legacy probes) and under the `/winnerproxy` prefix (for
+    HA's own clients); both forms behave identically and only the
+    prefix-less form is listed here.
+
+    Error shape: WinnerProxy deliberately does NOT use the HA unified
+    response envelope. Protocol endpoints follow Mojang/wiki.vg conventions
+    (status-code driven, bare JSON), and failures use a bare
+    `{"error": "<reason>"}` object. This deviation is intentional for
+    launcher compatibility.
+servers:
+  - url: /
+paths:
+  /health:
+    get:
+      summary: Liveness probe
+      description: >
+        Returns `200` with `{"status": "ok"}` (bare JSON, not the unified
+        envelope). No upstream or database access.
+      responses:
+        '200':
+          description: Service is alive
+  /:
+    get:
+      summary: Yggdrasil server metadata (also served at /winnerproxy)
+      description: >
+        Passes through the HRPAuth root metadata so Minecraft clients see
+        HA's real `skinDomains` / `signaturePublickey`. When HA is
+        unreachable, returns a minimal `{"skinDomains": []}` so legacy
+        probes still succeed (always 200).
+      responses:
+        '200':
+          description: HA root metadata, or the minimal fallback object
+  /sessionserver/session/minecraft/hasJoined:
+    get:
+      summary: Session join verification (three-stage flow)
+      description: >
+        Query parameters are passed through verbatim to HA (standard
+        `username` + `serverId`, plus any future HA-side parameters such as
+        `ip`). Stage 1 asks HA; on a hit the HA profile is returned and
+        cached. Stage 2 asks Mojang (a cached positive Mojang answer from an
+        earlier attempt short-circuits straight to registration). Stage 3
+        proxy-registers the Mojang player in HA and returns the HA
+        `profile_id` with the Mojang skin properties. A Mojang player whose
+        username collides with a non-bindable HA account is rejected with
+        `204` (the HA `username_already_bound` outcome surfaces as "no
+        profile" to the game server).
+      parameters:
+        - in: query
+          name: username
+          schema: { type: string }
+        - in: query
+          name: serverId
+          schema: { type: string }
+      responses:
+        '200':
+          description: >
+            Player profile `{id, name, properties}` (HA profile for HA
+            players; HA profile id + Mojang properties for proxy-registered
+            Mojang players)
+        '204':
+          description: >
+            No profile: join not verified, Mojang upstream disabled, or the
+            Mojang username is bound-rejected by HA
+        '500':
+          description: '`{"error": "auth backend unavailable"}` (local failure, e.g. password generation)'
+        '503':
+          description: '`{"error": "auth backend unavailable"}` (HA proxy-registration failed)'
+  /sessionserver/session/minecraft/profile/{uuid}:
+    get:
+      summary: Profile lookup by UUID
+      description: >
+        Serves the HA profile from the local cache when warm, otherwise
+        forwards to HRPAuth and warms the cache. The `unsigned` query
+        parameter is forwarded (default true).
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema: { type: string }
+        - in: query
+          name: unsigned
+          schema: { type: boolean, default: true }
+      responses:
+        '200':
+          description: Player profile `{id, name, properties}`
+        '404':
+          description: UUID unknown to HA (empty body)
+  /api/profiles/minecraft:
+    post:
+      summary: Batch profile query by usernames
+      description: >
+        Forwards the username list directly to HRPAuth. Returns only the
+        `{id, name}` summary per hit (texture properties are dropped per
+        Yggdrasil convention); usernames without a profile are omitted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { type: string }
+      responses:
+        '200':
+          description: Array of `{id, name}` objects
+        '400':
+          description: '`{"error": "<parse error>"}` for a malformed body'
+        '500':
+          description: '`{"error": "<upstream error>"}` when the HA query fails'

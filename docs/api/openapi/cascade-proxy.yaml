@@ -1,0 +1,295 @@
+openapi: 3.1.0
+info:
+  title: Cascade Proxy Management API
+  version: 1.0.0
+  description: >
+    HTTP management surface of the Cascade edge proxy itself (the backend
+    control plane it forwards to is specified separately in
+    `cascade-backend-v1.yaml`). Room endpoints are a facade: they forward to
+    the room's backend and pass the backend's raw JSON response through, so
+    success bodies are backend-defined. Facade-level errors use a bare
+    `{"error": "<CODE>"}` object — `ROOM_CONFLICT` (409),
+    `BACKEND_NOT_READY` / `BACKEND_UNAVAILABLE` (503), or the backend's own
+    API error code and status. The account endpoints exist only when an
+    HRPAuth client is configured; the internal endpoints require the
+    `X-Internal-Key` header. This surface does not use the HA unified
+    response envelope (management/probe API, not a business API).
+servers:
+  - url: /
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe
+      responses:
+        '200':
+          description: '`{"status": "ok"}`'
+  /readyz:
+    get:
+      summary: Readiness probe
+      responses:
+        '200':
+          description: '`{"status": "ready"}`'
+        '503':
+          description: '`{"status": "not_ready"}`'
+  /api/backends:
+    get:
+      summary: List backend statuses
+      responses:
+        '200':
+          description: '`{"backends": [...]}` with each backend''s status object'
+  /api/rooms:
+    get:
+      summary: List rooms known to the proxy
+      responses:
+        '200':
+          description: '`{"rooms": [...]}` (empty array when none)'
+    post:
+      summary: Create a room (facade over the backend create call)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code: { type: string }
+                title: { type: string }
+                maxPlayers: { type: integer }
+      responses:
+        '201':
+          description: Backend response passed through
+        '400':
+          description: Malformed body
+        '409':
+          description: '`{"error": "ROOM_CONFLICT"}`'
+        '503':
+          description: '`{"error": "BACKEND_NOT_READY"}` / `{"error": "BACKEND_UNAVAILABLE"}`'
+  /api/rooms/{code}:
+    get:
+      summary: Get room state (forwarded to the backend)
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Backend response passed through
+        '503':
+          description: Backend unavailable
+    delete:
+      summary: Delete a room (forwarded to the backend)
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: '`{"message": "room deleted"}` (backend answered 204)'
+        '503':
+          description: Backend unavailable
+  /api/rooms/{code}/settings:
+    put:
+      summary: Update room settings (forwarded to the backend)
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                mapName: { type: string }
+                credits: { type: integer }
+                fogOfWar: { type: integer }
+                income: { type: number }
+                disableNuke: { type: boolean }
+                sharedControl: { type: boolean }
+                startingUnits: { type: integer }
+                maxUnits: { type: integer }
+      responses:
+        '200':
+          description: Backend response passed through
+        '400':
+          description: Malformed body
+        '503':
+          description: Backend unavailable
+  /api/rooms/{code}/kick:
+    post:
+      summary: Kick a player (forwarded to the backend)
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [playerId]
+              properties:
+                playerId: { type: string }
+      responses:
+        '200':
+          description: '`{"message": "player kicked"}` (backend answered 204)'
+        '400':
+          description: Malformed body
+        '503':
+          description: Backend unavailable
+  /api/rooms/{code}/ban:
+    post:
+      summary: Ban a player (forwarded to the backend)
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [playerId]
+              properties:
+                playerId: { type: string }
+      responses:
+        '200':
+          description: '`{"message": "player banned"}` (backend answered 204)'
+        '400':
+          description: Malformed body
+        '503':
+          description: Backend unavailable
+  /api/rooms/{code}/players:
+    get:
+      summary: List room players (forwarded to the backend)
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Backend response passed through
+        '503':
+          description: Backend unavailable
+  /api/auth/verify:
+    post:
+      summary: Verify HA credentials (only present when HRPAuth is configured)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, password]
+              properties:
+                identifier: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: '`{uuid, email, username}` of the verified user'
+        '400':
+          description: Malformed body
+        '401':
+          description: '`{"error": "invalid credentials"}`'
+        '502':
+          description: HRPAuth call failed
+  /api/auth/claim:
+    post:
+      summary: Claim a game binding for an HA user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gameUUID, haUserUUID]
+              properties:
+                gameUUID: { type: string }
+                haUserUUID: { type: string }
+      responses:
+        '200':
+          description: '`{"success": true}`'
+        '400':
+          description: Malformed body
+        '500':
+          description: Database not configured or claim failed
+  /api/auth/status/{gameUUID}:
+    get:
+      summary: Get the binding for a game UUID
+      parameters:
+        - in: path
+          name: gameUUID
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: '`{gameUUID, haUserUUID, playerName, cbh, quickAuth, lastLogin}`'
+        '404':
+          description: '`{"error": "binding not found"}`'
+        '500':
+          description: Database not configured or lookup failed
+  /api/auth/bindings/{haUserUUID}:
+    get:
+      summary: List all bindings of an HA user
+      parameters:
+        - in: path
+          name: haUserUUID
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: '`{"data": [...]}` binding objects'
+        '500':
+          description: Database not configured or lookup failed
+  /internal/heartbeat:
+    get:
+      summary: Internal liveness probe
+      description: Requires the `X-Internal-Key` header.
+      parameters:
+        - in: header
+          name: X-Internal-Key
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: '`{"status": "ok"}`'
+        '401':
+          description: '`{"error": "invalid internal key"}`'
+  /internal/proxy-register:
+    post:
+      summary: Record a proxy-registered player binding
+      description: Requires the `X-Internal-Key` header.
+      parameters:
+        - in: header
+          name: X-Internal-Key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gameUUID, playerName]
+              properties:
+                gameUUID: { type: string }
+                playerName: { type: string }
+      responses:
+        '200':
+          description: '`{"success": true}`'
+        '400':
+          description: Malformed body
+        '401':
+          description: '`{"error": "invalid internal key"}`'
+        '500':
+          description: Database not configured or insert failed
