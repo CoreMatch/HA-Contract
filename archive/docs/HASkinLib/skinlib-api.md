@@ -1,6 +1,6 @@
 # HASkinLib API 文档
 
-> 当前业务 API 的权威规范源已切换到根目录 [`docs/api/`](file:///home/lnb/HA-Contract/docs/api/README.md)。
+> 当前业务 API 的权威规范源已切换到根目录 [`docs/api/`](../../../docs/api/README.md)。
 > 本文档保留详细说明；接口路径、响应结构、错误码调整时，请优先更新 OpenAPI 与错误码注册表。
 
 当前版本已开放以下接口：

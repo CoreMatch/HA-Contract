@@ -1,6 +1,6 @@
 # HRPAuth-Backend-Go 开发文档
 
-> 当前业务 API 的权威规范源已切换到根目录 [`docs/api/`](file:///home/lnb/HA-Contract/docs/api/README.md)。
+> 当前业务 API 的权威规范源已切换到根目录 [`docs/api/`](../../../docs/api/README.md)。
 > 本目录保留模块化说明文档；当路径、响应结构、错误码发生变化时，请先更新 OpenAPI 与错误码注册表，再回填这里。
 
 本目录为面向开发人员的详细 API 文档，每个功能模块单独成文，便于按需查阅。
