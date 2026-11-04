@@ -9,19 +9,36 @@
 openapi: 3.1.0
 info:
   title: Cascade Backend Contract
-  version: 1.0.0
-  description: Versioned control API between the Cascade proxy and an independent game backend.
+  version: 1.1.0
+  description: >-
+    Versioned control API between the Cascade proxy and an independent game
+    backend. v1.1 (2026-11-04): backend trust modes (open/ip/pinned, default
+    open; JWT signatures are not verified by the backend), /health readiness
+    includes a configured game-core helper, and 403 FORBIDDEN answers
+    trust-mode rejections. See the contract document Changelog
+    (docs/dev/Cascade/Cascade-Backend-v1.md). No endpoint paths or existing
+    field semantics changed.
 servers:
   - url: https://backend.example.invalid/v1
-security:
-  - mutualTLS: []
+# Since v1.1 transport and trust are backend configuration (trust modes):
+# TLS is used only when the backend configures a server certificate, and
+# mutual TLS is required only by the `pinned` trust mode (as a fingerprint
+# check, not a CA chain). No universal security requirement applies.
+security: []
 paths:
   /health:
     get:
       operationId: getBackendHealth
       responses:
         "200":
-          description: Backend control and game listeners are ready.
+          description: >-
+            Backend control and game listeners are ready. Since v1.1: if a
+            game-core helper is configured on the backend, readiness
+            additionally requires the helper to be ready (non-blocking probe;
+            the health check must not start the helper). A configured helper
+            that failed to load keeps the backend not ready (no silent
+            degradation). Backends without a helper are ready once the game
+            listener is established.
           content:
             application/json:
               schema:
@@ -33,6 +50,8 @@ paths:
                   status:
                     type: string
                     enum: [ready, not_ready]
+        "403":
+          $ref: "#/components/responses/TrustForbidden"
         "503":
           $ref: "#/components/responses/BackendError"
   /rooms:
@@ -45,6 +64,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RoomSnapshot"
+        "403":
+          $ref: "#/components/responses/TrustForbidden"
         "503":
           $ref: "#/components/responses/BackendError"
   /sessions/{sessionID}/identity:
@@ -62,12 +83,18 @@ paths:
               properties:
                 token:
                   type: string
-                  description: EdDSA-signed, single-use JWT described in the contract.
+                  description: >-
+                    Single-use JWT described in the contract. The proxy signs
+                    it with EdDSA; since v1.1 backends do not verify the
+                    signature (trust-mode dependent) but still enforce the
+                    structural claims and one-time jti.
       responses:
         "204":
           description: Identity bound, or an exact idempotent retry was accepted.
         "400":
           $ref: "#/components/responses/BackendError"
+        "403":
+          $ref: "#/components/responses/TrustForbidden"
         "404":
           $ref: "#/components/responses/BackendError"
         "409":
@@ -88,6 +115,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RoomDetail"
+        "403":
+          $ref: "#/components/responses/TrustForbidden"
         "404":
           $ref: "#/components/responses/BackendError"
     delete:
@@ -97,6 +126,8 @@ paths:
       responses:
         "204":
           description: Room deleted.
+        "403":
+          $ref: "#/components/responses/TrustForbidden"
         "404":
           $ref: "#/components/responses/BackendError"
   /rooms/create:
@@ -123,6 +154,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RoomSummary"
+        "403":
+          $ref: "#/components/responses/TrustForbidden"
         "409":
           $ref: "#/components/responses/BackendError"
   /rooms/{code}/settings:
@@ -144,6 +177,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RoomSummary"
+        "403":
+          $ref: "#/components/responses/TrustForbidden"
         "404":
           $ref: "#/components/responses/BackendError"
   /rooms/{code}/kick:
@@ -160,6 +195,8 @@ paths:
       responses:
         "204":
           description: Player disconnected.
+        "403":
+          $ref: "#/components/responses/TrustForbidden"
         "404":
           $ref: "#/components/responses/BackendError"
   /rooms/{code}/ban:
@@ -176,6 +213,8 @@ paths:
       responses:
         "204":
           description: Player banned and disconnected.
+        "403":
+          $ref: "#/components/responses/TrustForbidden"
         "404":
           $ref: "#/components/responses/BackendError"
   /rooms/{code}/players:
@@ -197,10 +236,15 @@ paths:
                     items:
                       type: object
                       additionalProperties: true
+        "403":
+          $ref: "#/components/responses/TrustForbidden"
         "404":
           $ref: "#/components/responses/BackendError"
 components:
   securitySchemes:
+    # Retained for reference: since v1.1 client certificates are only required
+    # by backends running the `pinned` trust mode, which validates them by
+    # SHA-256 fingerprint rather than CA chain.
     mutualTLS:
       type: mutualTLS
   parameters:
@@ -295,5 +339,23 @@ components:
             properties:
               code:
                 type: string
+              message:
+                type: string
+    TrustForbidden:
+      description: >-
+        Trust-mode rejection (v1.1): the request source is outside
+        trustedCascadeIPs (ip/pinned modes) or the TLS client-certificate
+        fingerprint is not pinned (pinned mode). Response body uses the
+        stable error shape with code FORBIDDEN. Since the trust check wraps
+        the whole /v1 surface, any operation may return this response.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [code, message]
+            properties:
+              code:
+                type: string
+                enum: [FORBIDDEN]
               message:
                 type: string
