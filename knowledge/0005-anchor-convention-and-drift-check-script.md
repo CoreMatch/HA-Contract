@@ -1,0 +1,64 @@
+# 0005. Knowledge Anchor Convention and the Drift-Check Script
+
+## Status
+Accepted
+
+## Date
+2026-11-05
+
+## Context
+The ADR-style knowledge bases cite code with `path/to/file:Lx-Ly` line
+references. Every code change shifts those line numbers, so citations drift
+silently and the entries rot (observed repeatedly across repositories in the
+2026-11-04/05 audits). Line numbers are the least stable identifier available;
+symbol names and key names survive most edits.
+
+## Decision
+Knowledge entries anchor evidence in one of four formats, in order of
+preference:
+
+1. **Symbol anchor** — `path/to/file.ext::SymbolName`. Used when the cited
+   code has a stable function/type/constant name. Verified by grepping the
+   symbol in the file.
+2. **Field anchor** — `path/to/file.ext (field: key_name)`. Used for config
+   templates, YAML sections, and generated files that have no code symbol.
+   Verified by grepping the key name in the file.
+3. **Time-point anchor** — `path/to/file.ext:Lx-Ly @ <commit>`. Used only
+   when line numbers must stay exact for a historical citation (frozen
+   snapshots, quote verification, deleted code). Verified against that
+   commit's tree, never the working tree.
+4. **Line anchor** — `path/to/file.ext:Lx-Ly`. Last resort for current-state
+   citations that have neither a symbol nor a key name; expected to drift and
+   to be repaired by the check below.
+
+Cross-repository citations are prefixed with `[xref]` on the same line and
+are skipped by the checker (it cannot verify other repositories from here).
+Absolute paths are checked directly.
+
+The mechanical check lives at `scripts/check-knowledge-anchors.sh` in this
+repository (canonical location). It scans `knowledge/*.md` of whatever
+repository it is run from, verifies every anchor per the rules above, prints
+a problem list, and exits non-zero on any failure:
+
+```bash
+bash /home/lnb/Desktop/HA/HA-Contract/scripts/check-knowledge-anchors.sh
+```
+
+## Consequences
+- Costs and limitations:
+  - Symbol anchors break on renames; the checker then reports the symbol as
+    missing, which is exactly the intended early warning.
+  - Time-point anchors never drift but also never update; they are historical
+    records, not current-state claims. Entries must say which they are.
+  - The checker verifies existence (file/symbol/key/line count), not
+    semantics; a citation can still be contextually wrong. Human review
+    remains necessary.
+  - Repositories without a local checkout of HA-Contract must copy the script
+    or skip the check; the convention itself is repository-independent.
+
+## Evidence
+- scripts/check-knowledge-anchors.sh (added by this commit; run from any
+  repository root, exit 0 = clean, 1 = problems listed, 2 = no knowledge/)
+- First runs on 2026-11-05: HA-Contract knowledge flagged its unmarked
+  RW-HPS cross-repo citations; Cascade flagged 7 references broken by the
+  dead-code cleanup (commit 58528ce); HRPAuth ran clean (79 anchors).
