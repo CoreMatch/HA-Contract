@@ -12,6 +12,43 @@ This project is the core contract and service collection of the [CoreMatch](http
 - [Cascade](https://github.com/CoreMatch/Cascade): Rusted Warfare edge proxy (backend contract lives in this repository)
 - [HRPAuth-WebUI](https://github.com/CoreMatch/HRPAuth-WebUI): Frontend interface for the authentication service
 
+## Container Orchestration (Platform-wide)
+
+Every Go service listed above ships a multi-stage `Dockerfile` (static Go build on
+`golang:<go.mod version>-alpine`, Alpine runtime, non-root user). The platform as
+a whole is orchestrated by a single Compose template that lives in the deployer
+repository, not in this one:
+
+- Compose template: [`CoreMatch/HA-Services-Deployer` → `deploy/docker-compose.yml`](https://github.com/CoreMatch/HA-Services-Deployer/blob/main/deploy/docker-compose.yml)
+- Per-service config templates: `deploy/config/*.yaml.tmpl`, rendered at container
+  start with `envsubst`
+- Deployment-scoped values (MySQL/Redis addresses, upstream URLs, secrets):
+  `deploy/.env`, see `deploy/.env.example`
+
+| Image | Repository | Container port |
+|---|---|---|
+| `ha/hrpauth` | [HRPAuth](https://github.com/CoreMatch/HRPAuth) | 2778 |
+| `ha/hrpauth-yggdrasil-api` | [HRPAuth-Yggdrasil-API](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API) | 2770 |
+| `ha/haskinlib` | [HASkinLib](https://github.com/CoreMatch/HASkinLib) | 2701 |
+| `ha/haskinproxy` | [HASkinProxy](https://github.com/CoreMatch/HASkinProxy) | 2702 |
+| `ha/winnerproxy` | [WinnerProxy](https://github.com/CoreMatch/WinnerProxy) | 2777 |
+| `ha/ha-webui-sdkhandler` | [HA-WebUI-SDKHandler](https://github.com/CoreMatch/HA-WebUI-SDKHandler) | 2704, 2705 |
+| `ha/ha-services-deployer` | [HA-Services-Deployer](https://github.com/CoreMatch/HA-Services-Deployer) | 18080 |
+
+MySQL and Redis are **not** started by the template: every service reads them
+from the `DB_*` / `REDIS_*` environment variables, which point at externally
+managed instances. Service-to-service calls use Compose service names
+(`http://hrpauth:2778`, `http://ha-services-deployer:18080`, …).
+
+Configuration loading differs per service (this is the deployment contract, not
+an API contract): HRPAuth, HRPAuth-Yggdrasil-API, HASkinLib, HASkinProxy and
+HA-WebUI-SDKHandler read `config.yaml`, WinnerProxy reads `config.yml`, and
+MatchCoreArena-Server reads `config/config.yaml` via `CONFIG_PATH`. The Compose
+template renders each of them to the path its service expects.
+
+Frontend, desktop (Wails) and Java plugin repositories are not part of the
+container template.
+
 ## Documentation Center (Single Source of Truth)
 
 To prevent documentation drift from the actual project, this project adopts a unified API standard and documentation management mechanism:
