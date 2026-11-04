@@ -38,3 +38,4 @@ Each entry is one page in ADR style:
 | [0002](0002-game-engine-as-external-dependency.md) | The Game Engine Is an External Dependency | accepted | 2026-11-04 |
 | [0003](0003-single-room-model.md) | Single-Room Model (RoomID = ServerID) | accepted | 2026-11-04 |
 | [0004](0004-simulation-state-ownership.md) | Simulation State Ownership | accepted | 2026-11-04 |
+| [0005](0005-anchor-convention-and-drift-check-script.md) | Knowledge Anchor Convention and the Drift-Check Script | accepted | 2026-11-05 |
