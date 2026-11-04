@@ -57,4 +57,4 @@ When creating new endpoints, declare the required auth level and document it in 
 | # | Item | Owner | Depends On | Status | Notes |
 |---|---|---|---|---|---|
 | 1.1 | *Example: Ensure all business routes appear in OpenAPI specs* | *HRPAuth, HASkinLib* | *—* | *Pending* | *Use `check-business-api-drift.sh` to verify* |
-| 2.1 | `POST /admin/force-bind`: transfer `mojang_uuid` from proxy account (cbh=0) to manual account, delete proxy account | HRPAuth | — | Pending | Contract & wiki updated; Velocity plugin (`HRPAuth-Spigot`) `ForceBindCommand` implemented; HA backend handler not yet implemented |
+| 2.1 | `POST /admin/force-bind`: transfer `mojang_uuid` from proxy account (cbh=0) to manual account, delete proxy account | HRPAuth-Yggdrasil-API | — | Implemented (2026-11-05) | Author-approved placement: implemented in HRPAuth-Yggdrasil-API (spec in `docs/api/openapi/hrpauth-yggdrasil-business.yaml`); target credentials verified via core `/internal/verify-credentials`; Velocity plugin (`HRPAuth-Spigot`) `ForceBindCommand` is the caller |

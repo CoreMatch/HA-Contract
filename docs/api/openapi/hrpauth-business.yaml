@@ -210,15 +210,18 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
   /user/declare-email:
     post:
-      summary: Declare email for a user (removed endpoint)
+      summary: Declare email for a user (removed; deprecation confirmed)
       deprecated: true
       description: >
-        This endpoint is NOT registered by the current HRPAuth core
-        (removed in commit 9ab4e64, 2026-10-06); calls receive the standard
-        404 `route_not_found` response. It is kept in this file only as a
-        migration reference: the WinnerProxy client still contains a
-        `DeclareEmail` method targeting this path (no active call site as of
-        2026-11-04).
+        Removed from the HRPAuth core in commit 9ab4e64 (2026-10-06); calls
+        receive the standard 404 `route_not_found` response. Deprecation was
+        confirmed by author decision on 2026-11-05: this endpoint will NOT
+        return in any form, and there is no service-to-service successor for
+        it. Giving a claimed email to a proxy-registered account is part of
+        the claim flow instead — `POST /admin/claim-user` in
+        `openapi/hrpauth-yggdrasil-business.yaml`. The former
+        `user.declare-email` scope has been removed from the core scope
+        registry. This entry is kept solely as a historical record.
       responses:
         '404': { $ref: '#/components/responses/Error' }
   /user/security/change-email/send-code:
@@ -962,10 +965,12 @@ paths:
           description: 'Credentials invalid; body is `{"error": "invalid credentials"}`'
   /internal/verify-token:
     post:
-      summary: Resolve an OAuth2 access token to a user (internal, service-to-service)
+      summary: Resolve an OAuth2 access token (internal, service-to-service)
       description: >
         Requires ops (level 2) auth. Used by satellite services to resolve a
-        site-side OAuth2 access token to the owning user.
+        site-side OAuth2 access token. User tokens resolve to the owning
+        user; service tokens (client_credentials) resolve to their scope
+        set without a user.
       requestBody:
         required: true
         content:
@@ -978,8 +983,47 @@ paths:
                   type: string
       responses:
         '200':
-          description: Success; `data` contains `uid`, `uuid`, `email`, `username`
+          description: >
+            Success. For a user token `data` contains `uid`, `uuid`,
+            `email`, `username`, `is_service: false` and `scopes`. For a
+            service token `data` contains `is_service: true` and `scopes`
+            only (no user fields).
         '401': { $ref: '#/components/responses/Error' }
+  /internal/claim-user:
+    post:
+      summary: Provision the core user for a claimed proxy account (internal, service-to-service)
+      description: >
+        Requires ops (level 2) auth. Creates the core user for a
+        proxy-registered game account that is being claimed through
+        HRPAuth-Yggdrasil-API `POST /admin/claim-user`: validates email
+        format and minimum password length, enforces email uniqueness
+        across all core users, and creates the user with `verified=true`.
+        Idempotent by username: if the username already belongs to a user
+        with the same email, that user is returned; the same username with
+        a different email yields 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Success; `data` contains `uid` and `uuid`
+        '400':
+          description: '`username_too_short` / `invalid_email` / `password_too_short`'
+        '401': { $ref: '#/components/responses/Error' }
+        '409':
+          description: '`email_already_registered` / `username_already_bound`'
   /services/users/{uuid}:
     get:
       summary: Look up a user by UUID (internal, service-to-service)

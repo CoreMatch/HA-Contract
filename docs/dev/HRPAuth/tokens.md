@@ -40,7 +40,7 @@ This document clarifies all Tokens and their lifecycles involved in the project.
 > ⚠️ **Important Distinctions**:
 > 1. Site business APIs now authenticate with **OAuth2 Bearer tokens**, not `remember_token`.
 > 2. `Manage Token (M-T)` is now a **legacy compatibility credential** and should not be used for new integrations.
-> 3. Service-to-service proxy operations use `client_credentials` and endpoint-level scopes such as `register.manage` or `user.declare-email`.
+> 3. Service-to-service proxy operations use `client_credentials` and endpoint-level scopes such as `register.manage` or `user.claim.as-service`.
 > 4. `Yggdrasil Access Token` remains completely independent from site OAuth2 access tokens.
 > 5. Database scopes (`db.line.read`, `db.line.write`, `db.line.delete`, `db.table.create`, `db.table.delete`) are **NOT** included in the built-in super client by default. They must be explicitly granted via `oauth2.super_client_extra_scopes` in `config.yaml`.
 
