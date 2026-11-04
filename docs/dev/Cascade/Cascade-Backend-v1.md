@@ -10,13 +10,14 @@
 >   The copy left in the Cascade repository is historical and must not diverge.
 > - Revised on: 2026-11-04 as **v1.1** (backend trust strategies, health
 >   readiness criterion, `FORBIDDEN` error code) and **v1.1.1** (deployment
->   content moved out per repository scope), and 2026-11-05 as **v1.2**
->   (proxy transport selection from the declared trust strategy) by
->   HA-Contract; see [Changelog](#changelog).
+>   content moved out per repository scope), 2026-11-05 as **v1.2** (proxy
+>   transport selection from the declared trust strategy) and **v1.2.1**
+>   (coverage-matrix clarifications: reserved `UNSUPPORTED_VERSION`, retry
+>   scope) by HA-Contract; see [Changelog](#changelog).
 
 ---
 
-# Cascade Backend Contract v1.2
+# Cascade Backend Contract v1.2.1
 
 This contract defines the boundary between the Cascade edge proxy and an
 independently developed Rusted Warfare backend. The backend owns rooms, lobby
@@ -242,7 +243,9 @@ Errors use this shape:
 Stable error codes:
 
 - `INVALID_REQUEST`
-- `UNSUPPORTED_VERSION`
+- `UNSUPPORTED_VERSION` (reserved; the reference backend has no version gate
+  on the control plane as of v1.2.1 and does not emit this code — it stays
+  registered for future protocol-version checks)
 - `FORBIDDEN` (v1.1): the request was rejected by the backend trust strategy
   (source not in the accepted allowlist, or client-certificate fingerprint
   not accepted). Returned with HTTP `403`; possible on any `/v1` endpoint.
@@ -257,8 +260,10 @@ Stable error codes:
 - `INTERNAL_ERROR`
 
 The proxy retries only idempotent control requests, at most twice after the
-initial attempt, with bounded backoff. It does not retry room creation unless
-the backend supports an idempotency key. If identity binding cannot be
+initial attempt, with bounded backoff, and only for transport-level
+failures; an HTTP error response from the backend is surfaced to the caller
+immediately, without retry. It does not retry room creation unless the
+backend supports an idempotency key. If identity binding cannot be
 confirmed within the 5-second pending deadline, the proxy closes the game
 connection and must not forward the client's pending PoW response. Client
 errors must not expose tokens, certificates, or internal backend details.
@@ -278,6 +283,26 @@ errors must not expose tokens, certificates, or internal backend details.
   routing.
 
 ## Changelog
+
+### v1.2 → v1.2.1 (2026-11-05)
+
+Clarifying revision from the route/error-code coverage audit; **no
+interface semantics changed**:
+
+1. **`UNSUPPORTED_VERSION` marked reserved**: the reference backend has no
+   version gate on the control plane and does not emit the code; it remains
+   registered for future protocol-version checks.
+2. **Retry scope clarified**: the proxy's bounded retries apply to
+   transport-level failures of idempotent requests only; an HTTP error
+   response from the backend is surfaced immediately without retry (this
+   documents the implemented behavior).
+
+Route coverage was audited at the same revision: the ten `/v1` routes
+registered by the reference backend implementation and the ten paths in the
+OpenAPI companion match one-to-one, and every route the proxy consumes
+(`/health`, `/rooms`, `/sessions/{sessionID}/identity`, `/rooms/create`,
+`/rooms/{code}` with its settings/kick/ban/players subresources) is present
+in both.
 
 ### v1.1.1 → v1.2 (2026-11-05)
 
