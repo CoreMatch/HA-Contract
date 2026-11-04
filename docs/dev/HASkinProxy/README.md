@@ -21,22 +21,9 @@ The proxy translates standard Yggdrasil API responses into the CSL JSON format. 
 
 ## Configuration
 
-The service is configured via a `config.yaml` file. Default values are generated if the file is missing.
-
-| Section | Key | Description |
-|---------|-----|-------------|
-| `server` | `listen_addr` | The address and port the proxy listens on (default `:2702`). |
-| `server` | `public_url` | Externally reachable base URL, announced to HRPAuth as the relay source. |
-| `upstream` | `base_url` | The URL of the Yggdrasil-compliant service. |
-| `upstream` | `timeout` | Upstream request timeout in seconds. |
-| `upstream` | `client_id`, `client_secret` | OAuth2 client id/token used to authenticate against HRPAuth. |
-| `cache` | `profile_ttl` | Cache duration for profile data in seconds. |
-| `cache` | `texture_ttl` | Cache duration for texture metadata in seconds. |
-| `cache` | `max_size_mb` | Maximum in-memory cache size in MB. |
-| `presence` | `enabled` | Toggle the presence (bonjour) handshake with HRPAuth (default `true`). |
-| `presence` | `name` | Service name registered in HRPAuth (default `HASkinProxy`). |
-| `presence` | `ttl_seconds` | Self-declared registration lifetime in seconds; `<=0` means never expire. |
-| `sdk` | `enabled` | Toggle the automatic compile-time SDK package upload to HRPAuth (default `true`). |
+Runtime configuration of the HASkinProxy service (configuration file and its
+sections) is documented in the
+[HASkinProxy repository README](https://github.com/CoreMatch/HASkinProxy).
 
 ## Implementation Details
 

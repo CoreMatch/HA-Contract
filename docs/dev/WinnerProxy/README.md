@@ -6,8 +6,8 @@ from the HA upstream to Mojang, and can proxy-register Mojang players.
 
 ## Inbound HTTP Surface
 
-Default listen address `:2777` (config key `server.addr`). The last three
-routes are bound both at the root and under the `/winnerproxy` prefix.
+The last three routes are bound both at the root and under the `/winnerproxy`
+prefix.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -38,16 +38,14 @@ token.
 
 ## Configuration
 
-- File: `config.yml` in the working directory (auto-generated on first start;
-  prompts for the OAuth2 client secret when stdin is a TTY).
-- Key sections: `server` (`addr`, `public_url`), `upstreams.hrpauth` (`url`,
-  `client_id`, `client_secret`), Mojang upstream settings, link-token
-  verification cache settings.
+Runtime configuration of the WinnerProxy service (configuration file, listen
+address defaults, upstream credentials) is documented in the
+[WinnerProxy repository README](https://github.com/CoreMatch/WinnerProxy).
 
 ## Behavior Notes
 
 - Single-instance design: in-process freecache, no shared state, no leader
-  election; scale by putting instances behind a load balancer.
+  election.
 - hasJoined flow: HA 200 → return HA profile; else Mojang hasJoined → return
   Mojang profile (Mojang-signed textures); else optional proxy registration
   path.
