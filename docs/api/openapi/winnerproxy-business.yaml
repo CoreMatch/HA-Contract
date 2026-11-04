@@ -99,9 +99,13 @@ paths:
     post:
       summary: Batch profile query by usernames
       description: >
-        Forwards the username list directly to HRPAuth. Returns only the
-        `{id, name}` summary per hit (texture properties are dropped per
-        Yggdrasil convention); usernames without a profile are omitted.
+        Forwards the username list to the HRPAuth Yggdrasil batch endpoint
+        (`POST /api/profiles/minecraft`, prefix-less; the configured base
+        URL already carries the `/yggdrasil-api` relay prefix and the relay
+        strips it). Returns only the `{id, name}` summary per hit (texture
+        properties are dropped per Yggdrasil convention); usernames without
+        a profile are omitted. Upstream failures are mapped to explicit
+        errors, never a bare 500.
       requestBody:
         required: true
         content:
@@ -114,5 +118,9 @@ paths:
           description: Array of `{id, name}` objects
         '400':
           description: '`{"error": "<parse error>"}` for a malformed body'
-        '500':
-          description: '`{"error": "<upstream error>"}` when the HA query fails'
+        '502':
+          description: >
+            HA query failed. `{"error": "hrpauth batch endpoint missing"}`
+            when the upstream answers 404 (route missing, e.g. relay-prefix
+            drift); `{"error": "hrpauth upstream unavailable"}` for any
+            other upstream or network failure.
