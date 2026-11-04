@@ -1,19 +1,30 @@
 openapi: 3.1.0
 info:
   title: Cascade Proxy Management API
-  version: 1.0.0
+  version: 1.1.0
   description: >
     HTTP management surface of the Cascade edge proxy itself (the backend
     control plane it forwards to is specified separately in
     `cascade-backend-v1.yaml`). Room endpoints are a facade: they forward to
     the room's backend and pass the backend's raw JSON response through, so
-    success bodies are backend-defined. Facade-level errors use a bare
-    `{"error": "<CODE>"}` object — `ROOM_CONFLICT` (409),
-    `BACKEND_NOT_READY` / `BACKEND_UNAVAILABLE` (503), or the backend's own
-    API error code and status. The account endpoints exist only when an
-    HRPAuth client is configured; the internal endpoints require the
-    `X-Internal-Key` header. This surface does not use the HA unified
-    response envelope (management/probe API, not a business API).
+    success bodies are backend-defined. Since v1.1 every error response on
+    this surface uses the unified envelope
+    `{"success": false, "code": ..., "message": ..., "meta": {"request_id": ...}}`
+    (see `components.schemas.ErrorEnvelope`). Facade-level `code` values are
+    the `lower_snake` codes registered in HA-Contract
+    `docs/api/error-codes.md` (`cascade_room_conflict`,
+    `cascade_backend_unavailable`, `cascade_invalid_internal_key`,
+    `cascade_database_not_configured`, `cascade_binding_not_found`,
+    `invalid_json_body`, `invalid_credentials`, `internal_error`,
+    `route_not_found`). When the backend itself answers with an error, its
+    stable `UPPER_SNAKE` contract code (`FORBIDDEN`, `SESSION_NOT_FOUND`,
+    `ROOM_CONFLICT`, ...), status, and message are forwarded verbatim in the
+    same envelope shape; those codes are registered in the Cascade backend
+    contract, not in the global registry. Unmatched routes return the
+    envelope with `route_not_found` (404); recovered panics return
+    `internal_error` (500). Success response shapes are unchanged. The
+    account endpoints exist only when an HRPAuth client is configured; the
+    internal endpoints require the `X-Internal-Key` header.
 servers:
   - url: /
 paths:
@@ -30,7 +41,7 @@ paths:
         '200':
           description: '`{"status": "ready"}`'
         '503':
-          description: '`{"status": "not_ready"}`'
+          description: No healthy backend; envelope with `cascade_backend_unavailable`
   /api/backends:
     get:
       summary: List backend statuses
@@ -59,11 +70,15 @@ paths:
         '201':
           description: Backend response passed through
         '400':
-          description: Malformed body
+          description: Malformed body; envelope with `invalid_json_body`
         '409':
-          description: '`{"error": "ROOM_CONFLICT"}`'
+          description: Room claimed by multiple backends; envelope with `cascade_room_conflict`
         '503':
-          description: '`{"error": "BACKEND_NOT_READY"}` / `{"error": "BACKEND_UNAVAILABLE"}`'
+          description: >-
+            Owning backend unhealthy or unreachable; envelope with
+            `cascade_backend_unavailable`. A backend error answer is
+            forwarded verbatim (its status plus `UPPER_SNAKE` code and
+            message in the envelope).
   /api/rooms/{code}:
     get:
       summary: Get room state (forwarded to the backend)
@@ -75,8 +90,10 @@ paths:
       responses:
         '200':
           description: Backend response passed through
+        '409':
+          description: Room claimed by multiple backends; envelope with `cascade_room_conflict`
         '503':
-          description: Backend unavailable
+          description: Backend unavailable; envelope with `cascade_backend_unavailable` (backend error answers forwarded verbatim)
     delete:
       summary: Delete a room (forwarded to the backend)
       parameters:
@@ -87,8 +104,10 @@ paths:
       responses:
         '200':
           description: '`{"message": "room deleted"}` (backend answered 204)'
+        '409':
+          description: Room claimed by multiple backends; envelope with `cascade_room_conflict`
         '503':
-          description: Backend unavailable
+          description: Backend unavailable; envelope with `cascade_backend_unavailable` (backend error answers forwarded verbatim)
   /api/rooms/{code}/settings:
     put:
       summary: Update room settings (forwarded to the backend)
@@ -117,9 +136,11 @@ paths:
         '200':
           description: Backend response passed through
         '400':
-          description: Malformed body
+          description: Malformed body; envelope with `invalid_json_body`
+        '409':
+          description: Room claimed by multiple backends; envelope with `cascade_room_conflict`
         '503':
-          description: Backend unavailable
+          description: Backend unavailable; envelope with `cascade_backend_unavailable` (backend error answers forwarded verbatim)
   /api/rooms/{code}/kick:
     post:
       summary: Kick a player (forwarded to the backend)
@@ -141,9 +162,11 @@ paths:
         '200':
           description: '`{"message": "player kicked"}` (backend answered 204)'
         '400':
-          description: Malformed body
+          description: Malformed body; envelope with `invalid_json_body`
+        '409':
+          description: Room claimed by multiple backends; envelope with `cascade_room_conflict`
         '503':
-          description: Backend unavailable
+          description: Backend unavailable; envelope with `cascade_backend_unavailable` (backend error answers forwarded verbatim)
   /api/rooms/{code}/ban:
     post:
       summary: Ban a player (forwarded to the backend)
@@ -165,9 +188,11 @@ paths:
         '200':
           description: '`{"message": "player banned"}` (backend answered 204)'
         '400':
-          description: Malformed body
+          description: Malformed body; envelope with `invalid_json_body`
+        '409':
+          description: Room claimed by multiple backends; envelope with `cascade_room_conflict`
         '503':
-          description: Backend unavailable
+          description: Backend unavailable; envelope with `cascade_backend_unavailable` (backend error answers forwarded verbatim)
   /api/rooms/{code}/players:
     get:
       summary: List room players (forwarded to the backend)
@@ -179,8 +204,10 @@ paths:
       responses:
         '200':
           description: Backend response passed through
+        '409':
+          description: Room claimed by multiple backends; envelope with `cascade_room_conflict`
         '503':
-          description: Backend unavailable
+          description: Backend unavailable; envelope with `cascade_backend_unavailable` (backend error answers forwarded verbatim)
   /api/auth/verify:
     post:
       summary: Verify HA credentials (only present when HRPAuth is configured)
@@ -198,11 +225,11 @@ paths:
         '200':
           description: '`{uuid, email, username}` of the verified user'
         '400':
-          description: Malformed body
+          description: Malformed body; envelope with `invalid_json_body`
         '401':
-          description: '`{"error": "invalid credentials"}`'
+          description: Envelope with `invalid_credentials`
         '502':
-          description: HRPAuth call failed
+          description: HRPAuth call failed; envelope with `internal_error`
   /api/auth/claim:
     post:
       summary: Claim a game binding for an HA user
@@ -220,9 +247,11 @@ paths:
         '200':
           description: '`{"success": true}`'
         '400':
-          description: Malformed body
+          description: Malformed body; envelope with `invalid_json_body`
+        '404':
+          description: No unclaimed binding for the game UUID; envelope with `cascade_binding_not_found`
         '500':
-          description: Database not configured or claim failed
+          description: Envelope with `cascade_database_not_configured` (no binding database) or `internal_error` (claim failed)
   /api/auth/status/{gameUUID}:
     get:
       summary: Get the binding for a game UUID
@@ -235,9 +264,9 @@ paths:
         '200':
           description: '`{gameUUID, haUserUUID, playerName, cbh, quickAuth, lastLogin}`'
         '404':
-          description: '`{"error": "binding not found"}`'
+          description: Envelope with `cascade_binding_not_found`
         '500':
-          description: Database not configured or lookup failed
+          description: Envelope with `cascade_database_not_configured` (no binding database) or `internal_error` (lookup failed)
   /api/auth/bindings/{haUserUUID}:
     get:
       summary: List all bindings of an HA user
@@ -250,7 +279,7 @@ paths:
         '200':
           description: '`{"data": [...]}` binding objects'
         '500':
-          description: Database not configured or lookup failed
+          description: Envelope with `cascade_database_not_configured` (no binding database) or `internal_error` (lookup failed)
   /internal/heartbeat:
     get:
       summary: Internal liveness probe
@@ -264,7 +293,7 @@ paths:
         '200':
           description: '`{"status": "ok"}`'
         '401':
-          description: '`{"error": "invalid internal key"}`'
+          description: Envelope with `cascade_invalid_internal_key`
   /internal/proxy-register:
     post:
       summary: Record a proxy-registered player binding
@@ -288,8 +317,33 @@ paths:
         '200':
           description: '`{"success": true}`'
         '400':
-          description: Malformed body
+          description: Malformed body; envelope with `invalid_json_body`
         '401':
-          description: '`{"error": "invalid internal key"}`'
+          description: Envelope with `cascade_invalid_internal_key`
         '500':
-          description: Database not configured or insert failed
+          description: Envelope with `cascade_database_not_configured` (no binding database) or `internal_error` (insert failed)
+components:
+  schemas:
+    ErrorEnvelope:
+      type: object
+      description: >-
+        Unified shape of every Cascade management-API error response
+        (v1.1). Facade-level codes are the lower_snake codes registered in
+        HA-Contract docs/api/error-codes.md; backend answers keep their
+        UPPER_SNAKE contract code, status, and message verbatim.
+      required: [success, code, message, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        code:
+          type: string
+        message:
+          type: string
+        meta:
+          type: object
+          required: [request_id]
+          properties:
+            request_id:
+              type: string
+              description: Random 32-character hex identifier for log correlation

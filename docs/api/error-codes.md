@@ -115,7 +115,7 @@ The following error codes are the stable registry for current HA business APIs. 
 | `cascade_backend_unavailable` | Cascade management API: the owning backend is unhealthy or unreachable, so the request cannot be forwarded |
 | `cascade_invalid_internal_key` | Cascade management API: the `X-Internal-Key` header is missing or does not match the key issued by HRPAuth Core |
 | `cascade_database_not_configured` | Cascade management API: the endpoint needs the player-binding database, which is not available |
-| `cascade_binding_not_found` | Cascade management API: no player binding exists for the given game UUID (HTTP 404) |
+| `cascade_binding_not_found` | Cascade management API: no player binding exists for the given game UUID, or (on the claim path) no unclaimed binding exists (HTTP 404) |
 
 Cascade note: the backend-facing `/v1` surface is governed by
 `docs/dev/Cascade/Cascade-Backend-v1.md`, whose stable `UPPER_SNAKE` error
