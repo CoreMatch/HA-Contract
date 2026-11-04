@@ -102,7 +102,7 @@ The following error codes are the stable registry for current HA business APIs. 
 | `oauth_refresh_failed` | OAuth2 refresh token is invalid, expired, or revoked. Returned by MatchCoreArena `POST /api/auth/refresh`; in the HRPAuth core refresh failures surface as `oauth_invalid_grant`. |
 | `oauth_revoke_failed` | OAuth2 token revocation request failed. Returned by MatchCoreArena `POST /api/auth/logout`. Defined in the HRPAuth core registry only; no core endpoint returns it. |
 | `oauth_rate_limited` | Too many auth requests; retry later (MatchCoreArena login-ticket flow). |
-| `oauth_hrpaauth_down` | HRPAuth upstream unavailable during an auth flow (MatchCoreArena; the code string carries the historical `hrpaauth` spelling). |
+| `oauth_hrpauth_down` | HRPAuth upstream unavailable during an auth flow (MatchCoreArena). The code string was misspelled `oauth_hrpaauth_down` until the spelling fix; no external consumer ever used the old form. |
 | `mca_invalid_request` | MatchCoreArena: general parameter error |
 | `mca_user_not_found` | MatchCoreArena: user does not exist |
 | `mca_friend_not_found` | MatchCoreArena: friend relationship does not exist |
