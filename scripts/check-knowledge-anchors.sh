@@ -10,9 +10,12 @@
 #
 #   1. Symbol anchor      path/to/file.ext::SymbolName
 #        -> the file must exist; the symbol must be greppable in it (fixed string).
-#   2. Line anchor        path/to/file.ext:L12  or  path:L12-L34  (bare numbers also accepted)
+#   2. Line anchor        path:L123 / path:L123-L145 (bare numbers also accepted),
+#                         and the markdown-link spelling path#L123 / path#L123-L145
 #        -> the file must exist and have at least <end> lines.
-#   3. Time-point anchor  path:L12-L34 @ <commit>
+#        Colons inside URLs (http://host:port) are NOT line anchors; URLs are
+#        stripped before extraction.
+#   3. Time-point anchor  path:L123-L145 @ <commit>
 #        -> the file must exist in <commit> with at least <end> lines (git-verified).
 #        Use this for historical citations that must keep exact line numbers.
 #   4. Field anchor       path/to/file.ext (field: key_name)
@@ -26,12 +29,25 @@
 # Absolute paths (e.g. /home/lnb/RW-HPS/Go-Server/...) are checked directly.
 # Relative paths are resolved against the repository root.
 #
+# Self test:
+#   bash check-knowledge-anchors.sh --self-test
+#   runs the checker against scripts/tests/anchor-fixture and asserts the exact
+#   expected outcome (5 problems, no URL false positives).
+#
 # Output: one line per problem; a summary at the end.
 # Exit code: 0 = all anchors verified; 1 = problems found; 2 = no knowledge/ dir.
 
 set -u
 
-ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SELFTEST=0
+[ "${1:-}" = "--self-test" ] && SELFTEST=1
+
+if [ "$SELFTEST" -eq 1 ]; then
+  ROOT="$SCRIPT_DIR/tests/anchor-fixture"
+else
+  ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+fi
 cd "$ROOT" || exit 2
 
 if [ ! -d knowledge ]; then
@@ -41,14 +57,20 @@ fi
 
 problems=0
 checked=0
+report_lines=""
 
 report() { # $1 = anchor description, $2 = problem
-  echo "PROBLEM: $2"
-  echo "    anchor: $1"
+  report_lines+="PROBLEM: $2"$'\n'
+  report_lines+="    anchor: $1"$'\n'
   problems=$((problems + 1))
 }
 
-path_plausible() { # a candidate path must contain '/' or exist as a root file
+path_plausible() { # a candidate path must contain '/' or exist as a root file.
+                    # Slash-less tokens that are not existing files (docker
+                    # image tags like alpine:3, host:port like localhost:8080,
+                    # PHP class constants like PDO::X, convention examples
+                    # like file.ext) are skipped. Known limitation: a
+                    # mistyped root-level file name is not flagged.
   case "$1" in
     /*) return 0 ;;
     */*) return 0 ;;
@@ -105,8 +127,11 @@ check_field_anchor() { # $1=path $2=key $3=raw
   fi
 }
 
-# Collect content once, dropping [xref] lines and fenced URL noise.
-content=$(cat knowledge/*.md 2>/dev/null | grep -vF '[xref]')
+# Collect content once: drop [xref] lines, strip URLs so that
+# http://host:port can never be parsed as a path:line anchor.
+content=$(cat knowledge/*.md 2>/dev/null \
+  | grep -vF '[xref]' \
+  | sed -E 's@(https?|ftp)://[^[:space:]<>"]*@@g')
 
 # 1) symbol anchors: path::Symbol
 while IFS= read -r m; do
@@ -128,10 +153,9 @@ while IFS= read -r m; do
   check_field_anchor "$p" "$key" "$m"
 done <<< "$(printf '%s\n' "$content" | grep -oE '[A-Za-z0-9_./~-]+\.[A-Za-z0-9]+ \(field: [^)]+\)' || true)"
 
-# 3) line anchors (optionally time-point): path:L12-L34 [@ commit]
+# 3a) line anchors with ':': path:L12-L34 [@ commit]  (bare numbers accepted)
 while IFS= read -r m; do
   [ -z "$m" ] && continue
-  case "$m" in *://*) continue ;; esac
   commit=""
   rest="$m"
   case "$m" in
@@ -151,8 +175,64 @@ while IFS= read -r m; do
   check_line_anchor "$p" "$end" "$commit" "$m"
 done <<< "$(printf '%s\n' "$content" | grep -oE '[A-Za-z0-9_./~-]+:L?[0-9]+(-L?[0-9]+)?( @ [0-9a-fA-F]{7,40})?' || true)"
 
+# 3b) line anchors with '#L' (markdown-link spelling): path#L12-L34 [@ commit]
+while IFS= read -r m; do
+  [ -z "$m" ] && continue
+  commit=""
+  rest="$m"
+  case "$m" in
+    *" @ "*)
+      commit="${m##* @ }"
+      rest="${m% @ *}"
+      ;;
+  esac
+  p="${rest%%#*}"
+  rng="${rest#*#L}"
+  end="${rng##*-L}"
+  end="${end##*-}"
+  case "$end" in *[!0-9]*|"") continue ;; esac
+  path_plausible "$p" || continue
+  checked=$((checked + 1))
+  check_line_anchor "$p" "$end" "$commit" "$m"
+done <<< "$(printf '%s\n' "$content" | grep -oE '[A-Za-z0-9_./~-]+#L[0-9]+(-L?[0-9]+)?( @ [0-9a-fA-F]{7,40})?' || true)"
+
+summary="anchors checked: $checked, problems: $problems"
+
+if [ "$SELFTEST" -eq 1 ]; then
+  # Expected fixture outcome: exactly 5 problems (see tests/anchor-fixture),
+  # and no false positives from the URL lines.
+  fail=0
+  if [ "$problems" -ne 5 ]; then
+    echo "SELFTEST FAIL: expected 5 problems, got $problems"; fail=1
+  fi
+  if [ "$checked" -lt 11 ]; then
+    echo "SELFTEST FAIL: expected at least 11 anchors checked (incl. #L forms), got $checked"; fail=1
+  fi
+  case "$report_lines" in
+    *"127.0.0.1"*|*"arena.mcnb.dev"*|*"example.org"*|*"8443/docs"*)
+      echo "SELFTEST FAIL: URL text was parsed as an anchor"; fail=1 ;;
+  esac
+  case "$report_lines" in
+    *"docs/missing.go"*) : ;;
+    *) echo "SELFTEST FAIL: docs/missing.go was not reported (missing-file check regressed)"; fail=1 ;;
+  esac
+  case "$report_lines" in
+    *"PDO"*|*"alpine"*|*"golang"*|*"file.ext"*|*"localhost"*)
+      echo "SELFTEST FAIL: non-path token was parsed as an anchor"; fail=1 ;;
+  esac
+  printf '%s' "$report_lines"
+  echo "----------------------------------------"
+  echo "$summary"
+  if [ "$fail" -eq 0 ]; then
+    echo "SELFTEST PASS"
+    exit 0
+  fi
+  exit 1
+fi
+
+printf '%s' "$report_lines"
 echo "----------------------------------------"
-echo "anchors checked: $checked, problems: $problems"
+echo "$summary"
 if [ "$problems" -gt 0 ]; then
   exit 1
 fi
