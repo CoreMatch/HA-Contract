@@ -8,6 +8,8 @@ This document instructs AI agents on how to work within the **HA-Contract** repo
 
 HA-Contract is the single-source-of-truth **contract and documentation center** for the [CoreMatch](https://github.com/CoreMatch) HA (High-performance Authentication) system. The services themselves live in **separate sibling repositories**; this repository contains only contracts, documentation, and helper scripts (the legacy root-level symlinks into a local monorepo were removed on 2026-11-03).
 
+This repository exists for **secondary development** on top of the HA platform. New services, clients, and integrations are built against the contracts defined here, and this is the single place where those contracts are kept current.
+
 | Service | Repository | Purpose | Tech Stack |
 |---|---|---|---|
 | **HRPAuth** | [`CoreMatch/HRPAuth`](https://github.com/CoreMatch/HRPAuth) | Core auth service (Business API, OAuth2 authorization server) | Go 1.26+, Gin, MySQL, Redis, GORM |
@@ -18,6 +20,14 @@ HA-Contract is the single-source-of-truth **contract and documentation center** 
 | **HRPAuth-WebUI** | [`CoreMatch/HRPAuth-WebUI`](https://github.com/CoreMatch/HRPAuth-WebUI) | Frontend SPA for the auth service | TypeScript, React 19, MUI v7, Vite 7 |
 | **HA-WebUI-SDKHandler** | [`CoreMatch/HA-WebUI-SDKHandler`](https://github.com/CoreMatch/HA-WebUI-SDKHandler) | Compile-time SDK aggregation build service | Go 1.25+, Gin |
 | **Docs & Scripts** | `docs/`, `scripts/` in this repository | API specs, dev guides, CI helpers | OpenAPI YAML, Shell |
+
+---
+
+## Repository Scope
+
+HA-Contract is used for **secondary development**: everything in this repository exists so that other people and other repositories can build on the HA platform against a stable contract.
+
+Material that describes how the platform is operated rather than how it is built against is **out of scope here**. Deployment and operations documentation belongs to the [Wiki](https://github.com/SamuelCheston/SamuelWiki), and must not be added to this repository.
 
 ---
 
@@ -40,9 +50,9 @@ HA-Contract is the single-source-of-truth **contract and documentation center** 
 Documentation lives in two independent places:
 
 - `HA-Contract/docs/` (this repository) → **for AI agents** and as the authoritative contract source
-- [`CoreMatch/HRPAuth-Wiki`](https://github.com/CoreMatch/HRPAuth-Wiki) → **for human developers** (separate content repository)
+- [`SamuelCheston/SamuelWiki`](https://github.com/SamuelCheston/SamuelWiki) → **for human developers** (separate content repository), and the home of all deployment and operations documentation
 
-Agents should consume docs from `HA-Contract/docs/` and the relevant service repository's root. Do not modify `HRPAuth-Wiki` content as part of contract work.
+Agents should consume docs from `HA-Contract/docs/` and the relevant service repository's root. Do not modify Wiki content as part of contract work.
 
 ### 3. Unified Response Format
 
@@ -106,7 +116,6 @@ identity fields they return affect HASkinLib.
 - **Go services**: `go build -o ./build/<name>` (each has a `build.sh`).
 - **HRPAuth-Web**: `npm run build` (Vite production build).
 - **CI**: GitHub Actions on HASkinLib (Go build) and HRPAuth-Web (npm test + publish).
-- **No Docker**: The project deploys as native binaries + static frontend.
 
 ---
 
