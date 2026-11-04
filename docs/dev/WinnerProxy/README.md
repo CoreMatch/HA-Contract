@@ -28,7 +28,7 @@ token.
 |---|---|---|
 | `GET /sessionserver/session/minecraft/hasJoined` | hasJoined step 1 | HA skin path |
 | `GET /sessionserver/session/minecraft/profile/{uuid}` | profile query | |
-| `POST /yggdrasil/api/profiles/minecraft` | batch query | The implementation adds an extra `/yggdrasil` path segment; the upstream batch endpoint is `/api/profiles/minecraft`, so this call does not succeed against the current upstream |
+| `POST /api/profiles/minecraft` | batch query | Fixed 2026-11-05 (WinnerProxy `4ded866`): the former extra `/yggdrasil` path segment is gone; the base URL already carries the `/yggdrasil-api` relay prefix and the relay strips it. Upstream failures surface as 502 with an explicit `{"error": ...}` reason |
 | `POST /register` | proxy registration | Body `{username, password, email: "", mojang_uuid}`; the upstream `/register` requires the `identifier` field, so this call does not succeed against the current upstream. The upstream's implemented proxy-registration endpoint is `POST /internal/proxy-register` (X-Internal-Key) |
 | `GET /` | startup | Fetches Yggdrasil metadata published via presence `root_metadata` |
 | `POST /services/presence` | startup | Registers with `sdk_url` and `root_metadata.yggdrasil` |
