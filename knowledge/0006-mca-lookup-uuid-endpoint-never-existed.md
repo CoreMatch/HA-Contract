@@ -21,7 +21,9 @@ that was never implemented or contracted anywhere.
   resolution for match service" (2026-09-18); the design is recorded in
   [xref] MCA-Server `knowledge/0003-player-identity-is-hrpauth-uid-with-minecraft-uuid-resolution.md`.
 - [xref] HRPAuth registers only `POST /user/lookup`
-  (`main.go:214` → `controllers/user_info_controller.go:83-120`); its request
+  (`/home/lnb/Desktop/HA/HRPAuth/main.go:L214` →
+  `/home/lnb/Desktop/HA/HRPAuth/controllers/user_info_controller.go::LookupUser`);
+  its request
   accepts exactly one of `uid` (numeric) or `username` — there is no uuid
   dimension.
 - [xref] HRPAuth git history contains no occurrence of `lookup-uuid`
@@ -33,7 +35,7 @@ that was never implemented or contracted anywhere.
   in any contract file.
 - [xref] Impact: MCA-Server `internal/service/match.go:114-126` aborts the
   whole match report when any participant's UUID cannot be resolved;
-  `resolveUID` (`internal/service/match.go:271-295`) receives 404 →
+  `resolveUID` (`/home/lnb/Desktop/HA/MatchCoreArena-Server/internal/service/match.go::resolveUID`) receives 404 →
   `ErrUserNotFound`. The Redis cache (`mca:uuid_to_uid:`, 24 h) is only
   written by `resolveUID` itself after a successful lookup, so it can never
   warm up: settlement of real match reports fails end-to-end.
