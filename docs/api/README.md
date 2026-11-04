@@ -62,6 +62,7 @@ During the transition period, some success fields will be mirrored at the top le
 
 - `openapi/hrpauth-business.yaml`: HRPAuth Core Business API specification
 - `openapi/hrpauth-yggdrasil-business.yaml`: HRPAuth-Yggdrasil-API business wrapper specification
+- `openapi/cascade-backend-v1.yaml`: Cascade proxy↔backend control-plane contract (`/v1`, mutual TLS). Not an HA business API: it does not follow the unified business response format, and it is not covered by the gin-based anti-drift check (see `docs/dev/Cascade/README.md`)
 - `error-codes.md`: Unified error code registry
 
 ## Anti-Drift
