@@ -2,8 +2,8 @@
 
 Feature flags for the Yggdrasil protocol layer, corresponding to `yggdrasil.feature_flags.*` configuration items. Since the 2026-10 service split, these flags live in the configuration of the [`HRPAuth-Yggdrasil-API`](https://github.com/CoreMatch/HRPAuth-Yggdrasil-API) service.
 
-> For HRPAuth's own switches (`security.*`), see the Configuration section of
-> the [HRPAuth repository README](https://github.com/CoreMatch/HRPAuth).
+> For HRPAuth's own switches (`security.*`), see
+> [HRPAuth Configuration](https://wiki.mcnb.dev/projects/hrpauth/configuration) in the Wiki.
 
 | Configuration Item | Default | Description |
 |--------------------|---------|-------------|
