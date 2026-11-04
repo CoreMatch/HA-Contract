@@ -626,7 +626,12 @@ paths:
       description: >
         Records a completed match result. The bearer token must carry the
         `match:report` scope (system/admin reporters); without it the server
-        answers `403 oauth_insufficient_scope`.
+        answers `403 oauth_insufficient_scope`. If a participant resolves to
+        an HRPAuth UID that has no local `users` row, the report aborts
+        with `409 mca_user_not_provisioned` and nothing is written (the
+        transaction rolls back). This code only types the missing-row
+        symptom; the row-provisioning mechanism itself is pending an author
+        decision (PENDING-DECISIONS item 4) — no auto-provisioning happens.
       tags: [Matches]
       security:
         - BearerAuth: []
@@ -650,6 +655,8 @@ paths:
                         $ref: '#/components/schemas/Match'
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
 
   /api/matches/{id}:
     get:
