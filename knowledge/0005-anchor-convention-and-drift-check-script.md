@@ -17,10 +17,12 @@ symbol names and key names survive most edits.
 Knowledge entries anchor evidence in one of four formats, in order of
 preference:
 
-1. **Symbol anchor** — `path/to/file.ext::SymbolName`. Used when the cited
-   code has a stable function/type/constant name. Verified by grepping the
-   symbol in the file.
-2. **Field anchor** — `path/to/file.ext (field: key_name)`. Used for config
+1. **Symbol anchor** — a file path, then `::`, then a symbol name, e.g.
+   `scripts/check-knowledge-anchors.sh::check_symbol_anchor`. Used when the
+   cited code has a stable function/type/constant name. Verified by grepping
+   the symbol in the file.
+2. **Field anchor** — a file path, then `(field: ...)` with a key name, e.g.
+   `docs/api/openapi/cascade-backend-v1.yaml (field: /rooms)`. Used for config
    templates, YAML sections, and generated files that have no code symbol.
    Verified by grepping the key name in the file.
 3. **Time-point anchor** — `path/to/file.ext:Lx-Ly @ <commit>`. Used only

@@ -50,25 +50,44 @@ protocol (JSON lines over the helper's stdin/stdout, protocol version 2).
 
 ## Evidence
 
-All paths relative to the RW-HPS Go-Server repository (checked at commit
-`b0fbccfa`), unless noted.
+All paths absolute into the RW-HPS Go-Server checkout
+(`/home/lnb/RW-HPS/Go-Server`); anchors verified at commit `baabca44` on
+2026-11-05 (original audit at `b0fbccfa`).
 
-- Boundary rationale: `internal/game/seam.go:30-42` — upstream loads the
-  closed-source jar in-JVM and rewires it via ASM; "Go 进程无法执行 Java 字节码"
-  (a Go process cannot execute Java bytecode), no fake implementations.
-- Explicit-failure design: `internal/game/seam.go:17-21`
-  (`ErrNotImplemented = "game: no simulation backend available"`), `:144-164`
-  (`Unimplemented` placeholder; `Backend` defaults to it).
-- v2 operation set and validation: `Go-Server/docs/HELPER-PROTOCOL.md:73-89`;
-  transport and wire format `:15-28`; events `:93-105`.
-- v2-ext purpose and compatibility: `HELPER-PROTOCOL.md:144-167` (same wire
-  version; v2-only helpers answer `unsupported`; Go normalizes to
-  `game.ErrUnsupported` and degrades to logged no-ops); `internal/game/seam.go:23-28`
-  (`ErrUnsupported`), `:54-90` (`RoomControl` interface).
-- Degradation path: `internal/app/simulation.go:29-49` (no backend → `Unimplemented`,
-  "开局返回可读的错误"), `:54-57` (helper not configured is the silent default),
-  `:64-69` (broken helper config → warn + fall back to no backend);
-  `internal/app/bootstrap.go:66-67` ("没有后端时 start 会返回 ErrNotImplemented").
+- Boundary rationale:
+  `/home/lnb/RW-HPS/Go-Server/internal/game/seam.go::Simulation` — upstream
+  loads the closed-source jar in-JVM and rewires it via ASM; "Go 进程无法执行
+  Java 字节码" (a Go process cannot execute Java bytecode), no fake
+  implementations.
+- Explicit-failure design:
+  `/home/lnb/RW-HPS/Go-Server/internal/game/seam.go::ErrNotImplemented`
+  (`ErrNotImplemented = "game: no simulation backend available"`),
+  `/home/lnb/RW-HPS/Go-Server/internal/game/seam.go::Unimplemented`
+  (`Unimplemented` placeholder;
+  `/home/lnb/RW-HPS/Go-Server/internal/game/seam.go::Backend` defaults to it).
+- v2 operation set and validation:
+  `/home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: 操作（Go -> helper)`;
+  transport and wire format
+  `/home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: 传输与线格式)`;
+  events
+  `/home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: 事件（helper -> Go)`.
+- v2-ext purpose and compatibility:
+  `/home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: 版本与向后兼容)`
+  (same wire version; v2-only helpers answer `unsupported`; Go normalizes to
+  `game.ErrUnsupported` and degrades to logged no-ops);
+  `/home/lnb/RW-HPS/Go-Server/internal/game/seam.go::ErrUnsupported`
+  (`ErrUnsupported`),
+  `/home/lnb/RW-HPS/Go-Server/internal/game/seam.go::RoomControl`
+  (`RoomControl` interface).
+- Degradation path:
+  `/home/lnb/RW-HPS/Go-Server/internal/app/simulation.go::loadSimulation`
+  (no backend → `Unimplemented`, "开局返回可读的错误"),
+  `/home/lnb/RW-HPS/Go-Server/internal/app/simulation.go::GameHelperPath`
+  (helper not configured is the silent default),
+  `/home/lnb/RW-HPS/Go-Server/internal/app/simulation.go::attachSimulation`
+  (broken helper config → warn + fall back to no backend);
+  `/home/lnb/RW-HPS/Go-Server/internal/app/bootstrap.go::ErrNotImplemented`
+  ("没有后端时 start 会返回 ErrNotImplemented").
 - JDK constraint: recorded in the 2026-11-04 helper landing notes (JDK 25 crashes
   the Kotlin 2.0.0 compiler; build with JDK 17). Not independently re-verified in
   this pass.
