@@ -69,10 +69,9 @@ Table name: `profiles`
 - **Values**: `1` (default) = Created by human (WebUI registration or claimed proxy registration); `0` = Robot user created by WinnerProxy proxy registration and **not yet claimed**.
 - **Write Rules**:
   - WebUI `/register` (including captcha enabled) → always `1`.
-  - Service proxy `/register`:
-    - Hit existing user (idempotent / `mbe=1` bind) → **do not change** `cbh` (keep original value).
-    - New user with `mojang_uuid` provided → `0` (proxy registration).
-    - New user without `mojang_uuid` provided → `1` (equivalent to WebUI).
+  - Service proxy registration (`POST /internal/proxy-register`, HRPAuth-Yggdrasil-API):
+    - Hit existing account (idempotent by `mojang_uuid` / `mbe=1` bind) → **do not change** `cbh` (keep original value).
+    - New account with `mojang_uuid` provided → `0` (proxy registration).
 - **Cleanup Basis**: Users with `cbh=0` and both `register_at` / `last_sign_at` exceeding 30 days are deleted by `BotUserCleanupController` (see `references/HA-ROADMAP.md` §4).
 - **Claiming Mechanism**:
   - Via WebUI / MBE: whether `cbh` flips to 1 when a proxy-registered user subsequently registers and binds via WebUI is decided by the business layer; the current implementation keeps the original value.
@@ -88,16 +87,15 @@ Proxy-registered users are normally unable to log in to the business system beca
 | Request body | `username` (≥ 3 chars), `email` (must be unique), `password` (≥ 6 chars) |
 | Target | User with `username` equal to the request value AND `cbh=0` |
 
-Implementation status: as of 2026-11-04 no route or handler exists in either
-HRPAuth core or HRPAuth-Yggdrasil-API; HRPAuth-Yggdrasil-API contains an
-orphan service method (`AuthService.ClaimAccount`) with no caller. The table
-above and the steps below describe the intended semantics carried by this
-contract (see also `x-planned-endpoints` in
-`docs/api/openapi/hrpauth-yggdrasil-business.yaml`):
+Implementation status: implemented on 2026-11-05. HRPAuth-Yggdrasil-API
+serves `POST /admin/claim-user`; the core user provisioning happens through
+the HRPAuth core internal endpoint `POST /internal/claim-user`
+(`X-Internal-Key`). Steps:
 
-1. Reject when target is missing or `cbh=1` (already a human account).
-2. UPDATE the same row with `email`, `password` (bcrypt), `cbh = 1`, `verified = 1`.
-3. Return `{uid, username, email}`.
+1. Reject when no game account exists for the profile name (`404 user_not_found`) or the account has `cbh=1` (`409 user_not_claimable`).
+2. Provision the core user through the core: write `email`, `password` (bcrypt), `verified = 1`. Email uniqueness is enforced against the core user table (`409 email_already_registered`); a username owned by another core user yields `409 username_already_bound`. The core call is idempotent by (username, email), so a player retry completes the link instead of stranding the provisioned user.
+3. Link `core_user_id` and flip `cbh = 1` on the game account.
+4. Return `{uid, username, email}`.
 
 Side effects: after flipping `cbh` to 1, the user is no longer eligible for `BotUserCleanupController`, so operator claiming is the only way to permanently remove a `cbh=0` row without the user having to interact via MBE.
 
@@ -112,39 +110,39 @@ Players who have both a proxy-registered account (cbh=0, created by WinnerProxy)
 | Source account | User with `username` equal to the request value AND `cbh=0` |
 | Target account | User matching `email` + `password` (bcrypt verified) |
 
-Implementation status: as of 2026-11-04 no route or handler exists in either
-HRPAuth core or HRPAuth-Yggdrasil-API (tracked in `agents.md` Roadmap item
-2.1; the HRPAuth-Spigot plugin already ships the client command). The steps
-below describe the intended semantics carried by this contract:
+Implementation status: implemented on 2026-11-05. HRPAuth-Yggdrasil-API
+serves `POST /admin/force-bind`; the target credentials are verified through
+the HRPAuth core internal endpoint `POST /internal/verify-credentials`
+(`X-Internal-Key`). Steps:
 
 1. Validate `manage_token` against server config.
-2. Find source account by `username` where `cbh=0`; reject if not found or has no `mojang_uuid`.
-3. Authenticate target account by `email` + `password`; reject if credentials are invalid.
-4. Transfer `mojang_uuid` from source to target (UPDATE target, then DELETE source) in a single transaction.
+2. Find source account by profile name where `cbh=0`; reject if not found or has no `mojang_uuid`.
+3. Authenticate target account by `email` + `password` via the core; reject if credentials are invalid (`403 invalid_credentials`; unknown email and wrong password are merged).
+4. Transfer `mojang_uuid` from source to target and delete the source account in a single local transaction on the Yggdrasil side (the core call is read-only, so no cross-database rollback is needed). If the target core user has no game account yet, one is created (`cbh=1`) in the same transaction.
 5. Return success.
 
-Side effects: the proxy-registered account is permanently deleted. The target account's `mojang_uuid` is overwritten. Any existing `mojang_uuid` on the target account is replaced.
+Side effects: the proxy-registered account is permanently deleted. A target account already bound to a *different* `mojang_uuid` is rejected with `409 mojang_uuid_already_bound` (no overwrite); re-running with the same `mojang_uuid` is idempotent.
 
 ### `mojang_uuid`
 
 - **Format**: 32-bit lowercase hex (UUID without hyphens), isomorphic with Yggdrasil `selectedProfile.id`.
 - **Constraint**: `UNIQUE` index `uk_users_mojang_uuid` (`NULL` does not participate in unique constraint, so multiple unbound users can exist).
 - **Write Sources**:
-  - Service proxy `/register` decision tree 1 (hit by `mojang_uuid`) → idempotent return.
-  - Service proxy `/register` decision tree 2.a `mbe=1` → written during bind.
+  - `POST /internal/proxy-register` decision tree 1 (hit by `mojang_uuid`) → idempotent return.
+  - `POST /internal/proxy-register` decision tree 2.a `mbe=1` → written during bind.
   - `POST /admin/force-bind` → transfers `mojang_uuid` from a proxy-registered account to a target account (see "Force Bind" below).
   - **Not** written via WebUI `/register`.
 - **Relationship with `users.uuid`**: `users.uuid` is the internal UUID for the user within the HA / Yggdrasil system (unrelated to Mojang); `mojang_uuid` is the bound Mojang authentic UUID. Both can coexist and be different.
 
 ### `mbe` (Mojang Bind Enabled)
 
-- **Values**: `0` (default) = Prohibit Mojang players with the same name from binding via service proxy `/register` (**HA priority**, Mojang players receive 409 and are kicked); `1` = Allow binding.
+- **Values**: `0` (default) = Prohibit Mojang players with the same name from binding via `POST /internal/proxy-register` (**HA priority**, Mojang players receive 409 and are kicked); `1` = Allow binding.
 - **Write Endpoints** (HRPAuth-Yggdrasil-API, OAuth2 Bearer of the account owner):
   - `POST /player/mojang-bind-enable` → Sets `mbe = 1` and starts the auto-disable countdown. Idempotent.
   - `POST /player/mojang-bind-disable` → Sets `mbe = 0`. Idempotent.
   - (The former core endpoints `POST /user/mojang-bind-enable` / `-disable` were removed from the core in 2026-10.)
 - **Query**: `mbe` is returned in the HRPAuth-Yggdrasil-API `GET /player` response (`data.mbe`). The core `POST /user` response does not include it.
-- **Only effective in service proxy `/register` decision tree 2.a**: Checked when a same-name WebUI user is hit and their `mojang_uuid IS NULL`.
+- **Only effective in the `POST /internal/proxy-register` collision branch (decision tree 2.a)**: Checked when a colliding account is hit by profile name and its `mojang_uuid IS NULL`.
 - **Once `mojang_uuid` is written, the semantics of `mbe` disappear** (subsequent same-name Mojang players will not trigger 2.a). On successful bind, `mbe` is **automatically reset to 0** together with the `mojang_uuid` write, so the field cleanly reflects the current authorization status.
 - **Auto-disable timeout**: After `POST /player/mojang-bind-enable` sets `mbe = 1`, a 15-minute countdown begins. If no bind (`mojang_uuid` write) occurs within that window, the system automatically resets `mbe = 0`. The timeout is cancelled on successful bind (which also resets `mbe = 0`), explicit disable, or re-enable (which restarts the timer). Implementation: HRPAuth-Yggdrasil-API `controllers/mbe_timeout_controller.go` — an in-memory event stack scanned every 30 seconds.
 

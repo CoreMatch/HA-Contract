@@ -225,11 +225,14 @@ Available for creating a game account without an HRPAuth core identity.
 
 - **Auth**: `X-Internal-Key` header.
 - **Body**: `{ "username": "<string>", "password": "<string>", "mojang_uuid": "<string>" }`.
-- **Response**: `200` with `data: {account_id, profile_id}`; `400` for an invalid body; `401` for an invalid internal key; `500` on failure.
+- **Response**: `200` with `data: {account_id, profile_id}`; `400` for an invalid body; `401` for an invalid internal key; `409 username_already_bound` on a non-bindable username collision; `500` on failure.
 - **Logic**:
-    1. Creates an account with `cbh = 0` (Created By Human = false).
-    2. Stores the provided `password` (hashed) for local Yggdrasil auth.
-    3. Account is subject to bot cleanup if not claimed within 30 days.
+    1. `mojang_uuid` already linked to an account → idempotent `200` with the existing account/profile.
+    2. Username free → creates an account with `cbh = 0` (Created By Human = false), stores the provided `password` (hashed) for local Yggdrasil auth. Account is subject to bot cleanup if not claimed within 30 days.
+    3. Username collides with an account that has no `mojang_uuid`:
+        - `mbe = 1` → **completes the Mojang bind window** opened by the account owner via `POST /player/mojang-bind-enable`: sets `mojang_uuid`, refreshes `last_sign_at`, resets `mbe = 0`, cancels the pending 15-minute revert. `cbh`, `password`, `core_user_id` and the profile are preserved; the supplied `password` is discarded. Responds `200` with the existing account's `account_id`/`profile_id`.
+        - `mbe = 0` → `409 username_already_bound` (HA accounts have priority; a Mojang player cannot take the name).
+    4. Username collides with an account already bound to a different `mojang_uuid` → `409 username_already_bound` regardless of `mbe`.
 
 > Current WinnerProxy behavior: WinnerProxy does not call this endpoint. Its
 > proxy registration issues `POST /register` against the upstream with an
