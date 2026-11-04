@@ -10,12 +10,13 @@
 >   The copy left in the Cascade repository is historical and must not diverge.
 > - Revised on: 2026-11-04 as **v1.1** (backend trust strategies, health
 >   readiness criterion, `FORBIDDEN` error code) and **v1.1.1** (deployment
->   content moved out per repository scope) by HA-Contract; see
->   [Changelog](#changelog).
+>   content moved out per repository scope), and 2026-11-05 as **v1.2**
+>   (proxy transport selection from the declared trust strategy) by
+>   HA-Contract; see [Changelog](#changelog).
 
 ---
 
-# Cascade Backend Contract v1.1.1
+# Cascade Backend Contract v1.2
 
 This contract defines the boundary between the Cascade edge proxy and an
 independently developed Rusted Warfare backend. The backend owns rooms, lobby
@@ -28,8 +29,10 @@ Since v1.1, transport and trust are **separate decisions** on the backend:
 
 - Transport: the backend may serve TLS or plaintext on the game endpoint and
   the control plane; which one applies is a property of the backend
-  deployment, outside this contract. The proxy establishes TLS toward
-  backends that serve TLS and validates the backend certificate.
+  deployment, outside this contract. The proxy selects the transport it
+  speaks per backend as specified under
+  [Proxy transport selection](#proxy-transport-selection), and validates the
+  backend certificate whenever it establishes TLS.
 - Trust: how the backend authenticates the proxy is chosen from the
   [backend trust strategies](#backend-trust-strategies) below. The v1
   requirement of mutual TLS plus Ed25519 JWT signature verification is no
@@ -40,6 +43,35 @@ Since v1.1, transport and trust are **separate decisions** on the backend:
   trust strategy provides.
 - Direct client access is a backend deployment decision and is outside this
   contract.
+
+## Proxy transport selection
+
+Since v1.2, the proxy derives the transport toward each backend from the
+trust strategy declared for that backend:
+
+- `open` or `ip` — the proxy connects in **plaintext** (no TLS) to both the
+  `/v1` control plane and the game endpoint. The 24-byte `CASC` preamble is
+  still written first on the game connection (it applies after the transport
+  is established, whether or not TLS applies), and the identity JWT flow is
+  unchanged.
+- `pinned` — the proxy establishes **TLS with a client certificate**
+  (mutual TLS) and expects the backend to check the certificate fingerprint
+  as described above.
+- Missing or unparseable declaration — the proxy defaults to the **safest
+  available transport**: TLS with a client certificate. The proxy fails
+  closed; it never falls back to plaintext silently.
+
+A proxy-local override may force TLS or plaintext for a specific backend
+regardless of the declared strategy. The override changes only the transport
+the proxy speaks, never the trust strategy the backend runs; a deployment
+whose backend serves TLS while declaring `open` or `ip` must force TLS on
+the proxy side explicitly.
+
+Plaintext transport provides no transport confidentiality and no peer
+authentication; under `open` trust nothing on the path authenticates either
+side. It is therefore a deliberate choice for `open`/`ip` deployments, never
+a silent fallback. The structural JWT claim checks and the one-time `jti`
+ledger remain in force on both transports.
 
 ## Backend trust strategies
 
@@ -246,6 +278,20 @@ errors must not expose tokens, certificates, or internal backend details.
   routing.
 
 ## Changelog
+
+### v1.1.1 → v1.2 (2026-11-05)
+
+1. **Proxy transport selection**: the proxy derives its transport toward each
+   backend from the trust strategy declared for that backend: plaintext for
+   `open` and `ip`, TLS with a client certificate for `pinned`, and — when
+   the declaration is missing or unparseable — the safest available transport
+   (TLS with a client certificate; the proxy fails closed rather than falling
+   back to plaintext). A proxy-local override may force either transport per
+   backend. The `CASC` preamble and the identity JWT flow apply unchanged on
+   both transports.
+
+No endpoint paths, fields, or response semantics changed; v1.2 is not a
+breaking revision for backend implementations.
 
 ### v1.1 → v1.1.1 (2026-11-04)
 
