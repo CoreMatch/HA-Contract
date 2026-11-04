@@ -27,7 +27,7 @@ To prevent documentation drift from the actual project, this project adopts a un
 - [Cascade Backend API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/cascade-backend-v1.yaml): control-plane contract between the Cascade proxy and a Rusted Warfare backend
 
 ### Development and Internal Documentation
-- [HRPAuth Development Guide](https://github.com/CoreMatch/HA-Contract/tree/main/docs/dev/HRPAuth/): Includes configuration, data models, migrations, Token mechanisms, etc.
+- [HRPAuth Development Guide](https://github.com/CoreMatch/HA-Contract/tree/main/docs/dev/HRPAuth/): Data models, Token mechanisms, feature flags, microservice extension protocol, SDK package contract. (Runtime configuration and deployment live in the service repositories / Wiki.)
 - [HASkinProxy Development Guide](https://github.com/CoreMatch/HA-Contract/tree/main/docs/dev/HASkinProxy/): Technical details on the Yggdrasil-to-CSL proxy.
 - [WinnerProxy Service Contract](https://github.com/CoreMatch/HA-Contract/tree/main/docs/dev/WinnerProxy/): Inbound routes and current outbound calls.
 - [Cascade Backend Contract](https://github.com/CoreMatch/HA-Contract/tree/main/docs/dev/Cascade/): Authoritative proxy↔backend contract (transport, preamble, session gating, control plane).

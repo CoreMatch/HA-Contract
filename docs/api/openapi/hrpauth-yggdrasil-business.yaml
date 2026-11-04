@@ -101,7 +101,8 @@ paths:
         profile, and texture validation errors — are returned as
         `400 texture_upload_failed`. There is no upload rate limiting.
         Uploads larger than `yggdrasil.security.max_texture_file_size`
-        (default 512000 bytes) fail with `400 texture_upload_failed`.
+        (default 512000 bytes; the value `0` disables the size check) fail
+        with `400 texture_upload_failed`.
       security:
         - BearerAuth: []
       parameters:
