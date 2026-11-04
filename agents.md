@@ -10,7 +10,7 @@ HA-Contract is the single-source-of-truth **contract and documentation center** 
 
 1. **No project maintains its own contracts or documentation.** Service repositories do not keep their own API specs or development documentation.
 2. **All contracts are centralized in this repository.** HA-Contract is the single source of truth: the OpenAPI specs in `docs/api/openapi/` define the contract, and code must match the spec, not the other way around. Do NOT rely on code comments or in-repo READMEs as the authoritative API source.
-3. **All documentation is centralized in the [Wiki](https://wiki.mcnb.dev/).** Deployment and operations documentation belongs there and must not be added to this repository.
+3. **All documentation is centralized in the [Wiki](https://wiki.mcnb.dev/).** Deployment and operations documentation belongs there and must not be added to this repository. Exception: this repository's own `knowledge/` directory holds internal ADR-style memos about this project's design and operations; it is not outward-facing documentation and is outside the Wiki centralization above.
 
 If a service repository keeps a README at all, limit it to build-and-run entry points; do not add development or deployment documentation there.
 
