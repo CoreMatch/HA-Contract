@@ -105,6 +105,7 @@ The following error codes are the stable registry for current HA business APIs. 
 | `oauth_hrpauth_down` | HRPAuth upstream unavailable during an auth flow (MatchCoreArena). The code string was misspelled `oauth_hrpaauth_down` until the spelling fix; no external consumer ever used the old form. |
 | `mca_invalid_request` | MatchCoreArena: general parameter error |
 | `mca_user_not_found` | MatchCoreArena: user does not exist |
+| `mca_user_not_provisioned` | MatchCoreArena: a match-report participant resolved to an HRPAuth UID but has no local `users` row (HTTP 409; the payload is valid, the conflict is with server-side resource state). This only types the symptom — the row-provisioning mechanism itself is still pending an author decision (PENDING-DECISIONS item 4); no auto-provisioning was introduced. |
 | `mca_friend_not_found` | MatchCoreArena: friend relationship does not exist |
 | `mca_friend_request_exists` | MatchCoreArena: friend request already exists |
 | `mca_team_not_found` | MatchCoreArena: team does not exist |
