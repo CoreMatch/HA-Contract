@@ -9,7 +9,7 @@
 openapi: 3.1.0
 info:
   title: Cascade Backend Contract
-  version: 1.1.1
+  version: 1.2.0
   description: >-
     Versioned control API between the Cascade proxy and an independent game
     backend. v1.1 (2026-11-04): backend trust strategies (open/ip/pinned;
@@ -17,7 +17,12 @@ info:
     includes a game-core helper where present, and 403 FORBIDDEN answers
     trust-strategy rejections. v1.1.1 (2026-11-04): deployment/operations
     content moved out per repository scope; no interface semantics changed.
-    See the contract document Changelog
+    v1.2 (2026-11-05): the proxy derives its transport toward each backend
+    from the declared trust strategy (plaintext for open/ip, TLS with a
+    client certificate for pinned, safest available transport when the
+    declaration is missing or unparseable); no endpoint, field, or response
+    semantics changed, so this document carries the contract version for
+    traceability only. See the contract document Changelog
     (docs/dev/Cascade/Cascade-Backend-v1.md).
 servers:
   - url: https://backend.example.invalid/v1
