@@ -9,21 +9,21 @@
 openapi: 3.1.0
 info:
   title: Cascade Backend Contract
-  version: 1.1.0
+  version: 1.1.1
   description: >-
     Versioned control API between the Cascade proxy and an independent game
-    backend. v1.1 (2026-11-04): backend trust modes (open/ip/pinned, default
-    open; JWT signatures are not verified by the backend), /health readiness
-    includes a configured game-core helper, and 403 FORBIDDEN answers
-    trust-mode rejections. See the contract document Changelog
-    (docs/dev/Cascade/Cascade-Backend-v1.md). No endpoint paths or existing
-    field semantics changed.
+    backend. v1.1 (2026-11-04): backend trust strategies (open/ip/pinned;
+    JWT signatures are not verified by the backend), /health readiness
+    includes a game-core helper where present, and 403 FORBIDDEN answers
+    trust-strategy rejections. v1.1.1 (2026-11-04): deployment/operations
+    content moved out per repository scope; no interface semantics changed.
+    See the contract document Changelog
+    (docs/dev/Cascade/Cascade-Backend-v1.md).
 servers:
   - url: https://backend.example.invalid/v1
-# Since v1.1 transport and trust are backend configuration (trust modes):
-# TLS is used only when the backend configures a server certificate, and
-# mutual TLS is required only by the `pinned` trust mode (as a fingerprint
-# check, not a CA chain). No universal security requirement applies.
+# No universal security requirement applies: whether the backend serves TLS
+# and how it authenticates the proxy are implementation choices whose
+# observable behavior the contract defines (trust strategies).
 security: []
 paths:
   /health:
@@ -86,7 +86,7 @@ paths:
                   description: >-
                     Single-use JWT described in the contract. The proxy signs
                     it with EdDSA; since v1.1 backends do not verify the
-                    signature (trust-mode dependent) but still enforce the
+                    signature (trust-strategy dependent) but still enforce the
                     structural claims and one-time jti.
       responses:
         "204":
@@ -242,9 +242,9 @@ paths:
           $ref: "#/components/responses/BackendError"
 components:
   securitySchemes:
-    # Retained for reference: since v1.1 client certificates are only required
-    # by backends running the `pinned` trust mode, which validates them by
-    # SHA-256 fingerprint rather than CA chain.
+    # Retained for reference: under the `pinned` trust strategy the backend
+    # validates proxy client certificates by SHA-256 fingerprint rather than
+    # CA chain; other strategies do not require client certificates.
     mutualTLS:
       type: mutualTLS
   parameters:
@@ -343,11 +343,11 @@ components:
                 type: string
     TrustForbidden:
       description: >-
-        Trust-mode rejection (v1.1): the request source is outside
-        trustedCascadeIPs (ip/pinned modes) or the TLS client-certificate
-        fingerprint is not pinned (pinned mode). Response body uses the
-        stable error shape with code FORBIDDEN. Since the trust check wraps
-        the whole /v1 surface, any operation may return this response.
+        Trust-strategy rejection (v1.1): the request source is not in the
+        backend's accepted source allowlist, or the TLS client-certificate
+        fingerprint is not accepted. Response body uses the stable error
+        shape with code FORBIDDEN. Since the trust check wraps the whole /v1
+        surface, any operation may return this response.
       content:
         application/json:
           schema:
