@@ -8,10 +8,12 @@
 >   truth** for the Cascade backend contract (this document and
 >   [`../../api/openapi/cascade-backend-v1.yaml`](../../api/openapi/cascade-backend-v1.yaml)).
 >   The copy left in the Cascade repository is historical and must not diverge.
+> - Revised on: 2026-11-04 as **v1.1** by HA-Contract (backend trust modes,
+>   health readiness criterion, `FORBIDDEN` error code; see [Changelog](#changelog)).
 
 ---
 
-# Cascade Backend Contract v1
+# Cascade Backend Contract v1.1
 
 This contract defines the boundary between the Cascade edge proxy and an
 independently developed Rusted Warfare backend. The backend owns rooms, lobby
@@ -20,23 +22,62 @@ ingress, HRPAuth identity, route selection, and byte forwarding.
 
 ## Transport and trust
 
-- Control endpoints use HTTPS with mutual TLS. The proxy validates the
-  backend certificate and the backend requires a trusted proxy client
-  certificate.
-- The game endpoint uses TLS with mutual TLS. The backend requires the same
-  proxy identity before reading a gateway preamble.
-- The proxy JWT signing key is Ed25519. The backend receives trusted public
-  keys out-of-band. The `kid` header selects a key; key rotation must allow
-  old and new public keys to overlap for at least the maximum JWT lifetime.
+Since v1.1, transport and trust are **separate decisions** on the backend:
+
+- Transport: if the backend is configured with a server certificate and key,
+  both the game endpoint and the control plane use TLS; otherwise both are
+  plaintext. The proxy still establishes TLS to backends that serve it and
+  validates the backend certificate against its configured CA pool.
+- Trust: how the backend authenticates the proxy is chosen from the
+  [backend trust modes](#backend-trust-modes) below. The v1 requirement of
+  mutual TLS plus Ed25519 JWT signature verification is no longer mandatory;
+  it is replaced by the three trust modes, with `open` as the default.
 - The backend must not trust client-supplied identity fields as HA identity.
-  Only a verified proxy JWT establishes the game UUID for a pending session.
+  The game UUID for a pending session comes from the proxy-issued JWT claims
+  delivered through the identity endpoint, trusted at the level the selected
+  trust mode provides.
 - Direct client access is a backend deployment decision and is outside this
   contract.
 
+## Backend trust modes
+
+The backend selects exactly one trust mode (configuration, not negotiation).
+The default is `open`. The mode applies to both the game endpoint and the
+`/v1` control plane.
+
+- `open` (default): the backend accepts connections from any source. It does
+  not require or verify proxy client certificates and does not verify JWT
+  signatures; JWTs receive only the structural claim checks listed under
+  [Identity JWT](#identity-jwt). The one-time `jti` ledger still applies, so a
+  replayed token is still rejected. **Risk**: anyone who can reach the backend
+  port can pose as the proxy and bind arbitrary identities. Backends running
+  in `open` mode must not expose their game or control ports to untrusted
+  networks; production deployments should use at least `ip` mode.
+- `ip`: the backend accepts only connections whose source address is within
+  the configured `trustedCascadeIPs` list (exact IPs and/or CIDR ranges). JWT
+  signatures are still not verified. An empty allowlist is a configuration
+  error: the backend must fail to start rather than silently allowing or
+  denying all sources.
+- `pinned`: on top of the IP constraint (when the allowlist is non-empty),
+  the backend requires TLS and a proxy client certificate whose
+  SHA-256 fingerprint over the certificate DER matches one entry of the
+  configured fingerprint list. The list form deliberately supports rotation:
+  old and new fingerprints may coexist during an overlap window. Mismatched
+  fingerprints are rejected: game connections are closed before the preamble
+  is read, and control-plane requests receive `403` with code `FORBIDDEN`.
+
+Trust-mode rejections on the control plane always use HTTP `403` with the
+stable error code `FORBIDDEN`. Because the trust check wraps the whole `/v1`
+surface, any control endpoint may return `403 FORBIDDEN` in `ip`/`pinned`
+modes.
+
+Recommended rotation defaults: a 30-day rotation period with a 10-minute
+overlap window in which both old and new material are accepted.
+
 ## Game TCP preamble
 
-After the TLS handshake, the proxy writes exactly 24 bytes before any Rusted
-Warfare bytes:
+After the transport is established (TLS handshake where TLS is configured),
+the proxy writes exactly 24 bytes before any Rusted Warfare bytes:
 
 | Offset | Size | Encoding | Meaning |
 | --- | ---: | --- | --- |
@@ -93,8 +134,15 @@ Required claims:
 | `jti` | string | Unique cryptographically random token ID |
 
 The JWT must not contain HA UUID, HA login state, credentials, or authorization
-policy. The backend validates signature, key ID, issuer, audience, session ID,
-subject, issue/expiry times, and token ID. A token ID can only be consumed once.
+policy. Since v1.1, the backend **does not verify the JWT signature, `kid`, or
+`iss`** — proxy authenticity is carried by the selected
+[trust mode](#backend-trust-modes). The backend still performs the structural
+claim checks: well-formed compact JWS with `alg` `EdDSA`, audience equal to its
+own backend ID, non-empty `sid`/`sub`/`jti`, `exp` within 30 seconds of `iat`,
+and not expired. A token ID can only be consumed once; the one-time `jti`
+ledger is independent of trust mode and of signature verification. The proxy
+still signs tokens as specified above; backends simply do not check the
+signature.
 
 ## HTTP API
 
@@ -102,6 +150,13 @@ Base path: `/v1`. Bodies and responses use `application/json`. The OpenAPI
 document `openapi/cascade-backend-v1.yaml` is the machine-readable companion.
 
 - `GET /health`: readiness of the backend control and game services.
+  Readiness criterion (v1.1): the game listener is established; if a game-core
+  helper process is configured on the backend, the helper must additionally be
+  ready (checked via a non-blocking probe; health checks must not start the
+  helper). If the helper is configured but failed to load, the backend stays
+  `not_ready` — it must not silently degrade to ready without its game core.
+  Backends without a configured helper report ready as soon as the listener is
+  up (unchanged from v1).
 - `GET /rooms`: complete room ownership snapshot for this backend.
 - `PUT /sessions/{sessionID}/identity`: bind the signed JWT to a pending
   session.
@@ -159,6 +214,9 @@ Stable error codes:
 
 - `INVALID_REQUEST`
 - `UNSUPPORTED_VERSION`
+- `FORBIDDEN` (v1.1): the request was rejected by the backend trust mode
+  (source IP outside `trustedCascadeIPs`, or client-certificate fingerprint
+  not pinned). Returned with HTTP `403`; possible on any `/v1` endpoint.
 - `SESSION_NOT_FOUND`
 - `SESSION_EXPIRED`
 - `SESSION_IDENTITY_INVALID`
@@ -189,3 +247,26 @@ errors must not expose tokens, certificates, or internal backend details.
 - Configured prefixes for different backends must not overlap.
 - Duplicate room ownership is reported as a conflict and rejected for
   routing.
+
+## Changelog
+
+### v1 → v1.1 (2026-11-04)
+
+1. **Backend trust modes**: replaced the mandatory mutual-TLS + Ed25519
+   signature verification with three backend-selected trust modes
+   (`open` default / `ip` / `pinned`), and separated transport (TLS only when
+   the backend configures a server certificate) from trust. JWTs are no longer
+   signature-verified by the backend; structural claim checks and the one-time
+   `jti` ledger remain in force.
+2. **`/v1/health` readiness**: when a game-core helper is configured, `ready`
+   additionally requires the helper to be ready (non-blocking probe); a
+   configured-but-failed helper keeps the backend `not_ready` (no silent
+   degradation). Unchanged for backends without a helper.
+3. **`FORBIDDEN` error code**: added `403` with stable code `FORBIDDEN` for
+   trust-mode rejections (source IP / certificate fingerprint), possible on
+   any `/v1` endpoint.
+
+No endpoint paths or existing field semantics changed; v1.1 is not a breaking
+revision for proxy implementations (the proxy still signs JWTs and may still
+present client certificates — backends in `open`/`ip` modes simply do not
+require them).
