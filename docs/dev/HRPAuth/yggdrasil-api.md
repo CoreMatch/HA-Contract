@@ -237,12 +237,17 @@ Available for creating a game account without an HRPAuth core identity.
 > Current WinnerProxy behavior: WinnerProxy does not call this endpoint. Its
 > proxy registration issues `POST /register` against the upstream with an
 > OAuth2 Bearer token and body `{username, password, email: "",
-> mojang_uuid}`, and its batch profile query targets
-> `POST {upstream}/yggdrasil/api/profiles/minecraft`. Upstream `/register`
-> requires the `identifier` field, and the upstream batch path has no
-> `/yggdrasil` prefix, so these two outbound calls do not succeed against the
-> current upstream as of 2026-11-04. WinnerProxy's former dead client methods
-> for `POST /user/declare-email` and `POST /user/mojang-bind-enable` were
-> deleted on 2026-11-05; player-side flows use the Velocity plugin's
-> `/admin/claim-user` and `/admin/force-bind` paths instead (see
+> mojang_uuid}`. Upstream `/register` requires the `identifier` field, so
+> this outbound call does not succeed against the current upstream as of
+> 2026-11-04 (the contract-sanctioned endpoint is
+> `POST /internal/proxy-register`, see above). The batch profile query used
+> to target `POST {upstream}/yggdrasil/api/profiles/minecraft` (an extra
+> `/yggdrasil` segment this contract does not define) and 404'd; it was
+> fixed on 2026-11-05 (WinnerProxy `4ded866`) to call the prefix-less
+> `POST /api/profiles/minecraft` from §6, with upstream failures mapped to
+> explicit 502 errors instead of a bare 500. WinnerProxy's former dead
+> client methods for `POST /user/declare-email` and
+> `POST /user/mojang-bind-enable` were deleted on 2026-11-05; player-side
+> flows use the Velocity plugin's `/admin/claim-user` and
+> `/admin/force-bind` paths instead (see
 > `openapi/hrpauth-yggdrasil-business.yaml`).
