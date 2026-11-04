@@ -105,17 +105,18 @@ Players who have both a proxy-registered account (cbh=0, created by WinnerProxy)
 
 | Field | Value |
 |---|---|
-| Authentication | OAuth2 Bearer Service Token + `manage_token` in request body |
-| Request body | `username` (proxy account username, ≥ 3 chars), `email` (target account email), `password` (target account password), `manage_token` |
+| Authentication | OAuth2 Bearer Service Token, scope `user.force-bind.as-service` |
+| Request body | `username` (proxy account username, ≥ 3 chars), `email` (target account email), `password` (target account password) |
 | Source account | User with `username` equal to the request value AND `cbh=0` |
 | Target account | User matching `email` + `password` (bcrypt verified) |
 
-Implementation status: implemented on 2026-11-05. HRPAuth-Yggdrasil-API
-serves `POST /admin/force-bind`; the target credentials are verified through
-the HRPAuth core internal endpoint `POST /internal/verify-credentials`
-(`X-Internal-Key`). Steps:
+Implementation status: implemented on 2026-11-05; authentication switched
+from the retired `manage.token` to the service-token tier on 2026-11-05.
+HRPAuth-Yggdrasil-API serves `POST /admin/force-bind`; the target
+credentials are verified through the HRPAuth core internal endpoint
+`POST /internal/verify-credentials` (`X-Internal-Key`). Steps:
 
-1. Validate `manage_token` against server config.
+1. Require a service token carrying `user.force-bind.as-service` (same tier as `/admin/claim-user`).
 2. Find source account by profile name where `cbh=0`; reject if not found or has no `mojang_uuid`.
 3. Authenticate target account by `email` + `password` via the core; reject if credentials are invalid (`403 invalid_credentials`; unknown email and wrong password are merged).
 4. Transfer `mojang_uuid` from source to target and delete the source account in a single local transaction on the Yggdrasil side (the core call is read-only, so no cross-database rollback is needed). If the target core user has no game account yet, one is created (`cbh=1`) in the same transaction.

@@ -412,11 +412,13 @@ paths:
     post:
       summary: Transfer a Mojang UUID from a proxy account to a manual account
       description: >
-        Authenticated with an OAuth2 service token Bearer plus the operator
-        manage token in the body (`manage_token`). Transfers `mojang_uuid`
-        from the proxy-registered source account (`cbh=0`, matched by game
-        profile name) to the target account identified by core email +
-        password (verified through the core's
+        Authenticated with an OAuth2 service token Bearer carrying the
+        `user.force-bind.as-service` scope (same authentication tier as
+        `/admin/claim-user`; the former `manage_token` body field and the
+        `manage.token` config item were retired on 2026-11-05). Transfers
+        `mojang_uuid` from the proxy-registered source account (`cbh=0`,
+        matched by game profile name) to the target account identified by
+        core email + password (verified through the core's
         `POST /internal/verify-credentials`), then deletes the source
         account together with its profiles, tokens and sessions. All
         game-side writes happen in a single local transaction; the core
@@ -433,7 +435,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [username, email, password, manage_token]
+              required: [username, email, password]
               properties:
                 username:
                   type: string
@@ -445,8 +447,6 @@ paths:
                 password:
                   type: string
                   description: Target account password (min 6 chars)
-                manage_token:
-                  type: string
       responses:
         '200':
           description: Success; `data` contains the transferred `mojang_uuid`
@@ -455,7 +455,7 @@ paths:
         '401':
           description: Missing or invalid bearer token
         '403':
-          description: '`invalid_manage_token` / `invalid_credentials` / not a service token'
+          description: '`invalid_credentials` / not a service token / missing `user.force-bind.as-service` scope'
         '404':
           description: '`user_not_found` (no proxy account for that profile name)'
         '409':

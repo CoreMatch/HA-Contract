@@ -9,7 +9,7 @@ The following error codes are the stable registry for current HA business APIs. 
 | `invalid_email` | Invalid email format or email parameter |
 | `invalid_credentials` | Invalid login credentials |
 | `invalid_auth_type_or_token` | Legacy invalid combination of `auth_type` and token |
-| `invalid_manage_token` | Legacy invalid Manage Token |
+| `invalid_manage_token` | Legacy invalid Manage Token. Defined in this registry only; no current implementation returns it (the Yggdrasil-API force-bind `manage_token` check was retired on 2026-11-05 in favor of service-token scopes) |
 | `remember_token_required` | Legacy Remember Token missing |
 | `invalid_remember_token` | Legacy invalid Remember Token |
 | `manage_target_required` | Missing target user identifier for delegated/service operation |
