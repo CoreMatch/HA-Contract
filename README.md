@@ -24,6 +24,9 @@ To prevent documentation drift from the actual project, this project adopts a un
 - [HRPAuth Business API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/hrpauth-business.yaml)
 - [HRPAuth Yggdrasil Business API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/hrpauth-yggdrasil-business.yaml)
 - [HASkinLib Business API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/haskinlib-business.yaml)
+- [MatchCoreArena Business API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/matchcorearena-business.yaml)
+- [WinnerProxy Business API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/winnerproxy-business.yaml)
+- [Cascade Proxy API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/cascade-proxy.yaml): management surface of the Cascade proxy
 - [Cascade Backend API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/cascade-backend-v1.yaml): control-plane contract between the Cascade proxy and a Rusted Warfare backend
 
 ### Development and Internal Documentation
@@ -35,6 +38,45 @@ To prevent documentation drift from the actual project, this project adopts a un
 ### External Reference Standards (Immutable)
 - [External API Standards](https://github.com/CoreMatch/HA-Contract/tree/main/docs/references/): Contains external protocol standards such as CustomSkinAPI, Yggdrasil API (authlib-injector), etc.
 - **Note**: Documents in this directory belong to external standards. This project is only responsible for compliance; **modifying their content is strictly prohibited**.
+
+## Business API Drift Check (Method-Level)
+
+Every repository that has an OpenAPI contract is wired into
+[scripts/check-business-api-drift.sh](https://github.com/CoreMatch/HA-Contract/blob/main/scripts/check-business-api-drift.sh),
+which compares each implementation's registered routes against its contract
+at the **METHOD + path** level, in **both directions**:
+
+- implementation has the route but the contract does not, and
+- the contract declares a METHOD + path that no registered route serves.
+
+| Implementation repository | Route source scanned | Contract file |
+|---|---|---|
+| HRPAuth | `main.go` | `docs/api/openapi/hrpauth-business.yaml` |
+| HASkinLib | `main.go` | `docs/api/openapi/haskinlib-business.yaml` |
+| HRPAuth-Yggdrasil-API | `main.go` | `docs/api/openapi/hrpauth-yggdrasil-business.yaml` |
+| MatchCoreArena-Server | `api/router.go` | `docs/api/openapi/matchcorearena-business.yaml` |
+| WinnerProxy | `internal/router/router.go` | `docs/api/openapi/winnerproxy-business.yaml` |
+| Cascade (proxy) | `internal/api/proxy_http.go` | `docs/api/openapi/cascade-proxy.yaml` |
+
+Run it from a checkout of this repository:
+
+```bash
+./scripts/check-business-api-drift.sh
+```
+
+It prints `Business API drift check passed.` and exits 0 when every pair
+agrees. Implementation repositories are resolved through the environment
+variables `HRPAUTH_REPO_DIR`, `HASKINLIB_REPO_DIR`, `YGGDRASIL_REPO_DIR`,
+`MATCHCOREARENA_REPO_DIR`, `WINNERPROXY_REPO_DIR`, `CASCADE_REPO_DIR`,
+falling back to sibling directories of this repository and then to
+`~/Desktop/HA` (`~/Cascade` for Cascade). A missing repository or contract
+file is a hard error (exit 2), never a silent pass.
+
+When a new repository gains an OpenAPI contract, add it to the script:
+extract its routes from the single file that registers them, add a
+`check_set` pair against its yaml, and list any deliberate exclusions
+(protocol aliases, tombstoned endpoints) in the script's inline exclusion
+blocks so they stay visible.
 
 ## Archive Note
 
