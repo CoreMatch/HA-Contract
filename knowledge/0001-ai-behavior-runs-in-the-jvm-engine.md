@@ -51,28 +51,61 @@ implements AI behavior. Go contributes only three kinds of adaptation code:
 
 ## Evidence
 
-All paths relative to the RW-HPS Go-Server repository (checked at commit
-`b0fbccfa`), unless noted.
+All paths absolute into the RW-HPS Go-Server checkout
+(`/home/lnb/RW-HPS/Go-Server`); anchors verified at commit `baabca44` on
+2026-11-05 (original audit at `b0fbccfa`).
 
-- v2-ext operation constants and validation: `internal/game/external/protocol.go:95`
-  (`OpRoomAddAI = "room.addai"`), `:97` (`room.sync`), `:100` (`room.removeplayer`),
-  `:103` (`game.result`); AI response field `:232`, result payload `:242`.
-- Backend methods forwarding to the helper: `internal/game/external/ext.go:26`
-  (`AddAI`), `:50` (`SyncAllPlayer`), `:61` (`RemovePlayer`), `:78` (`GameResult`).
-- Registration chain: `internal/game/manage/playermanage.go:55-72` (`AddAI`),
-  `internal/game/room/serverroom.go:121-132` (wraps the engine profile).
-- `AiPlayer` marker type: `internal/game/player/aiplayer.go:14` (struct), `:34-35`
+- v2-ext operation constants and validation:
+  `/home/lnb/RW-HPS/Go-Server/internal/game/external/protocol.go::OpRoomAddAI`
+  (`OpRoomAddAI = "room.addai"`),
+  `/home/lnb/RW-HPS/Go-Server/internal/game/external/protocol.go::OpRoomSync`
+  (`room.sync`),
+  `/home/lnb/RW-HPS/Go-Server/internal/game/external/protocol.go::OpRoomRemovePlayer`
+  (`room.removeplayer`),
+  `/home/lnb/RW-HPS/Go-Server/internal/game/external/protocol.go::OpGameResult`
+  (`game.result`); AI response field
+  `/home/lnb/RW-HPS/Go-Server/internal/game/external/protocol.go::AI`, result
+  payload `/home/lnb/RW-HPS/Go-Server/internal/game/external/protocol.go::GameResult`.
+- Backend methods forwarding to the helper:
+  `/home/lnb/RW-HPS/Go-Server/internal/game/external/ext.go::AddAI`,
+  `/home/lnb/RW-HPS/Go-Server/internal/game/external/ext.go::SyncAllPlayer`,
+  `/home/lnb/RW-HPS/Go-Server/internal/game/external/ext.go::RemovePlayer`,
+  `/home/lnb/RW-HPS/Go-Server/internal/game/external/ext.go::GameResult`.
+- Registration chain:
+  `/home/lnb/RW-HPS/Go-Server/internal/game/manage/playermanage.go::AddAI`,
+  `/home/lnb/RW-HPS/Go-Server/internal/game/room/serverroom.go::AddAI`
+  (wraps the engine profile).
+- `AiPlayer` marker type:
+  `/home/lnb/RW-HPS/Go-Server/internal/game/player/aiplayer.go::AiPlayer`
+  (struct), `/home/lnb/RW-HPS/Go-Server/internal/game/player/aiplayer.go::IsAi`
   (`IsAi() bool { return true }`); base `Player.IsAi()` returns false at
-  `internal/game/player/player.go:181-182`; remove-on-kick hook `player.go:90-94`.
-- Commands: `internal/command/clientcommands.go:146-159` (`addai`, gated by
-  `EnableAI`, calls `PlayerManage.AddAI`), `:196-230` (`ai <difficulty>`).
-- Lifecycle: `internal/data/temp/servercacheflag.go:23-26` (`ai`/`aiWarn` flags),
-  `internal/game/manage/callmanage.go:147-161` (all-AI countdown branch),
-  `:182-203` (settlement via `game.result` → `survive.player`). Flag writer gap:
-  `SetAi` (`servercacheflag.go:103`) has no callers in non-test code.
-- Protocol entries: `Go-Server/docs/HELPER-PROTOCOL.md`, v2-ext section lines
-  144-272 — operation table `:169-177`, `ai` response field `:214-230` ("the engine
-  does not trigger a player.join event for AIs"), Go-side consumers `:264-272`.
+  `/home/lnb/RW-HPS/Go-Server/internal/game/player/player.go::IsAi`;
+  remove-on-kick hook
+  `/home/lnb/RW-HPS/Go-Server/internal/game/player/player.go::RemoveOnKick`.
+- Commands:
+  `/home/lnb/RW-HPS/Go-Server/internal/command/clientcommands.go::addai`
+  (`addai`, gated by `EnableAI`, calls `PlayerManage.AddAI`),
+  `/home/lnb/RW-HPS/Go-Server/internal/command/clientcommands.go::PlayerPositionAI`
+  (`ai <difficulty>`).
+- Lifecycle:
+  `/home/lnb/RW-HPS/Go-Server/internal/data/temp/servercacheflag.go::ai` and
+  `/home/lnb/RW-HPS/Go-Server/internal/data/temp/servercacheflag.go::aiWarn`
+  (`ai`/`aiWarn` flags),
+  `/home/lnb/RW-HPS/Go-Server/internal/game/manage/callmanage.go::MaxOnlyAIGameIngTime`
+  (all-AI countdown branch),
+  `/home/lnb/RW-HPS/Go-Server/internal/game/manage/callmanage.go::SetGameOverData`
+  (settlement via `game.result` → `survive.player`). Flag writer gap: `SetAi`
+  (`/home/lnb/RW-HPS/Go-Server/internal/data/temp/servercacheflag.go::SetAi`)
+  has no callers in non-test code.
+- Protocol entries: `/home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md` —
+  v2-ext section
+  `/home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: 扩展操作（protocol v2-ext)`,
+  operation table
+  `/home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: 扩展操作一览)`,
+  `ai` response field
+  /home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: 应答字段扩展：`ai`)
+  ("the engine does not trigger a player.join event for AIs"), Go-side consumers
+  `/home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: Go 侧消费点)`.
 - History: `git log -S AddAI` shows only additive commits (`b2464c78` player entity
   chain incl. AiPlayer, `db6220bf` manage layer, `724f25d7` commands, `e8d236f8`
   v2-ext protocol layer, `7418e25a` v2-ext wiring, `6863563e` addai profile return);
