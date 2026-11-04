@@ -428,6 +428,8 @@ paths:
           description: '`invalid_manage_token` / `invalid_credentials` / not a service token'
         '404':
           description: '`user_not_found` (no proxy account for that profile name)'
+        '409':
+          description: '`mojang_uuid_already_bound` (target account already bound to a different Mojang UUID)'
 components:
   parameters:
     InternalKeyHeader:

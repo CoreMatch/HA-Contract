@@ -23,7 +23,8 @@ The following error codes are the stable registry for current HA business APIs. 
 | `email_already_registered` | Email is already registered |
 | `invalid_mojang_uuid` | Invalid Mojang UUID format |
 | `mojang_uuid_required_for_existing_user` | `mojang_uuid` missing for existing user |
-| `username_already_bound` | Username is already bound and cannot be claimed (constant defined in HRPAuth-Yggdrasil-API; no current code path returns it) |
+| `mojang_uuid_already_bound` | Force-bind target account is already bound to a different `mojang_uuid` |
+| `username_already_bound` | Username is already bound and cannot be claimed (returned by the core's `/internal/claim-user` when the username belongs to another user, passed through by `/admin/claim-user`) |
 | `captcha_disabled` | Graphical captcha is disabled |
 | `captcha_invalid` | Graphical captcha is invalid or expired |
 | `verification_code_already_sent` | Verification code sent too frequently |

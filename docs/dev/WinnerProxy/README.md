@@ -33,8 +33,6 @@ token.
 | `GET /` | startup | Fetches Yggdrasil metadata published via presence `root_metadata` |
 | `POST /services/presence` | startup | Registers with `sdk_url` and `root_metadata.yggdrasil` |
 | `POST /services/relay` | startup | Declares relay rules |
-| `POST /user/declare-email` | unused | Client method present, no active call site; endpoint no longer exists on the core |
-| `POST /user/mojang-bind-enable` | unused | Client method present, no active call site; endpoint no longer exists on the core |
 
 ## Configuration
 

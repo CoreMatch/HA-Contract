@@ -238,6 +238,8 @@ Available for creating a game account without an HRPAuth core identity.
 > `POST {upstream}/yggdrasil/api/profiles/minecraft`. Upstream `/register`
 > requires the `identifier` field, and the upstream batch path has no
 > `/yggdrasil` prefix, so these two outbound calls do not succeed against the
-> current upstream as of 2026-11-04. WinnerProxy also retains client methods
-> for `POST /user/declare-email` and `POST /user/mojang-bind-enable` with no
-> active call sites; both endpoints no longer exist on the core.
+> current upstream as of 2026-11-04. WinnerProxy's former dead client methods
+> for `POST /user/declare-email` and `POST /user/mojang-bind-enable` were
+> deleted on 2026-11-05; player-side flows use the Velocity plugin's
+> `/admin/claim-user` and `/admin/force-bind` paths instead (see
+> `openapi/hrpauth-yggdrasil-business.yaml`).
