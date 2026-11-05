@@ -632,12 +632,13 @@ paths:
         `client_credentials` service token: a participant unknown to HRPAuth
         aborts the report with `404 mca_user_not_found`, and a
         service-credential or HRPAuth outage aborts with
-        `502 oauth_hrpauth_down`. If a participant resolves to an HRPAuth
-        UID that has no local `users` row, the report aborts
-        with `409 mca_user_not_provisioned` and nothing is written (the
-        transaction rolls back). This code only types the missing-row
-        symptom; the row-provisioning mechanism itself is pending an author
-        decision (PENDING-DECISIONS item 4) — no auto-provisioning happens.
+        `502 oauth_hrpauth_down`. A participant whose resolved HRPAuth UID has
+        no local `users` row is provisioned lazily: the settlement transaction
+        inserts the row (uid taken from the verified resolution only; rating
+        fields are table defaults, never reporter-supplied) and continues.
+        `409 mca_user_not_provisioned` is answered only when that lazy
+        provisioning is impossible (e.g. the uid is held by a soft-deleted
+        row); the transaction then rolls back and nothing is written.
       tags: [Matches]
       security:
         - BearerAuth: []
