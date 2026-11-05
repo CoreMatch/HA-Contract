@@ -78,8 +78,10 @@ paths:
         clients self-registered through `POST /oauth/register`. Seeded and
         self-registered rows are confidential, `client_credentials`-only,
         `is_super=false`, `is_active=true`; existing rows are never
-        overwritten. Their tokens resolve as service tokens and satisfy
-        ops (level 2) auth checks.
+        overwritten. Seed entries whose `client_secret` equals the super
+        client secret are skipped with a warning (the root credential is
+        never copied into an ordinary client row). Their tokens resolve as
+        service tokens and satisfy ops (level 2) auth checks.
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -119,8 +121,12 @@ paths:
         exchanging the super credentials again instead of persisting the
         secret. Config-seeded rows (`oauth2.service_clients`) take
         precedence: self-registering a seeded name returns the seeded row.
-        Every call is audit-logged (caller, service, requested scopes,
-        outcome, timestamp).
+        One exception: an existing row whose stored secret equals the super
+        client secret (legacy poisoned data) is refused with `400
+        invalid_client_metadata` and an operator-actionable message — it is
+        never returned, because handing it out would distribute the root
+        credential. Every call is audit-logged (caller, service, requested
+        scopes, outcome, timestamp).
       requestBody:
         required: true
         content:
