@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MatchCoreArena Business API
-  version: 1.1.0
+  version: 1.2.0
   description: >
     Unified specification for MatchCoreArena server business interfaces.
     Authentication via HRPAuth OAuth2 Authorization Code + PKCE.
@@ -667,10 +667,59 @@ paths:
         '409': { $ref: '#/components/responses/Error' }
         '502': { $ref: '#/components/responses/Error' }
 
+  /api/matches/virtual:
+    post:
+      summary: Submit a virtual match
+      description: >
+        Records a match without any game-side connection: the caller injects
+        the match data (teams with win/lose/draw results and member UUIDs)
+        and the server settles ratings in one transaction. Requires the
+        `match:report` scope, like the game-report endpoint; when
+        `virtual_matches.enabled` is false the server answers
+        `400 mca_invalid_request`. Identity resolution, lazy user
+        provisioning and the typed error semantics are identical to
+        `POST /api/matches` (`404 mca_user_not_found`,
+        `409 mca_user_not_provisioned`, `502 oauth_hrpauth_down`).
+        Rating rules: with exactly one winning team the formulas are
+        identical to the game-report path; all-draw matches settle with
+        S=0.5 against the pooled opponent average and reset streaks.
+        `started_at`/`finished_at` accept RFC3339 and default to the
+        current time. The response carries the recorded match plus each
+        participant's rating before/delta/after.
+      tags: [Matches]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VirtualReportInput'
+      responses:
+        '201':
+          description: Virtual match recorded
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/VirtualMatchResult'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+
   /api/matches/{id}:
     get:
       summary: Get match by ID
-      description: Returns match details.
+      description: >
+        Returns match details, including the participant list with each
+        participant's rating before/delta in this match.
       tags: [Matches]
       security:
         - BearerAuth: []
@@ -734,6 +783,93 @@ paths:
                         items:
                           $ref: '#/components/schemas/Match'
         '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  # ─── Matchmaking ───────────────────────────────────────────────────────
+  /api/matchmaking/join:
+    post:
+      summary: Join the matchmaking queue
+      description: >
+        Enqueues the authenticated user for a configured match mode. One
+        queue entry per user overall; joining again answers
+        `409 mca_queue_already_joined`. Unknown modes or a disabled
+        matchmaking system answer `400 mca_invalid_request`. The user's
+        `users` row is provisioned lazily with the same trust boundary as
+        match settlement, and `rank_score` is snapshotted into the queue
+        entry. A background engine removes entries older than the
+        configured timeout and forms matches within a rating window that
+        widens with wait time; formed matches are recorded and queryable
+        via `/api/matchmaking/status`.
+      tags: [Matchmaking]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [match_type]
+              properties:
+                match_type:
+                  type: string
+                  description: Queue mode (a configured matchmaking mode, e.g. "1v1", "2v2")
+      responses:
+        '201':
+          description: Joined the queue
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/QueueEntry'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /api/matchmaking/leave:
+    delete:
+      summary: Leave the matchmaking queue
+      description: >
+        Removes the authenticated user's queue entry. Without an entry the
+        server answers `404 mca_queue_not_joined`.
+      tags: [Matchmaking]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Left the queue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/matchmaking/status:
+    get:
+      summary: Get matchmaking status
+      description: >
+        Returns the authenticated user's queue state and the recent formed
+        matches they belong to (most recent first, up to 10).
+      tags: [Matchmaking]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/MatchmakingStatus'
         '401': { $ref: '#/components/responses/Error' }
 
   # ─── Rankings ──────────────────────────────────────────────────────────
@@ -1171,18 +1307,27 @@ components:
     
     Match:
       type: object
-      required: [id, match_type, winner_team_id, survival_rate, duration_seconds, started_at, finished_at, created_at]
+      required: [id, match_type, source, map_name, winner_team_id, survival_rate, duration_seconds, started_at, finished_at, created_at]
       properties:
         id:
           type: integer
           format: int64
         match_type:
           type: string
+        source:
+          type: string
+          enum: [game, virtual]
+          description: Match origin — game server report or virtual match
+        map_name:
+          type: string
+          description: Optional map identifier (empty when not provided)
         winner_team_id:
           type: string
+          description: Winning team ID (empty for draws)
         survival_rate:
           type: number
           format: double
+          description: Winning team survival rate (0 for draws)
         duration_seconds:
           type: integer
         started_at:
@@ -1194,6 +1339,185 @@ components:
         created_at:
           type: string
           format: date-time
+        participants:
+          type: array
+          description: >
+            Participant details with per-match rating movement; populated by
+            GET /api/matches/{id}, omitted in list responses.
+          items:
+            $ref: '#/components/schemas/ParticipantDetail'
+
+    ParticipantDetail:
+      type: object
+      required: [uid, team_id, is_winner, is_draw, rank_score_before, rank_score_delta, survival_time, kills, deaths]
+      properties:
+        uid:
+          type: integer
+          format: int64
+          description: Participant HRPAuth UID
+        team_id:
+          type: string
+        is_winner:
+          type: boolean
+        is_draw:
+          type: boolean
+          description: True for virtual-match draws (game reports are always false)
+        rank_score_before:
+          type: integer
+        rank_score_delta:
+          type: integer
+        survival_time:
+          type: integer
+        kills:
+          type: integer
+        deaths:
+          type: integer
+
+    VirtualReportInput:
+      type: object
+      required: [match_type, teams]
+      properties:
+        match_type:
+          type: string
+          description: Match type (e.g. "1v1", "2v2")
+        teams:
+          type: array
+          minItems: 2
+          description: >
+            At least two teams; at most one team may have result `win`, and
+            when one exists the other teams must be `lose` (no win/draw
+            mixing). All-draw matches are allowed.
+          items:
+            $ref: '#/components/schemas/VirtualTeamInput'
+        duration_seconds:
+          type: integer
+          default: 0
+        map_name:
+          type: string
+          description: Optional map identifier
+        started_at:
+          type: string
+          format: date-time
+          description: RFC3339; defaults to the current time
+        finished_at:
+          type: string
+          format: date-time
+          description: RFC3339; defaults to the current time
+
+    VirtualTeamInput:
+      type: object
+      required: [team_id, result, members]
+      properties:
+        team_id:
+          type: string
+        result:
+          type: string
+          enum: [win, lose, draw]
+        initial_count:
+          type: integer
+          description: Team initial member count (>= 1)
+        alive_count:
+          type: integer
+          description: Team survivor count at match end (0..initial_count)
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/ParticipantReport'
+
+    VirtualMatchResult:
+      type: object
+      required: [match, participants]
+      properties:
+        match:
+          $ref: '#/components/schemas/Match'
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/ParticipantSettlement'
+
+    ParticipantSettlement:
+      type: object
+      required: [uid, uuid, team_id, result, rank_score_before, rank_score_delta, rank_score_after]
+      properties:
+        uid:
+          type: integer
+          format: int64
+        uuid:
+          type: string
+          description: Participant Minecraft UUID as submitted
+        team_id:
+          type: string
+        result:
+          type: string
+          enum: [win, lose, draw]
+        rank_score_before:
+          type: integer
+        rank_score_delta:
+          type: integer
+        rank_score_after:
+          type: integer
+          description: max(0, rank_score_before + rank_score_delta)
+
+    QueueEntry:
+      type: object
+      required: [uid, match_type, rank_score, enqueued_at]
+      properties:
+        uid:
+          type: integer
+          format: int64
+        match_type:
+          type: string
+        rank_score:
+          type: integer
+          description: Rating snapshot taken at join time
+        enqueued_at:
+          type: string
+          format: date-time
+
+    MatchmakingStatus:
+      type: object
+      required: [in_queue, recent_groups]
+      properties:
+        in_queue:
+          type: boolean
+        queue_entry:
+          $ref: '#/components/schemas/QueueEntry'
+        recent_groups:
+          type: array
+          description: Formed matches containing the user, most recent first (up to 10)
+          items:
+            $ref: '#/components/schemas/FormedGroup'
+
+    FormedGroup:
+      type: object
+      required: [group_id, match_type, formed_at, members]
+      properties:
+        group_id:
+          type: integer
+          format: int64
+        match_type:
+          type: string
+        formed_at:
+          type: string
+          format: date-time
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/GroupMember'
+
+    GroupMember:
+      type: object
+      required: [uid, team_id, rank_score]
+      properties:
+        uid:
+          type: integer
+          format: int64
+        team_id:
+          type: string
+          description: Assigned team label (A/B/C...)
+        rank_score:
+          type: integer
+          description: Rating at match formation
     
     # ─── Rankings ──────────────────────────────────────────────────────────
     Ranking:
