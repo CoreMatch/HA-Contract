@@ -23,8 +23,13 @@ prefix.
 Yggdrasil-plane calls go to the configured upstream base URL
 (`upstreams.hrpauth.url`, default includes the `/yggdrasil-api` relay
 prefix); management-plane calls go to the management base URL
-(`hrpauth.url`, the core root). All calls carry an OAuth2 client-credentials
-Bearer token; proxy registration additionally carries the `X-Internal-Key`.
+(`hrpauth.url`, the core root). Business calls carry an OAuth2
+client-credentials Bearer token; proxy registration additionally carries
+the `X-Internal-Key`. Startup credential resolution is the exception: the
+presence bonjour and `POST /oauth/register` go out without a Bearer token
+(the register call authenticates with `client_secret_basic`), because the
+configured credentials may still be the super client and the super secret
+must never ride along on anything but the exchange itself.
 
 | Call | Used by | Notes |
 |---|---|---|
@@ -32,6 +37,7 @@ Bearer token; proxy registration additionally carries the `X-Internal-Key`.
 | `GET /sessionserver/session/minecraft/profile/{uuid}` | profile query | |
 | `POST /api/profiles/minecraft` | batch query | The base URL carries the `/yggdrasil-api` relay prefix and the relay strips it. Upstream failures surface as 502 with an explicit `{"error": ...}` reason |
 | `POST /internal/proxy-register` | proxy registration (hasJoined step 3) | Body `{username, password, mojang_uuid}`; authenticated with `X-Internal-Key` (contract `hrpauth-yggdrasil-business.yaml` `/internal/proxy-register`). Consumes `profile_id` from the envelope response |
+| `POST /oauth/register` | startup credential resolution | RFC 7591 protected registration (`client_secret_basic`): classifies the configured credentials — when they are the core's built-in super client they are exchanged for WinnerProxy's own low-privilege client (stable `client_id`/`client_secret` via get-or-create) and the config file is rewritten with it; already-low-privilege credentials are verified via `POST /oauth/token` and reused unchanged. Resolution failure aborts startup (contract `hrpauth-business.yaml` `/oauth/register`) |
 | `POST /services/auth-key` | startup, and after any 401 from proxy registration | Fetches/re-fetches the service's `X-Internal-Key` (core re-issues the key on every call) |
 | `GET /` | startup | Fetches Yggdrasil metadata published via presence `root_metadata` |
 | `POST /services/presence` | startup | Registers with `security_level: 0` and `root_metadata.yggdrasil` |
