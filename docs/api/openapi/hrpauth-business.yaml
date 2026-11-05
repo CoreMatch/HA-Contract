@@ -67,6 +67,17 @@ paths:
   /oauth/token:
     post:
       summary: OAuth2 token endpoint
+      description: >
+        Supported grants: `authorization_code` (PKCE S256), `refresh_token`,
+        `client_credentials`. Service clients calling `client_credentials`
+        are either the built-in super client (credentials from core config
+        `oauth2.super_client_id` / `super_client_secret`) or per-service
+        clients declared in core config `oauth2.service_clients`
+        (`client_id` / `client_secret` / optional `name`) and seeded
+        idempotently into `oauth2_clients` at startup (confidential,
+        `client_credentials`-only, `is_super=false`, `is_active=true`;
+        existing rows are never overwritten). Their tokens resolve as
+        service tokens and satisfy ops (level 2) auth checks.
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }

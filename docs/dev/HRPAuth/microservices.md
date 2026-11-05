@@ -94,6 +94,26 @@ HRPAuth uses a dual-layered authentication mechanism for microservice communicat
 1.  **OAuth2 (Standard Auth)**: Used for all microservice -> HRPAuth Core API calls. Microservices must provide a Bearer token obtained via the `client_credentials` grant.
 2.  **Internal Key (Temporary Secret)**: Used for HRPAuth Core -> microservice callback calls. This key is dynamic, short-lived, and exists only in memory.
 
+### Service Client Registration (`oauth2.service_clients`)
+
+A microservice's `client_credentials` identity is a row in the core's
+`oauth2_clients` table. Service clients are declared in the HRPAuth core
+config under `oauth2.service_clients` — a list of
+`{ client_id, client_secret, name? }` entries — and are seeded idempotently
+at core startup:
+
+- A missing row is created with `type=confidential`,
+  `grant_types=["client_credentials"]`, `is_super=false`, `is_active=true`.
+- An existing row is never modified (a manually rotated secret stays put);
+  a config/DB mismatch only logs a warning.
+- An empty (or absent) list seeds nothing.
+
+The built-in super client (`oauth2.super_client_id` /
+`oauth2.super_client_secret`) remains available as the shared service
+identity. Tokens issued to any of these clients resolve as service tokens
+and satisfy ops (level 2) auth checks on core endpoints such as
+`GET /services/users/{uuid}`.
+
 ### Temporary Key Acquisition (`POST /services/auth-key`)
 
 After a microservice has registered its presence, it must request a temporary internal key from HRPAuth.
