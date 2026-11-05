@@ -26,9 +26,9 @@ protocol (JSON lines over the helper's stdin/stdout, protocol version 2).
   relay (`hello`, `room.create/destroy/start/stop/status`, `conn.open/close/packet`,
   plus `player.*`/`chat`/`command` events back to Go). v2-ext adds the operations
   that upstream performs on in-process engine objects (`room.addai`, `room.sync`,
-  `room.removeplayer`, `game.result`; later `room.settings`), without changing the
-  wire version — a v2-only helper answers `unsupported` and Go degrades those calls
-  to logged no-ops.
+  `room.removeplayer`, `game.result`, `room.settings`), without changing the wire
+  version — a v2-only helper answers `unsupported` and Go degrades those calls to
+  logged no-ops.
 - **Degradation without a helper**: the server still starts and serves connections.
   Match start returns the readable error `game: no simulation backend available`.
 
@@ -37,7 +37,7 @@ protocol (JSON lines over the helper's stdin/stdout, protocol version 2).
 - Building and deploying the helper (JDK 17 required; JDK 25 crashes the Kotlin
   2.0.0 compiler) is part of operating a full-featured server; a host without it
   runs a degraded server that cannot start matches.
-- Every engine-side capability needs a protocol operation; capabilities added later
+- Every engine-side capability needs a protocol operation; new capabilities
   (e.g. room settings for the Cascade facade) extend v2-ext rather than the Go
   process.
 - Misconfiguration is checked statically at startup (parameters present, files
@@ -52,7 +52,7 @@ protocol (JSON lines over the helper's stdin/stdout, protocol version 2).
 
 All paths absolute into the RW-HPS Go-Server checkout
 (`/home/lnb/RW-HPS/Go-Server`); anchors verified at commit `baabca44` on
-2026-11-05 (original audit at `b0fbccfa`).
+2026-11-05.
 
 - Boundary rationale:
   `/home/lnb/RW-HPS/Go-Server/internal/game/seam.go::Simulation` — upstream
@@ -88,6 +88,5 @@ All paths absolute into the RW-HPS Go-Server checkout
   (broken helper config → warn + fall back to no backend);
   `/home/lnb/RW-HPS/Go-Server/internal/app/bootstrap.go::ErrNotImplemented`
   ("没有后端时 start 会返回 ErrNotImplemented").
-- JDK constraint: recorded in the 2026-11-04 helper landing notes (JDK 25 crashes
-  the Kotlin 2.0.0 compiler; build with JDK 17). Not independently re-verified in
-  this pass.
+- JDK constraint: JDK 25 crashes the Kotlin 2.0.0 compiler; build with JDK 17.
+  Not independently re-verified.

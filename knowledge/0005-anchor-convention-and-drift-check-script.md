@@ -8,10 +8,9 @@ Accepted
 
 ## Context
 The ADR-style knowledge bases cite code with `path/to/file:Lx-Ly` line
-references. Every code change shifts those line numbers, so citations drift
-silently and the entries rot (observed repeatedly across repositories in the
-2026-11-04/05 audits). Line numbers are the least stable identifier available;
-symbol names and key names survive most edits.
+references. Every code change shifts those line numbers, so citations
+drift silently and the entries rot. Line numbers are the least stable
+identifier available; symbol names and key names survive most edits.
 
 ## Decision
 Knowledge entries anchor evidence in one of four formats, in order of
@@ -76,8 +75,5 @@ target is absent (they stay fully enforced in a workspace checkout).
     pairs and similar non-path tokens are skipped by the same rule).
 
 ## Evidence
-- scripts/check-knowledge-anchors.sh (added by this commit; run from any
-  repository root, exit 0 = clean, 1 = problems listed, 2 = no knowledge/)
-- First runs on 2026-11-05: HA-Contract knowledge flagged its unmarked
-  RW-HPS cross-repo citations; Cascade flagged 7 references broken by the
-  dead-code cleanup (commit 58528ce); HRPAuth ran clean (79 anchors).
+- scripts/check-knowledge-anchors.sh (run from any repository root,
+  exit 0 = clean, 1 = problems listed, 2 = no knowledge/)

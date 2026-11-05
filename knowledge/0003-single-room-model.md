@@ -49,7 +49,7 @@ by the author on 2026-11-04):
 ## Evidence
 
 - Singleton wiring (RW-HPS Go-Server at `/home/lnb/RW-HPS/Go-Server`; anchors
-  verified at commit `baabca44` on 2026-11-05, original audit at `b0fbccfa`):
+  verified at commit `baabca44` on 2026-11-05):
   `/home/lnb/RW-HPS/Go-Server/internal/app/bootstrap.go::NewServerRoom`
   (`room.NewServerRoom(game.NewGameSession(global.ConfigServer.ServerID,
   game.Backend))` — RoomID = ServerID),
