@@ -1,7 +1,6 @@
 # ADR-0004: Simulation State Ownership
 
 - **Status**: accepted
-- **Date**: 2026-11-04
 
 ## Context
 
@@ -51,8 +50,7 @@ Live facts about the match are read from the engine on demand, not cached in Go:
 ## Evidence
 
 All paths absolute into the RW-HPS Go-Server checkout
-(`/home/lnb/RW-HPS/Go-Server`); anchors verified at commit `baabca44` on
-2026-11-05.
+(`/home/lnb/RW-HPS/Go-Server`); anchors verified at commit `baabca44`.
 
 - Engine authority and live reads:
   `/home/lnb/RW-HPS/Go-Server/internal/game/seam.go::Simulation` (`Simulation`

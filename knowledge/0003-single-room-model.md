@@ -1,7 +1,6 @@
 # ADR-0003: Single-Room Model (RoomID = ServerID)
 
 - **Status**: accepted
-- **Date**: 2026-11-04
 
 ## Context
 
@@ -16,7 +15,7 @@ and exposes a multi-room CRUD facade (`/rooms`, `/rooms/{code}`, `.../settings`,
 ## Decision
 
 The Go server keeps a **single room** (decision record D-5, `accepted`, re-affirmed
-by the author on 2026-11-04):
+by the author):
 
 - One `ServerRoom` is created at boot and stored in a package-level singleton slot
   (`room.SetDefault` / `room.Default()`); connections take the current room at
@@ -49,7 +48,7 @@ by the author on 2026-11-04):
 ## Evidence
 
 - Singleton wiring (RW-HPS Go-Server at `/home/lnb/RW-HPS/Go-Server`; anchors
-  verified at commit `baabca44` on 2026-11-05):
+  verified at commit `baabca44`):
   `/home/lnb/RW-HPS/Go-Server/internal/app/bootstrap.go::NewServerRoom`
   (`room.NewServerRoom(game.NewGameSession(global.ConfigServer.ServerID,
   game.Backend))` — RoomID = ServerID),
@@ -61,7 +60,7 @@ by the author on 2026-11-04):
   (`Default`).
 - Decision record D-5 (author decision log
   `/home/lnb/SamuelPortal-docs/RW-HPS-GO-DECISIONS.md (field: D-5)`, entry D-5,
-  `accepted`, author re-check 2026-11-04): singleton slot chosen over dependency
+  `accepted`, author re-check): singleton slot chosen over dependency
   injection; "若将来要支持一个 Go 进程多个独立房间，槽位要换成注册表" (multi-room
   would replace the slot with a registry).
 - Cascade routing (Cascade repository at `/home/lnb/Cascade`, checked locally):

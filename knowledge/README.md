@@ -22,7 +22,7 @@ entry, never the contract, and surface the conflict to the owner.
 
 Each entry is one page in ADR style:
 
-- **Status** (`accepted` / `superseded` / ...), **Date**
+- **Status** (`accepted` / `superseded` / ...)
 - **Context** — the problem and constraints
 - **Decision** — what was chosen
 - **Consequences** — including costs and limitations
@@ -32,10 +32,10 @@ Each entry is one page in ADR style:
 
 ## Entries
 
-| # | Title | Status | Date |
-|---|-------|--------|------|
-| [0001](0001-ai-behavior-runs-in-the-jvm-engine.md) | AI Behavior Runs Entirely in the JVM Engine | accepted | 2026-11-04 |
-| [0002](0002-game-engine-as-external-dependency.md) | The Game Engine Is an External Dependency | accepted | 2026-11-04 |
-| [0003](0003-single-room-model.md) | Single-Room Model (RoomID = ServerID) | accepted | 2026-11-04 |
-| [0004](0004-simulation-state-ownership.md) | Simulation State Ownership | accepted | 2026-11-04 |
-| [0005](0005-anchor-convention-and-drift-check-script.md) | Knowledge Anchor Convention and the Drift-Check Script | accepted | 2026-11-05 |
+| # | Title | Status |
+|---|-------|--------|
+| [0001](0001-ai-behavior-runs-in-the-jvm-engine.md) | AI Behavior Runs Entirely in the JVM Engine | accepted |
+| [0002](0002-game-engine-as-external-dependency.md) | The Game Engine Is an External Dependency | accepted |
+| [0003](0003-single-room-model.md) | Single-Room Model (RoomID = ServerID) | accepted |
+| [0004](0004-simulation-state-ownership.md) | Simulation State Ownership | accepted |
+| [0005](0005-anchor-convention-and-drift-check-script.md) | Knowledge Anchor Convention and the Drift-Check Script | accepted |
