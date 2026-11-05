@@ -77,6 +77,7 @@ The following error codes are the stable registry for current HA business APIs. 
 | `oauth_invalid_code_challenge` | Invalid or missing PKCE code challenge |
 | `oauth_insufficient_scope` | Token does not carry the required scope |
 | `oauth_access_denied` | Access denied by OAuth2 authorization policy |
+| `invalid_client_metadata` | Self-service client registration metadata is invalid (HRPAuth core `POST /oauth/register`; the RFC 7591 §3.2.2 error code): the service name is not presence-registered, a requested scope lies outside the service's `oauth2.service_scope_allowlist` entry (or is a super/`db.*` scope), `client_name` is missing, or the body is malformed (HTTP 400) |
 | `oauth_login_required` | Missing Bearer access token |
 | `login_ticket_required` | Missing login ticket |
 | `invalid_login_ticket` | Login ticket is invalid or expired |

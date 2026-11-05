@@ -94,19 +94,38 @@ HRPAuth uses a dual-layered authentication mechanism for microservice communicat
 1.  **OAuth2 (Standard Auth)**: Used for all microservice -> HRPAuth Core API calls. Microservices must provide a Bearer token obtained via the `client_credentials` grant.
 2.  **Internal Key (Temporary Secret)**: Used for HRPAuth Core -> microservice callback calls. This key is dynamic, short-lived, and exists only in memory.
 
-### Service Client Registration (`oauth2.service_clients`)
+### Service Client Registration
 
 A microservice's `client_credentials` identity is a row in the core's
-`oauth2_clients` table. Service clients are declared in the HRPAuth core
-config under `oauth2.service_clients` — a list of
-`{ client_id, client_secret, name? }` entries — and are seeded idempotently
-at core startup:
+`oauth2_clients` table. Rows come from two coexisting sources — config
+seeding takes precedence, self-service registration is the fallback:
 
-- A missing row is created with `type=confidential`,
-  `grant_types=["client_credentials"]`, `is_super=false`, `is_active=true`.
-- An existing row is never modified (a manually rotated secret stays put);
-  a config/DB mismatch only logs a warning.
-- An empty (or absent) list seeds nothing.
+1. **Config seeding (`oauth2.service_clients`)** — service clients declared
+   in the HRPAuth core config under `oauth2.service_clients` — a list of
+   `{ client_id, client_secret, name? }` entries — are seeded idempotently
+   at core startup:
+   - A missing row is created with `type=confidential`,
+     `grant_types=["client_credentials"]`, `is_super=false`, `is_active=true`.
+   - An existing row is never modified (a manually rotated secret stays put);
+     a config/DB mismatch only logs a warning.
+   - An empty (or absent) list seeds nothing.
+
+2. **Self-service registration (`POST /oauth/register`)** — a satellite
+   holding the super client credentials obtains its own low-privilege
+   client without any operator-managed secret. The endpoint is an RFC 7591
+   *protected registration*: the super client authenticates with
+   `client_secret_basic` (RFC 6749 §2.3.1); user tokens are rejected. The
+   request body carries `client_name` (a presence-registered service name,
+   which becomes the `client_id`) and an optional space-separated `scope`
+   bounded by the core config `oauth2.service_scope_allowlist` entry of
+   that service (super and `db.*` scopes are never grantable). Success
+   returns `201` with `client_id`, `client_secret`, `client_id_issued_at`
+   and `client_secret_expires_at = 0` (never expires). Idempotency is a
+   deployment extension, not RFC 7591 behavior: re-registering returns the
+   same `client_id` + `client_secret` unchanged (no new row, no rotation),
+   so a satellite can re-derive its credentials after every restart
+   instead of persisting them. Self-registering a config-seeded name
+   returns the seeded row. Every call is audit-logged.
 
 The built-in super client (`oauth2.super_client_id` /
 `oauth2.super_client_secret`) remains available as the shared service

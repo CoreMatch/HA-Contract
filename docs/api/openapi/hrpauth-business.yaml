@@ -70,14 +70,16 @@ paths:
       description: >
         Supported grants: `authorization_code` (PKCE S256), `refresh_token`,
         `client_credentials`. Service clients calling `client_credentials`
-        are either the built-in super client (credentials from core config
-        `oauth2.super_client_id` / `super_client_secret`) or per-service
+        are the built-in super client (credentials from core config
+        `oauth2.super_client_id` / `super_client_secret`), per-service
         clients declared in core config `oauth2.service_clients`
         (`client_id` / `client_secret` / optional `name`) and seeded
-        idempotently into `oauth2_clients` at startup (confidential,
-        `client_credentials`-only, `is_super=false`, `is_active=true`;
-        existing rows are never overwritten). Their tokens resolve as
-        service tokens and satisfy ops (level 2) auth checks.
+        idempotently into `oauth2_clients` at startup, or per-service
+        clients self-registered through `POST /oauth/register`. Seeded and
+        self-registered rows are confidential, `client_credentials`-only,
+        `is_super=false`, `is_active=true`; existing rows are never
+        overwritten. Their tokens resolve as service tokens and satisfy
+        ops (level 2) auth checks.
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -88,6 +90,60 @@ paths:
       summary: Revoke OAuth2 access token
       responses:
         '200': { description: Success }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /oauth/register:
+    post:
+      summary: Self-service service-client registration (RFC 7591 protected registration)
+      description: >
+        RFC 7591 protected client registration. The initial access
+        credential is the built-in super client, authenticated with
+        `client_secret_basic` (RFC 6749 §2.3.1, `Authorization: Basic`);
+        user tokens and any other caller are rejected with `401
+        oauth_invalid_client`. `client_name` must be a service already
+        registered via `/services/presence`, and `scope` (optional,
+        space-separated) must stay inside that service's core config
+        `oauth2.service_scope_allowlist` entry intersected with the known
+        service scope set — super privileges and `db.*` scopes can never
+        be granted through this endpoint. Issued clients are fixed to
+        `type=confidential`, `grant_types=["client_credentials"]`,
+        `is_super=false`, `is_active=true`, with `client_id` equal to the
+        service name. Success returns `201` with `client_id`,
+        `client_secret`, `client_id_issued_at` (unix seconds) and
+        `client_secret_expires_at = 0` (the secret never expires
+        automatically). Idempotency is a **deployment extension**, not
+        RFC 7591 behavior (which issues a fresh client per registration):
+        re-registering an existing service returns the same `client_id`
+        and `client_secret` unchanged — no new row, no secret rotation —
+        so a satellite can re-derive its credentials after a restart by
+        exchanging the super credentials again instead of persisting the
+        secret. Config-seeded rows (`oauth2.service_clients`) take
+        precedence: self-registering a seeded name returns the seeded row.
+        Every call is audit-logged (caller, service, requested scopes,
+        outcome, timestamp).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_name]
+              properties:
+                client_name:
+                  type: string
+                  description: Presence-registered service name; becomes the `client_id`.
+                scope:
+                  type: string
+                  description: >
+                    Optional space-separated scope request bounded by the
+                    service's allowlist; omitted means the full allowlist.
+      responses:
+        '201':
+          description: >
+            Client registered or returned unchanged (get-or-create
+            extension); body carries `client_id`, `client_secret`,
+            `client_id_issued_at`, `client_secret_expires_at` (`0` =
+            never expires) and the granted `scope`.
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
   /forgot-password:
