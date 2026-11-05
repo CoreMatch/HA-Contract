@@ -113,6 +113,8 @@ The following error codes are the stable registry for current HA business APIs. 
 | `mca_team_name_taken` | MatchCoreArena: team name is already in use |
 | `mca_not_team_leader` | MatchCoreArena: only the team leader can perform this action |
 | `mca_match_not_found` | MatchCoreArena: match does not exist |
+| `mca_queue_already_joined` | MatchCoreArena: the user already has a matchmaking queue entry (HTTP 409); one queue entry per user overall |
+| `mca_queue_not_joined` | MatchCoreArena: the user has no matchmaking queue entry to leave (HTTP 404) |
 | `cascade_room_conflict` | Cascade management API: a room code is claimed by more than one backend and cannot be routed |
 | `cascade_backend_unavailable` | Cascade management API: the owning backend is unhealthy or unreachable, so the request cannot be forwarded |
 | `cascade_invalid_internal_key` | Cascade management API: the `X-Internal-Key` header is missing or does not match the key issued by HRPAuth Core |
