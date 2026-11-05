@@ -108,6 +108,10 @@ seeding takes precedence, self-service registration is the fallback:
      `grant_types=["client_credentials"]`, `is_super=false`, `is_active=true`.
    - An existing row is never modified (a manually rotated secret stays put);
      a config/DB mismatch only logs a warning.
+   - An entry whose `client_secret` equals the super client secret is
+     skipped with a warning (constant-time comparison): the root credential
+     is never copied into an ordinary client row; the affected service
+     obtains its own credentials through self-service registration instead.
    - An empty (or absent) list seeds nothing.
 
 2. **Self-service registration (`POST /oauth/register`)** — a satellite
