@@ -1039,7 +1039,15 @@ paths:
       summary: Look up a user by UUID (internal, service-to-service)
       description: >
         Requires ops (level 2) auth. Used by satellite services to pull user
-        metadata from the core.
+        metadata from the core. The gate is the auth level, resolved from a
+        `client_credentials` service token (SubjectType `service`, e.g. the
+        built-in super client's credentials — the same pattern
+        HRPAuth-Yggdrasil-API uses via its `core_api` credentials); such
+        tokens carry the service scope set including `user.read.as-service`.
+        Registered consumer: MatchCoreArena resolves match-report
+        participant UUIDs to UIDs here (see
+        `matchcorearena-business.yaml` POST /api/matches). Unknown UUIDs
+        answer `404 user_not_found`.
       parameters:
         - in: path
           name: uuid

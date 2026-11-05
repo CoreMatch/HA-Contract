@@ -102,9 +102,9 @@ The following error codes are the stable registry for current HA business APIs. 
 | `oauth_refresh_failed` | OAuth2 refresh token is invalid, expired, or revoked. Returned by MatchCoreArena `POST /api/auth/refresh`; in the HRPAuth core refresh failures surface as `oauth_invalid_grant`. |
 | `oauth_revoke_failed` | OAuth2 token revocation request failed. Returned by MatchCoreArena `POST /api/auth/logout`. Defined in the HRPAuth core registry only; no core endpoint returns it. |
 | `oauth_rate_limited` | Too many auth requests; retry later (MatchCoreArena login-ticket flow). |
-| `oauth_hrpauth_down` | HRPAuth upstream unavailable during an auth flow (MatchCoreArena). The code string was misspelled `oauth_hrpaauth_down` until the spelling fix; no external consumer ever used the old form. |
+| `oauth_hrpauth_down` | HRPAuth upstream unavailable during an auth flow or a service-to-service call (MatchCoreArena; since 2026-11-05 also the settlement identity-resolution failure: service credentials unavailable or HRPAuth outage, HTTP 502). The code string was misspelled `oauth_hrpaauth_down` until the spelling fix; no external consumer ever used the old form. |
 | `mca_invalid_request` | MatchCoreArena: general parameter error |
-| `mca_user_not_found` | MatchCoreArena: user does not exist |
+| `mca_user_not_found` | MatchCoreArena: user does not exist. Since 2026-11-05 also returned (HTTP 404) when a match-report participant's UUID is unknown to HRPAuth (`GET /services/users/{uuid}` answered 404). |
 | `mca_user_not_provisioned` | MatchCoreArena: a match-report participant resolved to an HRPAuth UID but has no local `users` row (HTTP 409; the payload is valid, the conflict is with server-side resource state). This only types the symptom — the row-provisioning mechanism itself is still pending an author decision (PENDING-DECISIONS item 4); no auto-provisioning was introduced. |
 | `mca_friend_not_found` | MatchCoreArena: friend relationship does not exist |
 | `mca_friend_request_exists` | MatchCoreArena: friend request already exists |
