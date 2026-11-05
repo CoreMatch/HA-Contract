@@ -1,7 +1,7 @@
 # 0006. MCA Calls `POST /user/lookup-uuid` — Endpoint Never Existed
 
 ## Status
-Drift record — pending author decision (no code changed as of 2026-11-05).
+Drift record — RESOLVED 2026-11-05 via option C (see Resolution).
 
 ## Date
 2026-11-05
@@ -67,3 +67,18 @@ memo (MCA knowledge 0003) was never matched by a server-side counterpart.
 All three options change either protocol semantics (new public lookup
 dimension) or deployment credentials, so per the minimal-change rule none was
 applied; the author picks A/B/C.
+
+## Resolution (2026-11-05)
+
+The author chose **option C**. MatchCoreArena-Server no longer calls
+`/user/lookup-uuid` (the path never existed; nothing is registered under it):
+`LookupUserByUUID` now calls the contracted ops-level
+`GET /services/users/{uuid}` with a `client_credentials` service token
+(MCA-Server `feat/service-identity-lookup`, merged as `3d1cbaa` + wiring
+follow-up `e0e6f00`, config 1.5.0 `auth.hrpauth.service_client_id/secret`).
+The service credentials are the HRPAuth built-in super-client pair, injected
+by deployment (same source as HRPAuth-Yggdrasil-API's `core_api`
+credentials); no new public endpoint was added and `/user/lookup` is
+unchanged. Resolution failures are typed: unknown UUID →
+`404 mca_user_not_found`, service-credential/upstream failure →
+`502 oauth_hrpauth_down` (settlement aborts atomically either way).
