@@ -20,7 +20,7 @@ implements AI behavior. Go contributes only three kinds of adaptation code:
 1. **Command forwarding** — AI creation and engine-side operations are forwarded to
    the helper as v2-ext protocol operations: `room.addai`, `room.sync`,
    `room.removeplayer`, `game.result` (the four D-9 extensions; a fifth operation
-   `room.settings` was added later for room settings and is not AI behavior).
+   `room.settings` covers room settings and is not AI behavior).
 2. **Profile registration** — the engine creates the AI; the created profile is
    returned in the `room.addai` response (`ai` field: PlayerProfile + `position`)
    and registered into the room roster on the Go side, wrapped as the `AiPlayer`
@@ -36,10 +36,9 @@ implements AI behavior. Go contributes only three kinds of adaptation code:
 - AI capability is exactly as portable as the helper protocol: with a v2-ext helper,
   `addai` works end to end; without a helper, `addai` degrades with a "not portable"
   message and the server keeps running.
-- AI-related Go code is small (on the order of 250–300 lines per the 2026-11-04
-  audit) but load-bearing: deleting it breaks the `addai` command, AI removal, the
-  all-AI match lifecycle, and settlement broadcasting. There is no redundant AI
-  implementation to delete.
+- AI-related Go code is small (on the order of 250–300 lines) but load-bearing:
+  deleting it breaks the `addai` command, AI removal, the all-AI match lifecycle,
+  and settlement broadcasting. There is no redundant AI implementation to delete.
 - Difficulty handling is split: per-player difficulty of existing AIs is Go-side
   bookkeeping (`SetAiDifficulty`), while the engine default difficulty for newly
   created AIs is engine-side and answered "not portable" by the `ai <difficulty>`
@@ -53,7 +52,7 @@ implements AI behavior. Go contributes only three kinds of adaptation code:
 
 All paths absolute into the RW-HPS Go-Server checkout
 (`/home/lnb/RW-HPS/Go-Server`); anchors verified at commit `baabca44` on
-2026-11-05 (original audit at `b0fbccfa`).
+2026-11-05.
 
 - v2-ext operation constants and validation:
   `/home/lnb/RW-HPS/Go-Server/internal/game/external/protocol.go::OpRoomAddAI`
@@ -106,10 +105,6 @@ All paths absolute into the RW-HPS Go-Server checkout
   /home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: 应答字段扩展：`ai`)
   ("the engine does not trigger a player.join event for AIs"), Go-side consumers
   `/home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: Go 侧消费点)`.
-- History: `git log -S AddAI` shows only additive commits (`b2464c78` player entity
-  chain incl. AiPlayer, `db6220bf` manage layer, `724f25d7` commands, `e8d236f8`
-  v2-ext protocol layer, `7418e25a` v2-ext wiring, `6863563e` addai profile return);
-  no commit ever removed an AI implementation.
 - Audit conclusion (2026-11-04, full sweep of AI/bot-related Go code): no AI
   behavior implementation exists on the Go side; all AI logic executes in the helper
   JVM engine; all Go AI code is forwarding/registration/lifecycle adaptation.
