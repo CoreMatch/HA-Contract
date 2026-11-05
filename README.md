@@ -81,7 +81,7 @@ blocks so they stay visible.
 ## Knowledge Anchors (Drift Check)
 
 The ADR-style knowledge bases cite code with stable anchors (symbol / field /
-time-point / line — see [knowledge/0005](knowledge/0005-anchor-convention-and-drift-check-script.md)).
+line — see [knowledge/0005](knowledge/0005-anchor-convention-and-drift-check-script.md)).
 [scripts/check-knowledge-anchors.sh](scripts/check-knowledge-anchors.sh)
 verifies every anchor mechanically, and CI enforces it on every push/PR via
 [.github/workflows/knowledge-anchors.yml](.github/workflows/knowledge-anchors.yml)

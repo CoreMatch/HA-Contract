@@ -13,7 +13,7 @@ drift silently and the entries rot. Line numbers are the least stable
 identifier available; symbol names and key names survive most edits.
 
 ## Decision
-Knowledge entries anchor evidence in one of four formats, in order of
+Knowledge entries anchor evidence in one of three formats, in order of
 preference:
 
 1. **Symbol anchor** — a file path, then `::`, then a symbol name, e.g.
@@ -24,11 +24,7 @@ preference:
    `docs/api/openapi/cascade-backend-v1.yaml (field: /rooms)`. Used for config
    templates, YAML sections, and generated files that have no code symbol.
    Verified by grepping the key name in the file.
-3. **Time-point anchor** — `path/to/file.ext:Lx-Ly @ <commit>`. Used only
-   when line numbers must stay exact for a historical citation (frozen
-   snapshots, quote verification, deleted code). Verified against that
-   commit's tree, never the working tree.
-4. **Line anchor** — `path/to/file.ext:Lx-Ly` (the markdown-link spelling
+3. **Line anchor** — `path/to/file.ext:Lx-Ly` (the markdown-link spelling
    `path/to/file.ext#Lx-Ly` is recognized as equivalent). Last resort for
    current-state citations that have neither a symbol nor a key name;
    expected to drift and to be repaired by the check below. Colons inside
@@ -63,8 +59,6 @@ target is absent (they stay fully enforced in a workspace checkout).
 - Costs and limitations:
   - Symbol anchors break on renames; the checker then reports the symbol as
     missing, which is exactly the intended early warning.
-  - Time-point anchors never drift but also never update; they are historical
-    records, not current-state claims. Entries must say which they are.
   - The checker verifies existence (file/symbol/key/line count), not
     semantics; a citation can still be contextually wrong. Human review
     remains necessary.
