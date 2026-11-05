@@ -39,6 +39,7 @@ The service integrates with HRPAuth Core via the **Microservice Extension Layer*
 ### 2.2 Authentication & Security
 - **Inbound Auth (from Core)**: Internal callbacks (e.g., `GET /internal/heartbeat`) are authenticated via the `X-Internal-Key` header.
 - **Outbound Auth (to Core)**: Calls to Core APIs require an OAuth2 Bearer token (Ops level 2) obtained via `POST /services/auth-key`.
+- **Credential Resolution (startup)**: The configured `core_api` credentials are classified through the core's RFC 7591 protected registration endpoint `POST /oauth/register` (`client_secret_basic`), after a token-less presence bootstrap. Super credentials are exchanged for this service's own low-privilege client (`client_id` = `microservice.name`, the presence-registered name) and discarded from memory; the config file is rewritten atomically with the new pair (`.bak`, 0600) unless the deployment is entrypoint-rendered (`CONFIG_TEMPLATE`/`RENDERED_CONFIG`, WARN only). Already-low-privilege credentials are verified via a `client_credentials` token request and reused unchanged (no exchange, no write-back). Any resolution failure aborts startup (contract `hrpauth-business.yaml` `/oauth/register`).
 - **Internal Heartbeat**: The service MUST respond `200 OK` to `GET /internal/heartbeat` from Core to maintain its active status and internal key.
 
 ### 2.3 Data Consistency (Lazy Loading)

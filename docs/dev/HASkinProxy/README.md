@@ -76,3 +76,7 @@ On non-2xx upstream responses, no cache eviction occurs. On network errors to th
 ## Integration with HA System
 
 While generic in nature, `HASkinProxy` is a key component in the HA ecosystem, serving as the primary skin delivery mechanism for clients that do not support Yggdrasil-based skin loading directly.
+
+### Startup Credential Resolution
+
+The configured `upstream` credentials are classified at startup through the core's RFC 7591 protected registration endpoint `POST /oauth/register` (`client_secret_basic`), after a token-less presence bootstrap. Super credentials are exchanged for this service's own low-privilege client (`client_id` = presence name) and discarded from memory; the config file is rewritten atomically with the new pair (`.bak`, 0600) unless the deployment is entrypoint-rendered (`CONFIG_TEMPLATE`/`RENDERED_CONFIG`, WARN only). Already-low-privilege credentials are verified via a `client_credentials` token request and reused unchanged (no exchange, no write-back). Any resolution failure aborts startup (contract `hrpauth-business.yaml` `/oauth/register`).
