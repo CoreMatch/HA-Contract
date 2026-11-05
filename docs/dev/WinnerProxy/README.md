@@ -20,19 +20,23 @@ prefix.
 
 ## Outbound Calls (current implementation)
 
-All HA calls go to the configured upstream base URL (`upstreams.hrpauth.url`,
-default includes the `/yggdrasil-api` relay prefix) with an OAuth2 Bearer
-token.
+Yggdrasil-plane calls go to the configured upstream base URL
+(`upstreams.hrpauth.url`, default includes the `/yggdrasil-api` relay
+prefix); management-plane calls go to the management base URL
+(`hrpauth.url`, the core root). All calls carry an OAuth2 client-credentials
+Bearer token; proxy registration additionally carries the `X-Internal-Key`.
 
 | Call | Used by | Notes |
 |---|---|---|
 | `GET /sessionserver/session/minecraft/hasJoined` | hasJoined step 1 | HA skin path |
 | `GET /sessionserver/session/minecraft/profile/{uuid}` | profile query | |
-| `POST /api/profiles/minecraft` | batch query | Fixed 2026-11-05 (WinnerProxy `4ded866`): the former extra `/yggdrasil` path segment is gone; the base URL already carries the `/yggdrasil-api` relay prefix and the relay strips it. Upstream failures surface as 502 with an explicit `{"error": ...}` reason |
-| `POST /register` | proxy registration | Body `{username, password, email: "", mojang_uuid}`; the upstream `/register` requires the `identifier` field, so this call does not succeed against the current upstream. The upstream's implemented proxy-registration endpoint is `POST /internal/proxy-register` (X-Internal-Key) |
+| `POST /api/profiles/minecraft` | batch query | The base URL carries the `/yggdrasil-api` relay prefix and the relay strips it. Upstream failures surface as 502 with an explicit `{"error": ...}` reason |
+| `POST /internal/proxy-register` | proxy registration (hasJoined step 3) | Body `{username, password, mojang_uuid}`; authenticated with `X-Internal-Key` (contract `hrpauth-yggdrasil-business.yaml` `/internal/proxy-register`). Consumes `profile_id` from the envelope response |
+| `POST /services/auth-key` | startup, and after any 401 from proxy registration | Fetches/re-fetches the service's `X-Internal-Key` (core re-issues the key on every call) |
 | `GET /` | startup | Fetches Yggdrasil metadata published via presence `root_metadata` |
-| `POST /services/presence` | startup | Registers with `sdk_url` and `root_metadata.yggdrasil` |
+| `POST /services/presence` | startup | Registers with `security_level: 0` and `root_metadata.yggdrasil` |
 | `POST /services/relay` | startup | Declares relay rules |
+| `POST /services/sdk-packages` (and `DELETE /services/sdk-packages/{name}`) | startup | Compile-time SDK package upload for the WebUI |
 
 ## Configuration
 
