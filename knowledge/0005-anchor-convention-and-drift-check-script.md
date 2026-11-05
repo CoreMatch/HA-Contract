@@ -3,9 +3,6 @@
 ## Status
 Accepted
 
-## Date
-2026-11-05
-
 ## Context
 The ADR-style knowledge bases cite code with `path/to/file:Lx-Ly` line
 references. Every code change shifts those line numbers, so citations

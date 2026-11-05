@@ -1,7 +1,6 @@
 # ADR-0002: The Game Engine Is an External Dependency
 
 - **Status**: accepted
-- **Date**: 2026-11-04
 
 ## Context
 
@@ -51,8 +50,7 @@ protocol (JSON lines over the helper's stdin/stdout, protocol version 2).
 ## Evidence
 
 All paths absolute into the RW-HPS Go-Server checkout
-(`/home/lnb/RW-HPS/Go-Server`); anchors verified at commit `baabca44` on
-2026-11-05.
+(`/home/lnb/RW-HPS/Go-Server`); anchors verified at commit `baabca44`.
 
 - Boundary rationale:
   `/home/lnb/RW-HPS/Go-Server/internal/game/seam.go::Simulation` — upstream

@@ -1,7 +1,6 @@
 # ADR-0001: AI Behavior Runs Entirely in the JVM Engine
 
 - **Status**: accepted
-- **Date**: 2026-11-04
 
 ## Context
 
@@ -51,8 +50,7 @@ implements AI behavior. Go contributes only three kinds of adaptation code:
 ## Evidence
 
 All paths absolute into the RW-HPS Go-Server checkout
-(`/home/lnb/RW-HPS/Go-Server`); anchors verified at commit `baabca44` on
-2026-11-05.
+(`/home/lnb/RW-HPS/Go-Server`); anchors verified at commit `baabca44`.
 
 - v2-ext operation constants and validation:
   `/home/lnb/RW-HPS/Go-Server/internal/game/external/protocol.go::OpRoomAddAI`
@@ -105,6 +103,6 @@ All paths absolute into the RW-HPS Go-Server checkout
   /home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: 应答字段扩展：`ai`)
   ("the engine does not trigger a player.join event for AIs"), Go-side consumers
   `/home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: Go 侧消费点)`.
-- Audit conclusion (2026-11-04, full sweep of AI/bot-related Go code): no AI
+- Audit conclusion (full sweep of AI/bot-related Go code): no AI
   behavior implementation exists on the Go side; all AI logic executes in the helper
   JVM engine; all Go AI code is forwarding/registration/lifecycle adaptation.
