@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MatchCoreArena Business API
-  version: 1.5.0
+  version: 1.6.0
   description: >
     Unified specification for MatchCoreArena server business interfaces.
     Authentication via HRPAuth OAuth2 Authorization Code + PKCE.
@@ -1118,7 +1118,13 @@ paths:
       summary: Get matchmaking status
       description: >
         Returns the authenticated user's queue state and the recent formed
-        matches they belong to (most recent first, up to 10).
+        matches they belong to (most recent first, up to 10). Each formed
+        group carries `join_target` (host/port) when the server is
+        configured with `matchmaking.join_target` — same field name and
+        shape as the MCA client interop payload, so the client can launch
+        the game into the announced server without guessing. When the
+        server has no join_target configured the field is omitted and the
+        client falls back to its local configuration.
       tags: [Matchmaking]
       security:
         - BearerAuth: []
@@ -1786,6 +1792,24 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GroupMember'
+        join_target:
+          $ref: '#/components/schemas/JoinTarget'
+
+    JoinTarget:
+      type: object
+      required: [host, port]
+      description: >
+        Game server address delivered with formed matches (handoff chain).
+        Field name and shape match the MCA client interop payload; the
+        server omits the field entirely when `matchmaking.join_target` is
+        not configured, and the client falls back to its local setting.
+      properties:
+        host:
+          type: string
+          description: Game server hostname or IP
+        port:
+          type: integer
+          description: Game server port
 
     GroupMember:
       type: object
