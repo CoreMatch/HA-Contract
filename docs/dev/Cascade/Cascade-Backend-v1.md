@@ -328,7 +328,7 @@ startup-failure conditions, fingerprint computation and rotation periods, and
 network-exposure advice. **No interface semantics changed**: paths, fields,
 response codes, trust-strategy behavior, `jti` one-time semantics, and the
 `/health` readiness definition are exactly as in v1.1. Deployment guidance for
-the reference backend lives in the RW-HPS Go-Server README.
+the reference backend lives in the Avalon README (CoreMatch/Avalon).
 
 ### v1 → v1.1 (2026-11-04)
 

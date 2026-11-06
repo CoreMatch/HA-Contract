@@ -235,7 +235,7 @@ check_set "WinnerProxy" "$tmpdir/winnerproxy-routes.txt" "$tmpdir/winnerproxy-op
 
 # --- Cascade proxy ---
 # The backend control plane (cascade-backend-v1.yaml) is implemented in the
-# RW-HPS Go-Server outside these repositories and is intentionally not
+# Avalon Go server (CoreMatch/Avalon) outside these repositories and is intentionally not
 # checked here (see docs/dev/Cascade/README.md, "Anti-drift status").
 extract_gin_routes "$CASCADE_DIR/internal/api/proxy_http.go" > "$tmpdir/cascade-routes.txt"
 extract_openapi_routes "$CASCADE_PROXY_YAML" > "$tmpdir/cascade-openapi.txt"
