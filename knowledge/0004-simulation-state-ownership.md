@@ -49,43 +49,43 @@ Live facts about the match are read from the engine on demand, not cached in Go:
 
 ## Evidence
 
-All paths absolute into the RW-HPS Go-Server checkout
-(`/home/lnb/RW-HPS/Go-Server`); anchors verified at commit `baabca44`.
+All paths absolute into the Avalon checkout
+(`/home/lnb/Desktop/HA/Avalon`); anchors verified at commit `599b0e3`.
 
 - Engine authority and live reads:
-  `/home/lnb/RW-HPS/Go-Server/internal/game/seam.go::Simulation` (`Simulation`
+  `/home/lnb/Desktop/HA/Avalon/internal/game/seam.go::Simulation` (`Simulation`
   interface — Start/Stop/Running/PlayerCount belong to the backend),
-  `/home/lnb/RW-HPS/Go-Server/internal/game/seam.go::PlayerCount` and
-  `/home/lnb/RW-HPS/Go-Server/internal/game/seam.go::Running`
+  `/home/lnb/Desktop/HA/Avalon/internal/game/seam.go::PlayerCount` and
+  `/home/lnb/Desktop/HA/Avalon/internal/game/seam.go::Running`
   (`GameSession.PlayerCount`/`Running` delegate to the simulation).
 - TEAM_LIST mirroring:
-  `/home/lnb/RW-HPS/Go-Server/internal/io/packettype/packettype.go::TEAM_LIST`
+  `/home/lnb/Desktop/HA/Avalon/internal/io/packettype/packettype.go::TEAM_LIST`
   (`TEAM_LIST = 115`);
-  `/home/lnb/RW-HPS/Go-Server/internal/net/netconnectprotocol/realize/gameversionrelay.go::SendPacketExtractInformation`
+  `/home/lnb/Desktop/HA/Avalon/internal/net/netconnectprotocol/realize/gameversionrelay.go::SendPacketExtractInformation`
   (extraction on the forwarding path, `TEAM_LIST` case inside);
-  `/home/lnb/RW-HPS/Go-Server/internal/net/netconnectprotocol/universalanalysis.go::GetPacketTeamData`
+  `/home/lnb/Desktop/HA/Avalon/internal/net/netconnectprotocol/universalanalysis.go::GetPacketTeamData`
   (`GetPacketTeamData` backfills site/team/name; note the upstream setter quirk
   where `team` ends up equal to `site`).
 - Registration:
-  `/home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: PlayerProfile)`
+  `/home/lnb/Desktop/HA/Avalon/docs/HELPER-PROTOCOL.md (field: PlayerProfile)`
   (player events and `PlayerProfile` shape),
-  /home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: 应答字段扩展：`ai`)
+  /home/lnb/Desktop/HA/Avalon/docs/HELPER-PROTOCOL.md (field: 应答字段扩展：`ai`)
   (AI profile in the `room.addai` response);
-  `/home/lnb/RW-HPS/Go-Server/internal/game/seam.go::AIProfile` (`AIProfile`);
+  `/home/lnb/Desktop/HA/Avalon/internal/game/seam.go::AIProfile` (`AIProfile`);
   roster registration chain
-  `/home/lnb/RW-HPS/Go-Server/internal/game/manage/playermanage.go::AddAI`,
-  `/home/lnb/RW-HPS/Go-Server/internal/game/room/serverroom.go::AddAI`.
+  `/home/lnb/Desktop/HA/Avalon/internal/game/manage/playermanage.go::AddAI`,
+  `/home/lnb/Desktop/HA/Avalon/internal/game/room/serverroom.go::AddAI`.
 - Go-side bookkeeping:
-  `/home/lnb/RW-HPS/Go-Server/internal/game/seam.go::GameSession`
+  `/home/lnb/Desktop/HA/Avalon/internal/game/seam.go::GameSession`
   (`GameSession` fields),
-  `/home/lnb/RW-HPS/Go-Server/internal/data/temp/servercacheflag.go::ServerCacheFlag`
+  `/home/lnb/Desktop/HA/Avalon/internal/data/temp/servercacheflag.go::ServerCacheFlag`
   (one-shot flags incl. `ai`),
-  `/home/lnb/RW-HPS/Go-Server/internal/game/player/player.go::SetAiDifficulty`
+  `/home/lnb/Desktop/HA/Avalon/internal/game/player/player.go::SetAiDifficulty`
   (`SetAiDifficulty`).
 - Settlement flow:
-  `/home/lnb/RW-HPS/Go-Server/internal/game/manage/callmanage.go::SetGameOverData`
+  `/home/lnb/Desktop/HA/Avalon/internal/game/manage/callmanage.go::SetGameOverData`
   (`game.result` → `SetGameOverData` → `survive.player` broadcast; no outcome →
   skip),
-  `/home/lnb/RW-HPS/Go-Server/internal/game/external/protocol.go::GameResult`
+  `/home/lnb/Desktop/HA/Avalon/internal/game/external/protocol.go::GameResult`
   (`GameResult` payload); result field shapes in
-  /home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: 应答字段扩展：`result`).
+  /home/lnb/Desktop/HA/Avalon/docs/HELPER-PROTOCOL.md (field: 应答字段扩展：`result`).

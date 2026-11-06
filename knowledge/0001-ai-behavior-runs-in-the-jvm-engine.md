@@ -4,7 +4,7 @@
 
 ## Context
 
-The Go server (RW-HPS Go-Server) re-hosts a game server whose original runs on the
+The Go server (Avalon) re-hosts a game server whose original runs on the
 JVM with the game engine in-process. AI players are part of the game: pathfinding,
 decision-making, combat execution, and difficulty behavior all live inside the game
 engine. A question that recurs during maintenance is where AI behavior is
@@ -49,60 +49,60 @@ implements AI behavior. Go contributes only three kinds of adaptation code:
 
 ## Evidence
 
-All paths absolute into the RW-HPS Go-Server checkout
-(`/home/lnb/RW-HPS/Go-Server`); anchors verified at commit `baabca44`.
+All paths absolute into the Avalon checkout
+(`/home/lnb/Desktop/HA/Avalon`); anchors verified at commit `599b0e3`.
 
 - v2-ext operation constants and validation:
-  `/home/lnb/RW-HPS/Go-Server/internal/game/external/protocol.go::OpRoomAddAI`
+  `/home/lnb/Desktop/HA/Avalon/internal/game/external/protocol.go::OpRoomAddAI`
   (`OpRoomAddAI = "room.addai"`),
-  `/home/lnb/RW-HPS/Go-Server/internal/game/external/protocol.go::OpRoomSync`
+  `/home/lnb/Desktop/HA/Avalon/internal/game/external/protocol.go::OpRoomSync`
   (`room.sync`),
-  `/home/lnb/RW-HPS/Go-Server/internal/game/external/protocol.go::OpRoomRemovePlayer`
+  `/home/lnb/Desktop/HA/Avalon/internal/game/external/protocol.go::OpRoomRemovePlayer`
   (`room.removeplayer`),
-  `/home/lnb/RW-HPS/Go-Server/internal/game/external/protocol.go::OpGameResult`
+  `/home/lnb/Desktop/HA/Avalon/internal/game/external/protocol.go::OpGameResult`
   (`game.result`); AI response field
-  `/home/lnb/RW-HPS/Go-Server/internal/game/external/protocol.go::AI`, result
-  payload `/home/lnb/RW-HPS/Go-Server/internal/game/external/protocol.go::GameResult`.
+  `/home/lnb/Desktop/HA/Avalon/internal/game/external/protocol.go::AI`, result
+  payload `/home/lnb/Desktop/HA/Avalon/internal/game/external/protocol.go::GameResult`.
 - Backend methods forwarding to the helper:
-  `/home/lnb/RW-HPS/Go-Server/internal/game/external/ext.go::AddAI`,
-  `/home/lnb/RW-HPS/Go-Server/internal/game/external/ext.go::SyncAllPlayer`,
-  `/home/lnb/RW-HPS/Go-Server/internal/game/external/ext.go::RemovePlayer`,
-  `/home/lnb/RW-HPS/Go-Server/internal/game/external/ext.go::GameResult`.
+  `/home/lnb/Desktop/HA/Avalon/internal/game/external/ext.go::AddAI`,
+  `/home/lnb/Desktop/HA/Avalon/internal/game/external/ext.go::SyncAllPlayer`,
+  `/home/lnb/Desktop/HA/Avalon/internal/game/external/ext.go::RemovePlayer`,
+  `/home/lnb/Desktop/HA/Avalon/internal/game/external/ext.go::GameResult`.
 - Registration chain:
-  `/home/lnb/RW-HPS/Go-Server/internal/game/manage/playermanage.go::AddAI`,
-  `/home/lnb/RW-HPS/Go-Server/internal/game/room/serverroom.go::AddAI`
+  `/home/lnb/Desktop/HA/Avalon/internal/game/manage/playermanage.go::AddAI`,
+  `/home/lnb/Desktop/HA/Avalon/internal/game/room/serverroom.go::AddAI`
   (wraps the engine profile).
 - `AiPlayer` marker type:
-  `/home/lnb/RW-HPS/Go-Server/internal/game/player/aiplayer.go::AiPlayer`
-  (struct), `/home/lnb/RW-HPS/Go-Server/internal/game/player/aiplayer.go::IsAi`
+  `/home/lnb/Desktop/HA/Avalon/internal/game/player/aiplayer.go::AiPlayer`
+  (struct), `/home/lnb/Desktop/HA/Avalon/internal/game/player/aiplayer.go::IsAi`
   (`IsAi() bool { return true }`); base `Player.IsAi()` returns false at
-  `/home/lnb/RW-HPS/Go-Server/internal/game/player/player.go::IsAi`;
+  `/home/lnb/Desktop/HA/Avalon/internal/game/player/player.go::IsAi`;
   remove-on-kick hook
-  `/home/lnb/RW-HPS/Go-Server/internal/game/player/player.go::RemoveOnKick`.
+  `/home/lnb/Desktop/HA/Avalon/internal/game/player/player.go::RemoveOnKick`.
 - Commands:
-  `/home/lnb/RW-HPS/Go-Server/internal/command/clientcommands.go::addai`
+  `/home/lnb/Desktop/HA/Avalon/internal/command/clientcommands.go::addai`
   (`addai`, gated by `EnableAI`, calls `PlayerManage.AddAI`),
-  `/home/lnb/RW-HPS/Go-Server/internal/command/clientcommands.go::PlayerPositionAI`
+  `/home/lnb/Desktop/HA/Avalon/internal/command/clientcommands.go::PlayerPositionAI`
   (`ai <difficulty>`).
 - Lifecycle:
-  `/home/lnb/RW-HPS/Go-Server/internal/data/temp/servercacheflag.go::ai` and
-  `/home/lnb/RW-HPS/Go-Server/internal/data/temp/servercacheflag.go::aiWarn`
+  `/home/lnb/Desktop/HA/Avalon/internal/data/temp/servercacheflag.go::ai` and
+  `/home/lnb/Desktop/HA/Avalon/internal/data/temp/servercacheflag.go::aiWarn`
   (`ai`/`aiWarn` flags),
-  `/home/lnb/RW-HPS/Go-Server/internal/game/manage/callmanage.go::MaxOnlyAIGameIngTime`
+  `/home/lnb/Desktop/HA/Avalon/internal/game/manage/callmanage.go::MaxOnlyAIGameIngTime`
   (all-AI countdown branch),
-  `/home/lnb/RW-HPS/Go-Server/internal/game/manage/callmanage.go::SetGameOverData`
+  `/home/lnb/Desktop/HA/Avalon/internal/game/manage/callmanage.go::SetGameOverData`
   (settlement via `game.result` → `survive.player`). Flag writer gap: `SetAi`
-  (`/home/lnb/RW-HPS/Go-Server/internal/data/temp/servercacheflag.go::SetAi`)
+  (`/home/lnb/Desktop/HA/Avalon/internal/data/temp/servercacheflag.go::SetAi`)
   has no callers in non-test code.
-- Protocol entries: `/home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md` —
+- Protocol entries: `/home/lnb/Desktop/HA/Avalon/docs/HELPER-PROTOCOL.md` —
   v2-ext section
-  `/home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: 扩展操作（protocol v2-ext)`,
+  `/home/lnb/Desktop/HA/Avalon/docs/HELPER-PROTOCOL.md (field: 扩展操作（protocol v2-ext)`,
   operation table
-  `/home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: 扩展操作一览)`,
+  `/home/lnb/Desktop/HA/Avalon/docs/HELPER-PROTOCOL.md (field: 扩展操作一览)`,
   `ai` response field
-  /home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: 应答字段扩展：`ai`)
+  /home/lnb/Desktop/HA/Avalon/docs/HELPER-PROTOCOL.md (field: 应答字段扩展：`ai`)
   ("the engine does not trigger a player.join event for AIs"), Go-side consumers
-  `/home/lnb/RW-HPS/Go-Server/docs/HELPER-PROTOCOL.md (field: Go 侧消费点)`.
+  `/home/lnb/Desktop/HA/Avalon/docs/HELPER-PROTOCOL.md (field: Go 侧消费点)`.
 - Audit conclusion (full sweep of AI/bot-related Go code): no AI
   behavior implementation exists on the Go side; all AI logic executes in the helper
   JVM engine; all Go AI code is forwarding/registration/lifecycle adaptation.

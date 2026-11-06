@@ -26,7 +26,7 @@
 #        -> any line containing [xref] is skipped entirely. Mark citations of
 #        other repositories' files with [xref] so they are not checked here.
 #
-# Absolute paths (e.g. /home/lnb/RW-HPS/Go-Server/...) are checked directly.
+# Absolute paths (e.g. /home/lnb/Desktop/HA/Avalon/...) are checked directly.
 # Relative paths are resolved against the repository root.
 #
 # Environment:

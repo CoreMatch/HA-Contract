@@ -21,7 +21,7 @@ independently developed Rusted Warfare backend.
 
 - Proxy side: `CoreMatch/Cascade` (edge proxy; client ingress, HRPAuth
   identity, route selection, byte forwarding).
-- Backend side: `SamuelCheston/RW-HPS` Go-Server, `internal/net/gateway`
+- Backend side: `CoreMatch/Avalon`, `internal/net/gateway`
   (mTLS + `CASC` preamble + JWT session gating + `/v1` control plane).
 
 ## Anti-drift status
@@ -31,8 +31,8 @@ script extracts gin route registrations from `main.go` of the HA sibling
 service repositories (HRPAuth / HASkinLib / HRPAuth-Yggdrasil-API), while the
 backend routes of this contract are registered with Go `net/http` ServeMux
 patterns (`mux.HandleFunc("GET /v1/health", ...)`) inside
-`internal/net/gateway/control.go` of the RW-HPS Go-Server, which is outside
+`internal/net/gateway/control.go` of Avalon, which is outside
 the script's repository resolution. Until the script grows a non-gin,
-cross-repository extractor, conformance is enforced by the Go-Server's own
+cross-repository extractor, conformance is enforced by Avalon's own
 contract tests (`internal/net/gateway`) plus the Cascade-side contract test
 (`internal/backend/contract_test.go`, which parses the OpenAPI file).
