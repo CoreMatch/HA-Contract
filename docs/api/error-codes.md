@@ -107,14 +107,15 @@ The following error codes are the stable registry for current HA business APIs. 
 | `mca_invalid_request` | MatchCoreArena: general parameter error |
 | `mca_user_not_found` | MatchCoreArena: user does not exist. Since 2026-11-05 also returned (HTTP 404) when a match-report participant's UUID is unknown to HRPAuth (`GET /services/users/{uuid}` answered 404). |
 | `mca_user_not_provisioned` | MatchCoreArena: settlement lazy-provisioning failed — the participant's HRPAuth UID could not get a local `users` row (e.g. the uid is held by a soft-deleted row), so the report aborts and rolls back (HTTP 409). Ordinary missing rows are auto-provisioned inside the settlement transaction since 2026-11-05 (author decision: lazy initialization; uid only from the verified resolution, rating from table defaults) and do not produce this code. |
-| `mca_friend_not_found` | MatchCoreArena: friend relationship does not exist |
-| `mca_friend_request_exists` | MatchCoreArena: friend request already exists |
-| `mca_team_not_found` | MatchCoreArena: team does not exist |
-| `mca_team_name_taken` | MatchCoreArena: team name is already in use |
-| `mca_not_team_leader` | MatchCoreArena: only the team leader can perform this action |
+| `mca_friend_not_found` | MatchCoreArena: friend relationship does not exist. Reserved for the unimplemented friend feature; no code path currently returns it (friend endpoints answer `501 mca_not_implemented`). |
+| `mca_friend_request_exists` | MatchCoreArena: friend request already exists. Reserved for the unimplemented friend feature; no code path currently returns it (friend endpoints answer `501 mca_not_implemented`). |
+| `mca_team_not_found` | MatchCoreArena: team does not exist. Reserved for the unimplemented team feature; no code path currently returns it (team endpoints answer `501 mca_not_implemented`). |
+| `mca_team_name_taken` | MatchCoreArena: team name is already in use. Reserved for the unimplemented team feature; no code path currently returns it (team endpoints answer `501 mca_not_implemented`). |
+| `mca_not_team_leader` | MatchCoreArena: only the team leader can perform this action. Reserved for the unimplemented team feature; no code path currently returns it (team endpoints answer `501 mca_not_implemented`). |
 | `mca_match_not_found` | MatchCoreArena: match does not exist |
 | `mca_queue_already_joined` | MatchCoreArena: the user already has a matchmaking queue entry (HTTP 409); one queue entry per user overall |
 | `mca_queue_not_joined` | MatchCoreArena: the user has no matchmaking queue entry to leave (HTTP 404) |
+| `mca_not_implemented` | MatchCoreArena: the endpoint exists but the feature is explicitly unimplemented (HTTP 501). Returned by all friend and team endpoints. |
 | `cascade_room_conflict` | Cascade management API: a room code is claimed by more than one backend and cannot be routed |
 | `cascade_backend_unavailable` | Cascade management API: the owning backend is unhealthy or unreachable, so the request cannot be forwarded |
 | `cascade_invalid_internal_key` | Cascade management API: the `X-Internal-Key` header is missing or does not match the key issued by HRPAuth Core |
