@@ -17,7 +17,7 @@ If a service repository keeps a README at all, limit it to build-and-run entry p
 ## Mandatory Rules for All Agents
 
 - **Language**: All documentation must be written in **English**.
-- **External standards** in `docs/references/` (CustomSkinAPI, authlib-injector/Yggdrasil) are **read-only**. Never modify files in this directory. Old/drifted docs in `archive/docs/` must not be used as development references.
+- **External standards** in `docs/references/` (CustomSkinAPI, authlib-injector/Yggdrasil) are **read-only**. Never modify files in this directory. Project knowledge bases live in each repository's own `knowledge/` directory (repatriated 2026-11-07; see `knowledge/README.md`) — do not add project documentation to this repository.
 - **Error codes**: Use stable `lower_snake_case` error codes. Register new codes in `docs/api/error-codes.md`.
 - **Anti-Drift Check**: Before submitting changes that touch API routes, run:
   ```bash

@@ -30,9 +30,11 @@ To prevent documentation drift from the actual project, this project adopts a un
 - [Cascade Backend API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/cascade-backend-v1.yaml): control-plane contract between the Cascade proxy and a Rusted Warfare backend
 
 ### Development and Internal Documentation
-- [HRPAuth Development Guide](https://github.com/CoreMatch/HA-Contract/tree/main/docs/dev/HRPAuth/): Data models, Token mechanisms, feature flags, microservice extension protocol, SDK package contract. (Runtime configuration and deployment live in the service repositories / Wiki.)
-- [HASkinProxy Development Guide](https://github.com/CoreMatch/HA-Contract/tree/main/docs/dev/HASkinProxy/): Technical details on the Yggdrasil-to-CSL proxy.
-- [WinnerProxy Service Contract](https://github.com/CoreMatch/HA-Contract/tree/main/docs/dev/WinnerProxy/): Inbound routes and current outbound calls.
+- Development/design documentation lives in each service repository's own
+  `knowledge/` directory (repatriated from this repository on 2026-11-07):
+  HRPAuth, HRPAuth-Yggdrasil-API, HASkinLib, HASkinProxy, WinnerProxy,
+  HA-Services-Deployer, Avalon, and the other service repositories. See
+  [knowledge/README.md](knowledge/README.md) for the directory map.
 - [Cascade Backend Contract](https://github.com/CoreMatch/HA-Contract/tree/main/docs/dev/Cascade/): Authoritative proxy↔backend contract (transport, preamble, session gating, control plane).
 
 ### External Reference Standards (Immutable)
@@ -99,7 +101,9 @@ checks every repository's knowledge base in one pass.
 
 ## Archive Note
 
-Old and drifted documents have been moved to the [archive/docs/](https://github.com/CoreMatch/HA-Contract/tree/main/archive/docs/) directory and are no longer used as development references.
+Historical (pre-split) documentation was repatriated to the owning
+repositories' `knowledge/archive/` directories on 2026-11-07 (HRPAuth,
+HASkinLib, WinnerProxy). This repository no longer keeps an archive copy.
 
 ## Documentation Convention
 
