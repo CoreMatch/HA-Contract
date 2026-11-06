@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MatchCoreArena Business API
-  version: 1.3.0
+  version: 1.4.0
   description: >
     Unified specification for MatchCoreArena server business interfaces.
     Authentication via HRPAuth OAuth2 Authorization Code + PKCE.
@@ -192,6 +192,54 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+
+  /api/users/{uid}/matches:
+    get:
+      summary: List a player's match history
+      description: >
+        Returns the matches the given player participated in, most recent
+        first, with pagination. Participant details are omitted in list
+        responses (see GET /api/matches/{id}).
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: uid
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Numeric user UID
+        - in: query
+          name: page_num
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Page size
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Match'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
 
   /api/users/me/experience:
     post:
@@ -662,23 +710,53 @@ paths:
   # ─── Matches ───────────────────────────────────────────────────────────
   /api/matches:
     post:
-      summary: Report match result
+      summary: Report match result (single reporting entry point)
       description: >
-        Records a completed match result. The bearer token must carry the
-        `match:report` scope (system/admin reporters); without it the server
-        answers `403 oauth_insufficient_scope`. Participant Minecraft UUIDs
-        are resolved to HRPAuth UIDs through the ops-level service endpoint
-        `GET /services/users/{uuid}` (see `hrpauth-business.yaml`) using a
-        `client_credentials` service token: a participant unknown to HRPAuth
-        aborts the report with `404 mca_user_not_found`, and a
-        service-credential or HRPAuth outage aborts with
-        `502 oauth_hrpauth_down`. A participant whose resolved HRPAuth UID has
-        no local `users` row is provisioned lazily: the settlement transaction
-        inserts the row (uid taken from the verified resolution only; rating
-        fields are table defaults, never reporter-supplied) and continues.
+        Records a completed match result and settles ratings in one
+        transaction. This is the ONLY match-reporting entry point: game
+        servers and ops/debug tooling submit here alike. `source` is a
+        provenance marker only (`game` default, `virtual` for ops-injected
+        debug data) and never branches settlement.
+
+        Authorization: reporting requires an OPS-level credential
+        (maintenance token or a `tokens.yaml` service token) carrying the
+        `match:report` scope; ordinary player tokens are rejected with
+        `403 oauth_insufficient_scope` even if the scope is present.
+
+        Payload shape: either the unified `teams` array (each team carries
+        `result` win/lose/draw; at most one winner, no win/draw mixing,
+        all-draw allowed and settled with S=0.5) or the equivalent legacy
+        `winner_team` + `loser_teams` form. Self-contradictory payloads are
+        rejected with `400 mca_report_inconsistent` (multiple winners,
+        win/draw mixing, duplicate participant UUIDs, alive/initial count
+        violations, negative stats, `perf_tweak` outside [0.95, 1.05],
+        `finished_at` before `started_at`, or a positive
+        `duration_seconds` that disagrees with the timestamp difference).
+
+        Idempotency: `game_id` is the reporter-supplied stable key (unique
+        constraint). Re-reporting the same `game_id` with an identical
+        normalized payload replays the existing record with `200` and does
+        NOT settle again; the same `game_id` with a different payload
+        answers `409 mca_game_id_conflict`.
+
+        Identity: participant Minecraft UUIDs are resolved to HRPAuth UIDs
+        through the ops-level service endpoint `GET /services/users/{uuid}`
+        (see `hrpauth-business.yaml`) using a `client_credentials` service
+        token: a participant unknown to HRPAuth aborts the report with
+        `404 mca_user_not_found`, and a service-credential or HRPAuth
+        outage aborts with `502 oauth_hrpauth_down`. A participant whose
+        resolved HRPAuth UID has no local `users` row is provisioned
+        lazily: the settlement transaction inserts the row (uid taken from
+        the verified resolution only; rating fields are table defaults,
+        never reporter-supplied) and continues.
         `409 mca_user_not_provisioned` is answered only when that lazy
         provisioning is impossible (e.g. the uid is held by a soft-deleted
         row); the transaction then rolls back and nothing is written.
+
+        Party sharing: when `matchmaking_group_id` references a formed
+        matchmaking group, members of the same matchmaking party (>= 2 of
+        them in this match) share the average of their individual rating
+        deltas.
       tags: [Matches]
       security:
         - BearerAuth: []
@@ -689,8 +767,11 @@ paths:
             schema:
               $ref: '#/components/schemas/TeamReportInput'
       responses:
-        '201':
-          description: Match recorded
+        '200':
+          description: >
+            Idempotent replay — a match with this `game_id` and an
+            identical payload was already recorded; the existing record is
+            returned and nothing is settled again.
           content:
             application/json:
               schema:
@@ -700,44 +781,8 @@ paths:
                     properties:
                       data:
                         $ref: '#/components/schemas/Match'
-        '400': { $ref: '#/components/responses/Error' }
-        '401': { $ref: '#/components/responses/Error' }
-        '403': { $ref: '#/components/responses/Error' }
-        '404': { $ref: '#/components/responses/Error' }
-        '409': { $ref: '#/components/responses/Error' }
-        '502': { $ref: '#/components/responses/Error' }
-
-  /api/matches/virtual:
-    post:
-      summary: Submit a virtual match
-      description: >
-        Records a match without any game-side connection: the caller injects
-        the match data (teams with win/lose/draw results and member UUIDs)
-        and the server settles ratings in one transaction. Requires the
-        `match:report` scope, like the game-report endpoint; when
-        `virtual_matches.enabled` is false the server answers
-        `400 mca_invalid_request`. Identity resolution, lazy user
-        provisioning and the typed error semantics are identical to
-        `POST /api/matches` (`404 mca_user_not_found`,
-        `409 mca_user_not_provisioned`, `502 oauth_hrpauth_down`).
-        Rating rules: with exactly one winning team the formulas are
-        identical to the game-report path; all-draw matches settle with
-        S=0.5 against the pooled opponent average and reset streaks.
-        `started_at`/`finished_at` accept RFC3339 and default to the
-        current time. The response carries the recorded match plus each
-        participant's rating before/delta/after.
-      tags: [Matches]
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/VirtualReportInput'
-      responses:
         '201':
-          description: Virtual match recorded
+          description: Match recorded and settled
           content:
             application/json:
               schema:
@@ -746,7 +791,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: '#/components/schemas/VirtualMatchResult'
+                        $ref: '#/components/schemas/Match'
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
@@ -828,18 +873,36 @@ paths:
   # ─── Matchmaking ───────────────────────────────────────────────────────
   /api/matchmaking/join:
     post:
-      summary: Join the matchmaking queue
+      summary: Join the matchmaking queue (solo or as a party)
       description: >
-        Enqueues the authenticated user for a configured match mode. One
-        queue entry per user overall; joining again answers
-        `409 mca_queue_already_joined`. Unknown modes or a disabled
-        matchmaking system answer `400 mca_invalid_request`. The user's
-        `users` row is provisioned lazily with the same trust boundary as
-        match settlement, and `rank_score` is snapshotted into the queue
-        entry. A background engine removes entries older than the
-        configured timeout and forms matches within a rating window that
-        widens with wait time; formed matches are recorded and queryable
-        via `/api/matchmaking/status`.
+        Enqueues for a configured match mode. One queue entry per user
+        overall; joining again answers `409 mca_queue_already_joined`.
+        Unknown modes or a disabled matchmaking system answer
+        `400 mca_invalid_request`. The user's `users` row is provisioned
+        lazily with the same trust boundary as match settlement, and
+        `rank_score` is snapshotted into the queue entry.
+
+        Party join (`party_members`, same field name the ops panel sends):
+        a non-empty member UUID list enqueues the whole roster as one unit.
+        Member UUIDs are resolved to HRPAuth UIDs through the same
+        ops-level service endpoint as match reports — an unknown member
+        answers `404 mca_user_not_found`, an HRPAuth/service-credential
+        outage answers `502 oauth_hrpauth_down`. The roster must have 2
+        to (mode max team size) distinct members; oversized rosters answer
+        `409 mca_party_full`. A roster member already in another queued
+        party answers `409 mca_party_already_in_party` (and such a user
+        can also not solo-queue). The party is ephemeral: it is created at
+        join time and cleaned up when the group is committed or the whole
+        party leaves. Party members always enter the same formed match and
+        are assigned to the same team; their rating deltas are shared
+        (averaged) when the match is reported with the formed group's
+        `matchmaking_group_id`.
+
+        A background engine removes entries older than the configured
+        timeout and forms matches within a rating window that widens with
+        wait time; formed matches are recorded and queryable via
+        `/api/matchmaking/status`. The queue survives process restarts
+        (first engine tick re-runs timeout cleanup).
       tags: [Matchmaking]
       security:
         - BearerAuth: []
@@ -854,6 +917,14 @@ paths:
                 match_type:
                   type: string
                   description: Queue mode (a configured matchmaking mode, e.g. "1v1", "2v2")
+                party_members:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  description: >
+                    Optional member UUID list. Non-empty enqueues the whole
+                    roster as one party unit; empty/omitted queues solo.
       responses:
         '201':
           description: Joined the queue
@@ -865,17 +936,26 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: '#/components/schemas/QueueEntry'
+                        type: array
+                        description: >
+                          All queue entries created by this request (one for
+                          solo join, one per roster member for party join).
+                        items:
+                          $ref: '#/components/schemas/QueueEntry'
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
 
   /api/matchmaking/leave:
     delete:
       summary: Leave the matchmaking queue
       description: >
         Removes the authenticated user's queue entry. Without an entry the
-        server answers `404 mca_queue_not_joined`.
+        server answers `404 mca_queue_not_joined`. If the user queued with
+        a party, the WHOLE party is removed from the queue and the
+        ephemeral party is cleaned up.
       tags: [Matchmaking]
       security:
         - BearerAuth: []
@@ -911,6 +991,39 @@ paths:
                       data:
                         $ref: '#/components/schemas/MatchmakingStatus'
         '401': { $ref: '#/components/responses/Error' }
+
+  # ─── Observability ─────────────────────────────────────────────────────
+  /api/metrics:
+    get:
+      summary: Operational metrics snapshot (OPS only)
+      description: >
+        Returns in-process counters plus the live queue depth per mode.
+        Requires an OPS-level credential (maintenance token or a
+        `tokens.yaml` service token); ordinary player tokens are rejected
+        with `403 oauth_insufficient_scope`. Counter keys include
+        `matches_reported_total`, `matches_reported_replay_total`,
+        `matches_rejected_total:{code}` (rejection-reason distribution),
+        `matchmaking_groups_formed_total:{mode}`, `matchmaking_join_total`,
+        `matchmaking_leave_total`, `matchmaking_queue_timeout_removed_total`
+        and `matchmaking_parties_created_total`. Counters are process-local
+        (reset on restart).
+      tags: [Observability]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/MetricsSnapshot'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
 
   # ─── Rankings ──────────────────────────────────────────────────────────
   /api/rankings/{type}:
@@ -1287,12 +1400,26 @@ components:
     # ─── Matches ───────────────────────────────────────────────────────────
     TeamReportInput:
       type: object
-      required: [match_type, winner_team, loser_teams, started_at, finished_at]
+      required: [match_type, started_at, finished_at]
       properties:
         match_type:
           type: string
           description: Match type (e.g. "1v1", "2v2", "4v4v4v4")
+        teams:
+          type: array
+          minItems: 2
+          description: >
+            Unified shape: at least two teams; at most one team may have
+            result `win`, and when one exists the other teams must be
+            `lose` (no win/draw mixing). All-draw matches are allowed
+            (settled with S=0.5). Mutually exclusive in intent with
+            `winner_team`/`loser_teams`; when `teams` is present it wins.
+          items:
+            $ref: '#/components/schemas/TeamReportInfo'
         winner_team:
+          description: >
+            Legacy equivalent shape (winner + loser_teams), expanded to the
+            unified `teams` shape with win/lose results.
           $ref: '#/components/schemas/TeamReportInfo'
         loser_teams:
           type: array
@@ -1301,12 +1428,46 @@ components:
         duration_seconds:
           type: integer
           default: 0
+          description: >
+            Match duration in seconds. When positive it must equal
+            finished_at - started_at (otherwise 400 mca_report_inconsistent).
+        map_name:
+          type: string
+          description: Optional map identifier
+        server_id:
+          type: string
+          description: Optional reporting server identifier
+        game_id:
+          type: string
+          maxLength: 64
+          description: >
+            Optional reporter-supplied stable idempotency key (unique
+            constraint). Duplicate reports with an identical payload replay
+            the existing record (200); conflicting payloads answer
+            409 mca_game_id_conflict.
+        source:
+          type: string
+          enum: [game, virtual]
+          default: game
+          description: >
+            Provenance marker only — never branches settlement. `virtual`
+            marks ops/debug-injected data submitted through the same
+            endpoint.
+        matchmaking_group_id:
+          type: integer
+          format: int64
+          description: >
+            Optional formed-group id from matchmaking; when set, members of
+            the same matchmaking party share the average of their rating
+            deltas. Unknown group ids answer 400 mca_invalid_request.
         started_at:
           type: string
           format: date-time
+          description: RFC3339 or "YYYY-MM-DD HH:MM:SS" (UTC)
         finished_at:
           type: string
           format: date-time
+          description: RFC3339 or "YYYY-MM-DD HH:MM:SS" (UTC); not before started_at
 
     TeamReportInfo:
       type: object
@@ -1314,12 +1475,16 @@ components:
       properties:
         team_id:
           type: string
+        result:
+          type: string
+          enum: [win, lose, draw]
+          description: Required in the unified `teams` shape
         initial_count:
           type: integer
-          description: Team initial member count
+          description: Team initial member count (>= 1)
         alive_count:
           type: integer
-          description: Team survivor count at match end
+          description: Team survivor count at match end (0..initial_count)
         members:
           type: array
           items:
@@ -1342,12 +1507,16 @@ components:
         perf_tweak:
           type: number
           format: double
-          default: 1.0
-          description: Individual performance tweak coefficient [0.95, 1.05]
+          description: >
+            Individual performance tweak coefficient. Omit (or send 0) for
+            the neutral default 1.0; when provided it must lie within
+            [0.95, 1.05] — out-of-range values are rejected with
+            400 mca_report_inconsistent (same rule as the ops panel's
+            client-side validation).
     
     Match:
       type: object
-      required: [id, match_type, source, map_name, winner_team_id, survival_rate, duration_seconds, started_at, finished_at, created_at]
+      required: [id, match_type, source, map_name, server_id, game_id, winner_team_id, survival_rate, duration_seconds, started_at, finished_at, created_at]
       properties:
         id:
           type: integer
@@ -1357,10 +1526,16 @@ components:
         source:
           type: string
           enum: [game, virtual]
-          description: Match origin — game server report or virtual match
+          description: Provenance marker only — never branches settlement
         map_name:
           type: string
           description: Optional map identifier (empty when not provided)
+        server_id:
+          type: string
+          description: Optional reporting server identifier (empty when not provided)
+        game_id:
+          type: string
+          description: Reporter-supplied idempotency key (empty when not provided)
         winner_team_id:
           type: string
           description: Winning team ID (empty for draws)
@@ -1383,13 +1558,14 @@ components:
           type: array
           description: >
             Participant details with per-match rating movement; populated by
-            GET /api/matches/{id}, omitted in list responses.
+            POST /api/matches and GET /api/matches/{id}, omitted in list
+            responses.
           items:
             $ref: '#/components/schemas/ParticipantDetail'
 
     ParticipantDetail:
       type: object
-      required: [uid, team_id, is_winner, is_draw, rank_score_before, rank_score_delta, survival_time, kills, deaths]
+      required: [uid, team_id, is_winner, is_draw, rank_score_before, rank_score_delta, rank_score_after, survival_time, kills, deaths]
       properties:
         uid:
           type: integer
@@ -1401,95 +1577,7 @@ components:
           type: boolean
         is_draw:
           type: boolean
-          description: True for virtual-match draws (game reports are always false)
-        rank_score_before:
-          type: integer
-        rank_score_delta:
-          type: integer
-        survival_time:
-          type: integer
-        kills:
-          type: integer
-        deaths:
-          type: integer
-
-    VirtualReportInput:
-      type: object
-      required: [match_type, teams]
-      properties:
-        match_type:
-          type: string
-          description: Match type (e.g. "1v1", "2v2")
-        teams:
-          type: array
-          minItems: 2
-          description: >
-            At least two teams; at most one team may have result `win`, and
-            when one exists the other teams must be `lose` (no win/draw
-            mixing). All-draw matches are allowed.
-          items:
-            $ref: '#/components/schemas/VirtualTeamInput'
-        duration_seconds:
-          type: integer
-          default: 0
-        map_name:
-          type: string
-          description: Optional map identifier
-        started_at:
-          type: string
-          format: date-time
-          description: RFC3339; defaults to the current time
-        finished_at:
-          type: string
-          format: date-time
-          description: RFC3339; defaults to the current time
-
-    VirtualTeamInput:
-      type: object
-      required: [team_id, result, members]
-      properties:
-        team_id:
-          type: string
-        result:
-          type: string
-          enum: [win, lose, draw]
-        initial_count:
-          type: integer
-          description: Team initial member count (>= 1)
-        alive_count:
-          type: integer
-          description: Team survivor count at match end (0..initial_count)
-        members:
-          type: array
-          items:
-            $ref: '#/components/schemas/ParticipantReport'
-
-    VirtualMatchResult:
-      type: object
-      required: [match, participants]
-      properties:
-        match:
-          $ref: '#/components/schemas/Match'
-        participants:
-          type: array
-          items:
-            $ref: '#/components/schemas/ParticipantSettlement'
-
-    ParticipantSettlement:
-      type: object
-      required: [uid, uuid, team_id, result, rank_score_before, rank_score_delta, rank_score_after]
-      properties:
-        uid:
-          type: integer
-          format: int64
-        uuid:
-          type: string
-          description: Participant Minecraft UUID as submitted
-        team_id:
-          type: string
-        result:
-          type: string
-          enum: [win, lose, draw]
+          description: True for draws (all-draw reports settle with S=0.5)
         rank_score_before:
           type: integer
         rank_score_delta:
@@ -1497,6 +1585,12 @@ components:
         rank_score_after:
           type: integer
           description: max(0, rank_score_before + rank_score_delta)
+        survival_time:
+          type: integer
+        kills:
+          type: integer
+        deaths:
+          type: integer
 
     QueueEntry:
       type: object
@@ -1510,6 +1604,10 @@ components:
         rank_score:
           type: integer
           description: Rating snapshot taken at join time
+        party_id:
+          type: integer
+          format: int64
+          description: Ephemeral party id when queued as a party (omitted for solo)
         enqueued_at:
           type: string
           format: date-time
@@ -1558,6 +1656,29 @@ components:
         rank_score:
           type: integer
           description: Rating at match formation
+        party_id:
+          type: integer
+          format: int64
+          description: Party id when the member queued as part of a party (omitted for solo)
+
+    MetricsSnapshot:
+      type: object
+      required: [counters, queue_depth]
+      properties:
+        counters:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+          description: >
+            Process-local counters keyed by metric name (optionally
+            label-suffixed, e.g. matches_rejected_total:mca_report_inconsistent)
+        queue_depth:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+          description: Live queue depth keyed by match mode
     
     # ─── Rankings ──────────────────────────────────────────────────────────
     Ranking:
