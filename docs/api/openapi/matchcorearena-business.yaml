@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MatchCoreArena Business API
-  version: 1.4.0
+  version: 1.5.0
   description: >
     Unified specification for MatchCoreArena server business interfaces.
     Authentication via HRPAuth OAuth2 Authorization Code + PKCE.
@@ -798,6 +798,150 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
         '502': { $ref: '#/components/responses/Error' }
+    get:
+      summary: List matches globally (OPS query)
+      description: >
+        Ops/debug query over ALL matches with pagination and optional
+        filters; results are ordered by `finished_at` descending (then id
+        descending). Entries carry participant details — the same shape as
+        `GET /api/matches/{id}`. Requires an OPS-level credential
+        (maintenance token or a `tokens.yaml` service token); ordinary
+        player tokens are rejected with `403 oauth_insufficient_scope`.
+      tags: [Matches]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: source
+          schema:
+            type: string
+            enum: [game, virtual]
+          description: Filter by provenance marker
+        - in: query
+          name: map_name
+          schema:
+            type: string
+          description: Filter by exact map identifier
+        - in: query
+          name: game_id
+          schema:
+            type: string
+          description: Filter by exact reporter idempotency key
+        - in: query
+          name: uid
+          schema:
+            type: integer
+            format: int64
+          description: Filter by participant HRPAuth UID
+        - in: query
+          name: finished_from
+          schema:
+            type: string
+            format: date-time
+          description: Inclusive lower bound on finished_at (RFC3339 or "YYYY-MM-DD HH:MM:SS" UTC)
+        - in: query
+          name: finished_to
+          schema:
+            type: string
+            format: date-time
+          description: Inclusive upper bound on finished_at (RFC3339 or "YYYY-MM-DD HH:MM:SS" UTC)
+        - in: query
+          name: page_num
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Page size
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Match'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /api/matches/by-game-id/{game_id}:
+    get:
+      summary: Get match by game_id (OPS query)
+      description: >
+        Looks up the recorded match by the reporter-supplied idempotency
+        key, for investigating replay/conflict situations (0011 semantics).
+        Unknown keys answer `404 mca_match_not_found`. Requires an
+        OPS-level credential; ordinary player tokens are rejected with
+        `403 oauth_insufficient_scope`.
+      tags: [Matches]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: game_id
+          required: true
+          schema:
+            type: string
+          description: Reporter-supplied idempotency key
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Match'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/matches/rejections:
+    get:
+      summary: Recent report rejections (OPS query)
+      description: >
+        Returns recent `mca_report_inconsistent` and
+        `mca_game_id_conflict` rejections from a bounded in-memory ring
+        (process-local, reset on restart, debug-grade). Each record carries
+        the rejection time, code, `game_id` (when present) and a sanitized
+        reason summary — Minecraft UUIDs are masked and no player payload
+        fields are stored or echoed. Requires an OPS-level credential;
+        ordinary player tokens are rejected with
+        `403 oauth_insufficient_scope`.
+      tags: [Matches]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/RejectionRecord'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
 
   /api/matches/{id}:
     get:
@@ -1679,6 +1823,27 @@ components:
             type: integer
             format: int64
           description: Live queue depth keyed by match mode
+
+    RejectionRecord:
+      type: object
+      required: [time, code, reason]
+      properties:
+        time:
+          type: string
+          format: date-time
+          description: Rejection time (UTC)
+        code:
+          type: string
+          enum: [mca_report_inconsistent, mca_game_id_conflict]
+          description: Rejection error code
+        game_id:
+          type: string
+          description: Reporter idempotency key when the report carried one (omitted otherwise)
+        reason:
+          type: string
+          description: >
+            Sanitized reason summary — Minecraft UUIDs are masked as <uuid>;
+            no player payload fields are stored or echoed
     
     # ─── Rankings ──────────────────────────────────────────────────────────
     Ranking:
