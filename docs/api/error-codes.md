@@ -120,6 +120,7 @@ The following error codes are the stable registry for current HA business APIs. 
 | `mca_game_id_conflict` | MatchCoreArena: a match report reuses a `game_id` that is already recorded with a DIFFERENT payload (HTTP 409). Identical-payload duplicates are not errors — they replay the existing record with HTTP 200 (`game_id` idempotency). |
 | `mca_party_already_in_party` | MatchCoreArena: a matchmaking party roster member is already in another queued party, or a user already in a queued party tries to solo-queue (HTTP 409). |
 | `mca_party_full` | MatchCoreArena: a matchmaking party roster exceeds the mode's max team size (HTTP 409). |
+| `mca_ranking_not_found` | MatchCoreArena: the user has no ranking entry for the requested type/season (`GET /api/rankings/me`, HTTP 404). |
 | `cascade_room_conflict` | Cascade management API: a room code is claimed by more than one backend and cannot be routed |
 | `cascade_backend_unavailable` | Cascade management API: the owning backend is unhealthy or unreachable, so the request cannot be forwarded |
 | `cascade_invalid_internal_key` | Cascade management API: the `X-Internal-Key` header is missing or does not match the key issued by HRPAuth Core |

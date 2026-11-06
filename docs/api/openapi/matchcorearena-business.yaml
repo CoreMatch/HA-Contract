@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MatchCoreArena Business API
-  version: 1.6.0
+  version: 1.7.0
   description: >
     Unified specification for MatchCoreArena server business interfaces.
     Authentication via HRPAuth OAuth2 Authorization Code + PKCE.
@@ -1179,7 +1179,10 @@ paths:
   /api/rankings/{type}:
     get:
       summary: Get top rankings
-      description: Returns the top N rankings for the specified type and season.
+      description: >
+        Returns the top N rankings for the specified type and season, plus
+        `total_count` — the total number of ranked entries for that
+        type/season.
       tags: [Rankings]
       security:
         - BearerAuth: []
@@ -1214,16 +1217,17 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/Ranking'
+                        $ref: '#/components/schemas/RankingTopResult'
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
 
   /api/rankings/me:
     get:
       summary: Get my ranking
-      description: Returns the authenticated user's ranking for the specified type.
+      description: >
+        Returns the authenticated user's ranking for the specified type.
+        Users with no ranking entry for that type/season receive
+        `404 mca_ranking_not_found`.
       tags: [Rankings]
       security:
         - BearerAuth: []
@@ -1253,6 +1257,36 @@ paths:
                       data:
                         $ref: '#/components/schemas/Ranking'
         '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/rankings/tiers:
+    get:
+      summary: Get rank tier ladder (display only)
+      description: >
+        Returns the configured rank-tier ladder (name + minimum score each),
+        used by clients to render progress bars. Purely presentational:
+        tiers play no part in settlement and introduce no seasons. When no
+        tiers are configured the server returns an empty array and clients
+        hide the progress bar. Requires authentication like the other
+        ranking endpoints.
+      tags: [Rankings]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/RankTier'
         '401': { $ref: '#/components/responses/Error' }
 
   # ─── Maintenance ────────────────────────────────────────────────────────
@@ -1712,6 +1746,30 @@ components:
             responses.
           items:
             $ref: '#/components/schemas/ParticipantDetail'
+        self_summary:
+          description: >
+            The list subject's own view of this match (their team, win/draw
+            result and score movement). Populated only by the per-player
+            history lists (GET /api/matches/me, GET /api/matches/{uid}/matches);
+            omitted elsewhere.
+          $ref: '#/components/schemas/MatchSelfSummary'
+
+    MatchSelfSummary:
+      type: object
+      required: [team_id, is_winner, is_draw, rank_score_delta, rank_score_after]
+      properties:
+        team_id:
+          type: string
+          description: The subject player's team in this match
+        is_winner:
+          type: boolean
+        is_draw:
+          type: boolean
+        rank_score_delta:
+          type: integer
+        rank_score_after:
+          type: integer
+          description: max(0, rank_score_before + rank_score_delta)
 
     ParticipantDetail:
       type: object
@@ -1764,7 +1822,7 @@ components:
 
     MatchmakingStatus:
       type: object
-      required: [in_queue, recent_groups]
+      required: [in_queue, recent_groups, queue_stats]
       properties:
         in_queue:
           type: boolean
@@ -1775,6 +1833,28 @@ components:
           description: Formed matches containing the user, most recent first (up to 10)
           items:
             $ref: '#/components/schemas/FormedGroup'
+        queue_stats:
+          $ref: '#/components/schemas/QueueStats'
+
+    QueueStats:
+      type: object
+      required: [players, parties, average_wait_seconds]
+      description: >
+        Read-only queue size statistics for display; they do not influence
+        joining or group formation.
+      properties:
+        players:
+          type: integer
+          format: int64
+          description: Players currently queued (all modes)
+        parties:
+          type: integer
+          format: int64
+          description: Queued parties, counted once per party (solo players not counted)
+        average_wait_seconds:
+          type: integer
+          format: int64
+          description: Average queue wait in seconds (rounded), 0 when the queue is empty
 
     FormedGroup:
       type: object
@@ -1872,14 +1952,15 @@ components:
     # ─── Rankings ──────────────────────────────────────────────────────────
     Ranking:
       type: object
-      required: [id, user_uuid, rank_type, score, rank_position, season, updated_at]
+      required: [id, user_uid, rank_type, score, rank_position, season, updated_at]
       properties:
         id:
           type: integer
           format: int64
-        user_uuid:
-          type: string
-          format: uuid
+        user_uid:
+          type: integer
+          format: int64
+          description: Player HRPAuth UID
         rank_type:
           type: string
         score:
@@ -1892,3 +1973,28 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    RankingTopResult:
+      type: object
+      required: [rankings, total_count]
+      properties:
+        rankings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ranking'
+        total_count:
+          type: integer
+          description: Total number of ranked entries for the requested type/season
+
+    RankTier:
+      type: object
+      required: [name, min_score]
+      description: >
+        Display-only rank tier (ladder entry for progress bars); no part in
+        settlement, no season semantics.
+      properties:
+        name:
+          type: string
+        min_score:
+          type: integer
+          description: Minimum rank score for this tier
