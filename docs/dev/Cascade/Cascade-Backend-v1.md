@@ -13,11 +13,12 @@
 >   content moved out per repository scope), 2026-11-05 as **v1.2** (proxy
 >   transport selection from the declared trust strategy) and **v1.2.1**
 >   (coverage-matrix clarifications: reserved `UNSUPPORTED_VERSION`, retry
->   scope) by HA-Contract; see [Changelog](#changelog).
+>   scope), 2026-11-08 as **v1.3** (read-only room mod manifest and mod
+>   file endpoints) by HA-Contract; see [Changelog](#changelog).
 
 ---
 
-# Cascade Backend Contract v1.2.1
+# Cascade Backend Contract v1.3.0
 
 This contract defines the boundary between the Cascade edge proxy and an
 independently developed Rusted Warfare backend. The backend owns rooms, lobby
@@ -193,6 +194,10 @@ document `openapi/cascade-backend-v1.yaml` is the machine-readable companion.
 - Room management endpoints support the proxy's existing room API facade:
   retrieve room list/detail, create/delete room, update settings, kick/ban a
   player, and retrieve room players.
+- `GET /rooms/{code}/mods` (v1.3): mod manifest of the backend's game-core
+  mod set for this room. Read-only; see [Room mod manifest](#room-mod-manifest).
+- `GET /rooms/{code}/mods/{file}` (v1.3): mod file bytes, exactly as declared
+  in the manifest. Read-only; see [Room mod manifest](#room-mod-manifest).
 
 The backend must make `PUT .../identity` idempotent for the exact same
 sessionID and jti. A retry with a different identity or jti for an already
@@ -231,6 +236,43 @@ The proxy polls every 5 seconds and uses the latest successful snapshot for
 routing and list aggregation. Snapshots are authoritative per backend; a room
 code claimed by multiple backends is a conflict and must not be routed.
 After proxy restart, the directory is rebuilt from backend snapshots.
+
+## Room mod manifest
+
+Since v1.3 the backend exposes the mod set of its game core so that
+client-side mod assemblers (RW-Mod-Injector) can prepare the exact mods a
+room requires before connecting. Both endpoints are **read-only** and are
+at the same public level as the room list itself: they carry no player data
+and no server-internal fields.
+
+- `GET /rooms/{code}/mods` returns the manifest:
+  `{"mods":[{"name","file","sha256","size"}...], "sig":null, "sigAlg":null}`.
+  - `name` is a human-readable mod name (display only; assemblers must not
+    use it as an identity key).
+  - `file` is a safe file name restricted to `[A-Za-z0-9._-]+` (never `.` or
+    `..`); it is the only name valid on the content endpoint. Directory-style
+    mods are packaged by the backend; the served artifact is always a single
+    file.
+  - `sha256` is the lowercase hex SHA-256 of the exact bytes served by the
+    content endpoint; `size` is their size in bytes. **Content hashes are the
+    sole trust basis**: assemblers match installed mods against the manifest
+    by content hash only, never by name.
+  - `sig` / `sigAlg` are reserved for a future publisher signature; v1.3
+    backends emit `null` for both. Assemblers must accept and ignore them.
+  - The manifest reflects the backend's mod set as loaded from its game-core
+    mod directory. An empty `mods` array is valid (zero-mod room).
+  - Unknown room code: `404` with code `ROOM_NOT_FOUND`.
+- `GET /rooms/{code}/mods/{file}` returns the mod file bytes
+  (`application/octet-stream`). The body must be exactly the bytes whose
+  `sha256`/`size` the manifest declares for `file`; the backend must not
+  transform the stored file. A `file` value outside the whitelist character
+  set (including `.` and `..`) is `400 INVALID_REQUEST`; a well-formed value
+  absent from the manifest is `404 ROOM_NOT_FOUND`.
+
+Backends without a mod set or without mod-serving capability still answer
+`GET /rooms/{code}/mods` with an empty manifest for rooms they own; the
+content endpoint then only produces `404`. Trust-strategy behavior (`403
+FORBIDDEN`) applies to both endpoints like any other `/v1` operation.
 
 ## Errors and retries
 
@@ -283,6 +325,26 @@ errors must not expose tokens, certificates, or internal backend details.
   routing.
 
 ## Changelog
+
+### v1.2.1 → v1.3 (2026-11-08)
+
+Additive revision for client-side mod assembly (RW-Mod-Injector):
+
+1. **`GET /rooms/{code}/mods`**: read-only mod manifest of the backend's
+   game-core mod set for a room (`name` / `file` / `sha256` / `size` per
+   entry, plus reserved `sig` / `sigAlg` emitted as `null`). Content hashes
+   are defined as the sole trust basis for assembly; matching by name is
+   contractually excluded.
+2. **`GET /rooms/{code}/mods/{file}`**: read-only mod file bytes, exactly
+   the bytes the manifest declares. `file` is whitelist-restricted
+   (`[A-Za-z0-9._-]+`, never `.`/`..`); malformed values are
+   `INVALID_REQUEST`, unknown files `ROOM_NOT_FOUND`.
+
+No existing endpoint, field, or response semantics changed; v1.3 is not a
+breaking revision for proxy implementations (the proxy is not a consumer of
+these endpoints in v1.3 — they serve client-side assemblers, whether the
+client reaches the backend directly or through a future proxy-side content
+surface).
 
 ### v1.2 → v1.2.1 (2026-11-05)
 

@@ -7,15 +7,15 @@ independently developed Rusted Warfare backend.
 ## Files
 
 - [`Cascade-Backend-v1.md`](./Cascade-Backend-v1.md): the contract document,
-  currently at **v1.1.1** (transport and trust separation, backend trust
-  strategies `open`/`ip`/`pinned`, `/v1/health` helper readiness, `FORBIDDEN`
-  error code; v1.1.1 moved deployment content out per repository scope — see
-  its Changelog). Migrated from `CoreMatch/Cascade@f94f511` on 2026-11-04
+  currently at **v1.3.0** (read-only room mod manifest and mod file
+  endpoints; earlier revisions: v1.2.1 coverage clarifications, v1.2 proxy
+  transport selection, v1.1.x trust strategies and `FORBIDDEN` — see its
+  Changelog). Migrated from `CoreMatch/Cascade@f94f511` on 2026-11-04
   and revised here as the authoritative copy; the copy left in the Cascade
   repository is historical.
 - [`../../api/openapi/cascade-backend-v1.yaml`](../../api/openapi/cascade-backend-v1.yaml):
   OpenAPI 3.1 definition of the backend `/v1` control plane (`info.version`
-  tracks the contract version, currently `1.1.1`).
+  tracks the contract version, currently `1.3.0`).
 
 ## Counterpart implementations
 
