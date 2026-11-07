@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Avalon Plugin Contract
-  version: 1.1.0
+  version: 1.2.0
   description: >-
     Versioned contract between the Avalon governance server (caller) and
     out-of-process plugins (HTTP servers). v1.0.0 (2026-11-07): initial
@@ -16,10 +16,18 @@ info:
     veto when granted); manifest per-event veto capability; observe-tier
     delivery is best-effort (in-memory queue, drop-oldest, no persistence,
     no replay); gameplay vetoes are bounded by a separate tight timeout.
-    Plugins are independent processes; neither the JVM engine shell nor
-    Avalon loads plugin code. The authoritative design records are Avalon
-    knowledge entries 0006 (v1) and the v2 implementation status entry;
-    this file is the schema/endpoint registration.
+    v1.2.0 (2026-11-08): the three scope-deferred v2 items —
+    connection.new (connection-level veto admission before any protocol
+    state exists; payload is connection-layer only, a veto disconnects
+    silently with the reason logged server-side), game.start promoted to
+    dual mode (pre-start veto when granted, same payload shape with
+    match.startTime=0 before the start; the post-start observe emission is
+    unchanged), and player.kicked (observe-tier audit emitted from the
+    single kick choke point, carrying the kick reason and rejoin-lockout
+    duration). Plugins are independent processes; neither the JVM engine
+    shell nor Avalon loads plugin code. The authoritative design records
+    are Avalon knowledge entries 0006 (v1) and the v2 implementation
+    status entry; this file is the schema/endpoint registration.
 servers:
   - url: http://127.0.0.1:9800/v1
     description: >-
@@ -231,12 +239,24 @@ paths:
   /events/game.start:
     post:
       operationId: eventGameStart
-      summary: Match started (tier observe)
+      summary: Match started (tier observe; tier veto before start when granted)
       description: >-
-        Emitted after the room successfully starts a match (admin /start or
-        the auto-start countdown; both converge on the same start command).
-        Best-effort observe delivery. The match block is a snapshot of the
-        room state at start time.
+        Dual-mode event. Veto mode (manifest veto declaration plus operator
+        grant required, default-deny): consulted before the room starts a
+        match — admin /start and the auto-start countdown converge on the
+        same start path — with the pre-start room snapshot; match.startTime
+        is 0 in this pre-start consultation. Synchronous, bounded by
+        Avalon's admissionTimeoutMs (further capped by the plugin's manifest
+        timeoutMs); it blocks only the start request. allowed=false cancels
+        the start: the reason is shown to the initiating admin, or goes to
+        the Avalon server log only when the start was automatic (no
+        initiating player). Timeout, transport errors, non-2xx, invalid
+        signatures, malformed bodies, and denies without a reason fail open
+        (the match starts), WARN-logged and counted. At-most-once. Observe
+        mode: emitted after the room successfully starts a match,
+        best-effort delivery, match block is the start-time snapshot with
+        the actual startTime. A vetoed start produces no observe
+        notification.
       requestBody:
         required: true
         content:
@@ -245,9 +265,17 @@ paths:
               $ref: "#/components/schemas/GameStartEvent"
       responses:
         "200":
-          description: Ack (any 2xx; body ignored, signature verified)
+          description: >-
+            Veto mode: the decision (Verdict). Observe mode: ack, body
+            ignored, signature verified.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Verdict"
         default:
-          description: Dropped and counted (observe tier, no retry).
+          description: >-
+            Veto mode: error, fails open (the match starts). Observe mode:
+            dropped and counted.
 
   /events/player.chat:
     post:
@@ -331,6 +359,72 @@ paths:
             Veto mode: error, fails open (operation proceeds). Observe
             mode: dropped and counted.
 
+  /events/connection.new:
+    post:
+      operationId: eventConnectionNew
+      summary: Connection-level admission before protocol handling (tier veto, granted)
+      description: >-
+        Consulted when a new transport connection presents its first packet,
+        before any protocol state exists. The payload is connection-layer
+        information only — the connection has not spoken the game protocol
+        yet, so no player identity exists and none is carried. Requires both
+        a manifest veto declaration and the operator's veto grant
+        (default-deny), same gating as player.join. Synchronous, bounded by
+        Avalon's admissionTimeoutMs (further capped by the plugin's manifest
+        timeoutMs); the wait blocks only this connection's first packet, not
+        other connections. allowed=false closes the connection immediately.
+        There is no channel to surface the reason to the peer at this stage:
+        the reason goes to the Avalon server log only. Timeout, transport
+        errors, non-2xx, invalid signatures, malformed bodies, and denies
+        without a reason fail open (the connection proceeds), WARN-logged
+        and counted. At-most-once: Avalon never retries this event. The
+        built-in IP/24 ban check runs first and takes precedence — a banned
+        /24 is rejected without consulting plugins.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectionNewEvent"
+      responses:
+        "200":
+          description: The admission decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Verdict"
+        default:
+          description: >-
+            Non-2xx or invalid response: treated as an error, the admission
+            fails open (connection proceeds).
+
+  /events/player.kicked:
+    post:
+      operationId: eventPlayerKicked
+      summary: Player kicked (tier observe, audit)
+      description: >-
+        Emitted from the single choke point every kick funnels through —
+        console/client admin commands, relay/gateway actions, ban-triggered
+        kicks, and join-admission vetoes — including AI players (payload bot
+        flag distinguishes them). reason is the kick text as issued;
+        durationSec is the rejoin lockout in seconds (0 = kick without a
+        rejoin lock). Best-effort observe delivery: a delivery failure drops
+        the event and counts it — no retry, no persistence, no replay. This
+        is the defined audit semantics of the observe tier: a kick is never
+        re-driven or undone because its audit notification failed to
+        deliver.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerKickedEvent"
+      responses:
+        "200":
+          description: Ack (any 2xx; body ignored, signature verified)
+        default:
+          description: Dropped and counted (observe tier, no retry).
+
 components:
   securitySchemes:
     avalonSignature:
@@ -390,10 +484,12 @@ components:
             supported version; with no intersection the event is not
             delivered to this plugin. Declaring veto=true requests veto
             mode for a dual-mode event (player.join, unit.operation,
-            factory.build); it only takes effect when the operator's
-            plugin configuration grants that event's veto to this plugin
-            (default-deny). Without the grant the event is delivered in
-            observe mode.
+            factory.build, connection.new, game.start); it only takes
+            effect when the operator's plugin configuration grants that
+            event's veto to this plugin (default-deny). Without the grant
+            the event is delivered in observe mode (for connection.new,
+            which has no observe mode, without the grant the plugin is
+            simply not consulted).
           additionalProperties:
             type: object
             required: [versions]
@@ -691,7 +787,10 @@ components:
                   type: integer
                 startTime:
                   type: integer
-                  description: Unix seconds at match start.
+                  description: >-
+                    Unix seconds at match start. 0 in the pre-start veto
+                    consultation (the match has not started yet); the
+                    actual start time in the post-start observe emission.
                 players:
                   type: array
                   items:
@@ -756,3 +855,58 @@ components:
             actionId:
               type: string
               description: Factory build action id (never starts with "_").
+
+    ConnectionNewEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          required: [connection]
+          properties:
+            event:
+              const: connection.new
+            eventVersion:
+              const: 1
+            connection:
+              type: object
+              description: >-
+                Connection-layer identity only. The connection has not
+                spoken the game protocol yet; no player identity exists at
+                this point and none is carried. No room reference either —
+                the connection is not associated with a room yet.
+              required: [address, ipLong24, transport]
+              properties:
+                address:
+                  type: string
+                  description: Remote IP of the connection.
+                ipLong24:
+                  type: string
+                  description: >-
+                    /24 prefix key, same form the built-in IP/24 ban list
+                    is keyed on.
+                transport:
+                  type: string
+                  description: Transport identifier (e.g. TCP-NIO).
+
+    PlayerKickedEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          required: [room, player, reason, durationSec]
+          properties:
+            event:
+              const: player.kicked
+            eventVersion:
+              const: 1
+            room:
+              $ref: "#/components/schemas/RoomRef"
+            player:
+              $ref: "#/components/schemas/PlayerInfo"
+            reason:
+              type: string
+              description: >-
+                Kick text as issued. Sanitized before emission (control
+                characters stripped, truncated to 200 runes).
+            durationSec:
+              type: integer
+              description: >-
+                Rejoin lockout in seconds; 0 = kick without a rejoin lock.
