@@ -73,6 +73,7 @@ It prints `Business API drift check passed.` and exits 0 when every pair
 agrees. Implementation repositories are resolved through the environment
 variables `HRPAUTH_REPO_DIR`, `HASKINLIB_REPO_DIR`, `YGGDRASIL_REPO_DIR`,
 `MATCHCOREARENA_REPO_DIR`, `WINNERPROXY_REPO_DIR`, `CASCADE_REPO_DIR`,
+`DEPLOYER_REPO_DIR`,
 falling back to sibling directories of this repository and then to
 `~/Desktop/HA` (`~/Cascade` for Cascade). A missing repository or contract
 file is a hard error (exit 2), never a silent pass.
