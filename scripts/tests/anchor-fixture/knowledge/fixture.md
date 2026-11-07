@@ -1,7 +1,7 @@
 # Anchor-checker self-test fixture
 
 This fixture is consumed by `check-knowledge-anchors.sh --self-test`.
-Expected outcome: exactly 5 problems, 0 URL false positives.
+Expected outcome: exactly 6 problems, 0 URL false positives.
 
 ## URLs must never parse as anchors
 
@@ -10,20 +10,22 @@ https://arena.mcnb.dev:443/api/matches — see also
 https://example.org:8443/docs#L5 for the protocol notes. None of these
 may be reported.
 
-## Valid anchors (7, no problems)
+## Valid anchors (8, no problems)
 
 - Symbol anchor: sample.txt::MARKER
 - Field anchor: sample.txt (field: second)
 - Line anchors: sample.txt:L2 and sample.txt:2 and sample.txt:L1-L3
 - Markdown-link line anchors: sample.txt#L1-L2 and sample.txt#L3
+- Line anchor with correct content fingerprint: sample.txt:L1-L2 fp=2bcc721a
 
-## Deliberately broken anchors (exactly 5 problems)
+## Deliberately broken anchors (exactly 6 problems)
 
 - File that does not exist: docs/missing.go:10
 - Line beyond EOF: sample.txt:L99
 - Symbol that does not exist: sample.txt::NOSUCHSYMBOL
 - Field that does not exist: sample.txt (field: nosuchkey)
 - Time point in a nonexistent commit: sample.txt:L1 @ deadbeef0
+- Wrong content fingerprint: sample.txt:L3 fp=deadbeef
 
 ## Skipped lines
 
