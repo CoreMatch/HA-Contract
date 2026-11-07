@@ -1,18 +1,25 @@
 openapi: 3.1.0
 info:
   title: Avalon Plugin Contract
-  version: 1.0.0
+  version: 1.1.0
   description: >-
     Versioned contract between the Avalon governance server (caller) and
     out-of-process plugins (HTTP servers). v1.0.0 (2026-11-07): initial
     registration — manifest negotiation, the room.create synchronous
     admission event, and the game.over asynchronous post-match event,
     including the bidirectional HMAC signature scheme, delivery guarantees,
-    and failure policy. Plugins are independent processes; neither the JVM
-    engine shell nor Avalon loads plugin code. The authoritative design
-    record is Avalon knowledge entry 0006 (out-of-process plugin extension
-    points); this file is the schema/endpoint registration required before
-    server-side implementation.
+    and failure policy. v1.1.0 (2026-11-08): the three-tier event contract
+    (observe / veto / deliver) and the v2 event catalog — player.join
+    (observe, veto when granted), player.leave, player.banned,
+    player.unbanned, player.ipbanned, game.start, player.chat,
+    unit.operation (observe, veto when granted), factory.build (observe,
+    veto when granted); manifest per-event veto capability; observe-tier
+    delivery is best-effort (in-memory queue, drop-oldest, no persistence,
+    no replay); gameplay vetoes are bounded by a separate tight timeout.
+    Plugins are independent processes; neither the JVM engine shell nor
+    Avalon loads plugin code. The authoritative design records are Avalon
+    knowledge entries 0006 (v1) and the v2 implementation status entry;
+    this file is the schema/endpoint registration.
 servers:
   - url: http://127.0.0.1:9800/v1
     description: >-
@@ -35,7 +42,7 @@ paths:
         plugin's shared secret (see the Avalon-Plugin-Signature header). A
         missing, unsigned, unparseable, or protocol-incompatible manifest
         marks the plugin unready: admission calls skip it (fail-open) and
-        queued game.over events are held until negotiation succeeds.
+        queued deliver-tier events are held until negotiation succeeds.
       responses:
         "200":
           description: Manifest accepted
@@ -51,7 +58,7 @@ paths:
   /events/room.create:
     post:
       operationId: eventRoomCreate
-      summary: Synchronous room-creation admission (vetoable)
+      summary: Synchronous room-creation admission (tier veto)
       description: >-
         Sent before Avalon creates a room (boot-time singleton room,
         Cascade control-plane create, relay room). All subscribed ready
@@ -84,7 +91,7 @@ paths:
   /events/game.over:
     post:
       operationId: eventGameOver
-      summary: Asynchronous post-match notification (non-vetoable)
+      summary: Asynchronous post-match notification (tier deliver)
       description: >-
         Emitted after the room fires its game-over event. Delivery is
         at-least-once: per-plugin FIFO outbox persisted as a write-ahead
@@ -106,6 +113,223 @@ paths:
           description: Ack (any 2xx; body ignored, signature verified)
         default:
           description: "Non-ack: Avalon retries per the delivery guarantee."
+
+  /events/player.join:
+    post:
+      operationId: eventPlayerJoin
+      summary: Player joined the room (tier observe; tier veto when granted)
+      description: >-
+        Emitted after the player is registered in the room (the engine has
+        already accepted the connection; a veto therefore takes effect as
+        an immediate kick carrying the plugin's reason, not a refused
+        connection). Two modes per plugin, decided by manifest declaration
+        plus the operator's veto grant in Avalon's plugin configuration
+        (default-deny): veto mode — synchronous admission bounded by
+        admissionTimeoutMs, fail-open on error, allowed=false kicks the
+        player with the reason; observe mode — best-effort async push
+        (in-memory queue, drop-oldest, no persistence, no replay, no
+        retry). Vetoed joins produce no observe notifications.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerJoinEvent"
+      responses:
+        "200":
+          description: >-
+            Veto mode: the decision (Verdict). Observe mode: ack, body
+            ignored, signature verified.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Verdict"
+        default:
+          description: >-
+            Veto mode: error, fails open (player stays). Observe mode:
+            dropped and counted.
+
+  /events/player.leave:
+    post:
+      operationId: eventPlayerLeave
+      summary: Player left the room (tier observe)
+      description: >-
+        Emitted when a player disconnects or is kicked. Best-effort observe
+        delivery. The disconnect cause (voluntary / kicked / network drop)
+        is not available to Avalon and is not part of this event;
+        banRemainingMs > 0 indicates the player left with an active rejoin
+        lockout (kick or ban with a ban window).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerLeaveEvent"
+      responses:
+        "200":
+          description: Ack (any 2xx; body ignored, signature verified)
+        default:
+          description: Dropped and counted (observe tier, no retry).
+
+  /events/player.banned:
+    post:
+      operationId: eventPlayerBanned
+      summary: Player banned (tier observe)
+      description: >-
+        Emitted when a ban action fires against a player (console, client
+        admin command, or Cascade facade). Best-effort observe delivery.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerActionEvent"
+      responses:
+        "200":
+          description: Ack (any 2xx; body ignored, signature verified)
+        default:
+          description: Dropped and counted (observe tier, no retry).
+
+  /events/player.unbanned:
+    post:
+      operationId: eventPlayerUnbanned
+      summary: Player unbanned (tier observe)
+      description: >-
+        Emitted when an unban action fires for a player. Best-effort
+        observe delivery.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerActionEvent"
+      responses:
+        "200":
+          description: Ack (any 2xx; body ignored, signature verified)
+        default:
+          description: Dropped and counted (observe tier, no retry).
+
+  /events/player.ipbanned:
+    post:
+      operationId: eventPlayerIpBanned
+      summary: Player IP banned (tier observe)
+      description: >-
+        Emitted when an IP-ban action fires against a player. Best-effort
+        observe delivery.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerActionEvent"
+      responses:
+        "200":
+          description: Ack (any 2xx; body ignored, signature verified)
+        default:
+          description: Dropped and counted (observe tier, no retry).
+
+  /events/game.start:
+    post:
+      operationId: eventGameStart
+      summary: Match started (tier observe)
+      description: >-
+        Emitted after the room successfully starts a match (admin /start or
+        the auto-start countdown; both converge on the same start command).
+        Best-effort observe delivery. The match block is a snapshot of the
+        room state at start time.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GameStartEvent"
+      responses:
+        "200":
+          description: Ack (any 2xx; body ignored, signature verified)
+        default:
+          description: Dropped and counted (observe tier, no retry).
+
+  /events/player.chat:
+    post:
+      operationId: eventPlayerChat
+      summary: Player chat message passed the built-in filters (tier observe)
+      description: >-
+        Emitted after the message passes the length / mute-all / chat
+        filter checks; messages from muted players never reach plugins.
+        Best-effort observe delivery. High frequency: plugins declaring
+        this event should expect drop-oldest backpressure under load.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerChatEvent"
+      responses:
+        "200":
+          description: Ack (any 2xx; body ignored, signature verified)
+        default:
+          description: Dropped and counted (observe tier, no retry).
+
+  /events/unit.operation:
+    post:
+      operationId: eventUnitOperation
+      summary: Player issued a unit order (tier observe; tier veto when granted)
+      description: >-
+        Emitted when Avalon parses a unit-order block from the client
+        game-command stream. Observe mode: best-effort, high frequency.
+        Veto mode (manifest declaration plus operator grant required):
+        synchronous, bounded by Avalon's gameplay veto timeout
+        (gameplayVetoTimeoutMs, default cap 250ms) because it blocks the
+        issuing player's command stream; allowed=false stops the packet
+        before the engine with no player-facing message (the veto reason is
+        logged only); timeout/error fails open (operation proceeds).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnitOperationEvent"
+      responses:
+        "200":
+          description: >-
+            Veto mode: the decision (Verdict). Observe mode: ack, body
+            ignored, signature verified.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Verdict"
+        default:
+          description: >-
+            Veto mode: error, fails open (operation proceeds). Observe
+            mode: dropped and counted.
+
+  /events/factory.build:
+    post:
+      operationId: eventFactoryBuild
+      summary: Player queued a factory build (tier observe; tier veto when granted)
+      description: >-
+        Emitted when Avalon parses a factory-build action (action id not
+        starting with "_") from the client game-command stream. Same tier
+        rules and timeout semantics as unit.operation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FactoryBuildEvent"
+      responses:
+        "200":
+          description: >-
+            Veto mode: the decision (Verdict). Observe mode: ack, body
+            ignored, signature verified.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Verdict"
+        default:
+          description: >-
+            Veto mode: error, fails open (operation proceeds). Observe
+            mode: dropped and counted.
 
 components:
   securitySchemes:
@@ -152,7 +376,7 @@ components:
         protocol:
           type: string
           const: avalon-plugin/v1
-          description: Exact match required in v1.
+          description: Exact match required (the v1 protocol id covers v1.x).
         id:
           type: string
           description: Plugin self-identifier.
@@ -162,9 +386,14 @@ components:
         events:
           type: object
           description: >-
-            Event name -> supported schema versions. Avalon emits the
-            highest mutually supported version; with no intersection the
-            event is not delivered to this plugin.
+            Event name -> capability. Avalon emits the highest mutually
+            supported version; with no intersection the event is not
+            delivered to this plugin. Declaring veto=true requests veto
+            mode for a dual-mode event (player.join, unit.operation,
+            factory.build); it only takes effect when the operator's
+            plugin configuration grants that event's veto to this plugin
+            (default-deny). Without the grant the event is delivered in
+            observe mode.
           additionalProperties:
             type: object
             required: [versions]
@@ -174,16 +403,20 @@ components:
                 items:
                   type: integer
                 minItems: 1
+              veto:
+                type: boolean
+                default: false
         timeoutMs:
           type: integer
           description: >-
             Self-declared processing budget; Avalon caps it with its own
-            admission timeout. Absent or non-positive means the Avalon cap.
+            admission timeout (and with the gameplay veto timeout for
+            in-game vetoes). Absent or non-positive means the Avalon cap.
         maxConcurrency:
           type: integer
           description: >-
-            Declared but reserved in v1: Avalon runs one worker per plugin
-            (ordering guarantee); values above 1 are treated as 1.
+            Declared but reserved in v1/v2: Avalon runs one worker per
+            plugin (ordering guarantee); values above 1 are treated as 1.
 
     EventEnvelope:
       type: object
@@ -214,6 +447,65 @@ components:
               type: string
             coreVersion:
               type: string
+
+    RoomRef:
+      type: object
+      description: The room the event belongs to.
+      required: [kind, code]
+      properties:
+        kind:
+          type: string
+          enum: [server, cascade, relay]
+          description: >-
+            v2 gameplay events only occur in server-mode rooms (kind is
+            "server"); room.create keeps all three kinds.
+        code:
+          type: string
+
+    PlayerInfo:
+      type: object
+      description: >-
+        Player identity as known to Avalon. In-game statistics
+        (kills/losses/economy/positions/survive state) are engine interior
+        and are deliberately not part of the contract.
+      required: [name, uuid, team]
+      properties:
+        name:
+          type: string
+        uuid:
+          type: string
+          description: connectHexID, the player's engine-side unique id.
+        team:
+          type: integer
+        slot:
+          type: integer
+          description: Engine slot, 0-based.
+        host:
+          type: boolean
+        bot:
+          type: boolean
+        spectator:
+          type: boolean
+        admin:
+          type: boolean
+          description: Room admin flag (including auto-admin).
+        address:
+          type: string
+          description: Source IP when known, else empty string.
+
+    Verdict:
+      type: object
+      description: Decision for a veto-tier call.
+      required: [allowed]
+      properties:
+        allowed:
+          type: boolean
+        reason:
+          type: string
+          description: >-
+            Mandatory when allowed=false. Human-readable; Avalon truncates
+            to 200 runes and strips control characters before display. A
+            deny without a reason is a malformed response and fails open.
 
     RoomCreateEvent:
       allOf:
@@ -284,15 +576,7 @@ components:
             eventVersion:
               const: 1
             room:
-              type: object
-              required: [kind, code]
-              properties:
-                kind:
-                  type: string
-                  const: server
-                  description: Only server-mode rooms run a simulation in v1.
-                code:
-                  type: string
+              $ref: "#/components/schemas/RoomRef"
             result:
               description: >-
                 Null when the engine produced no settlement data (e.g. a
@@ -325,3 +609,150 @@ components:
                           type: integer
                     replayName:
                       type: string
+
+    PlayerJoinEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          required: [room, player]
+          properties:
+            event:
+              const: player.join
+            eventVersion:
+              const: 1
+            room:
+              $ref: "#/components/schemas/RoomRef"
+            player:
+              $ref: "#/components/schemas/PlayerInfo"
+
+    PlayerLeaveEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          required: [room, player, banRemainingMs, inGame]
+          properties:
+            event:
+              const: player.leave
+            eventVersion:
+              const: 1
+            room:
+              $ref: "#/components/schemas/RoomRef"
+            player:
+              $ref: "#/components/schemas/PlayerInfo"
+            banRemainingMs:
+              type: integer
+              description: >-
+                Milliseconds remaining on the rejoin lockout window; > 0
+                means the player left with an active kick/ban window. The
+                disconnect cause itself (voluntary / kicked / network
+                drop) is not obtainable and is not carried.
+            inGame:
+              type: boolean
+              description: Whether the room was mid-match at leave time.
+
+    PlayerActionEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          required: [room, player]
+          properties:
+            event:
+              enum: [player.banned, player.unbanned, player.ipbanned]
+            eventVersion:
+              const: 1
+            room:
+              $ref: "#/components/schemas/RoomRef"
+            player:
+              $ref: "#/components/schemas/PlayerInfo"
+
+    GameStartEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          required: [room, match]
+          properties:
+            event:
+              const: game.start
+            eventVersion:
+              const: 1
+            room:
+              $ref: "#/components/schemas/RoomRef"
+            match:
+              type: object
+              description: Room snapshot at match start.
+              required: [mapName, mapPlayer, maxPlayers, startTime, players]
+              properties:
+                mapName:
+                  type: string
+                mapPlayer:
+                  type: string
+                  description: Engine map-player descriptor (e.g. "[z;p10]").
+                maxPlayers:
+                  type: integer
+                startTime:
+                  type: integer
+                  description: Unix seconds at match start.
+                players:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/PlayerInfo"
+
+    PlayerChatEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          required: [room, player, message]
+          properties:
+            event:
+              const: player.chat
+            eventVersion:
+              const: 1
+            room:
+              $ref: "#/components/schemas/RoomRef"
+            player:
+              $ref: "#/components/schemas/PlayerInfo"
+            message:
+              type: string
+              description: Message text after the built-in filters.
+
+    UnitOperationEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          required: [room, player, action, unitName, x, y]
+          properties:
+            event:
+              const: unit.operation
+            eventVersion:
+              const: 1
+            room:
+              $ref: "#/components/schemas/RoomRef"
+            player:
+              $ref: "#/components/schemas/PlayerInfo"
+            action:
+              type: string
+              description: Order kind name (build/move/attack etc.).
+            unitName:
+              type: string
+            x:
+              type: number
+            y:
+              type: number
+
+    FactoryBuildEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          required: [room, player, actionId]
+          properties:
+            event:
+              const: factory.build
+            eventVersion:
+              const: 1
+            room:
+              $ref: "#/components/schemas/RoomRef"
+            player:
+              $ref: "#/components/schemas/PlayerInfo"
+            actionId:
+              type: string
+              description: Factory build action id (never starts with "_").
