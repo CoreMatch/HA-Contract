@@ -29,6 +29,7 @@ To prevent documentation drift from the actual project, this project adopts a un
 - [Cascade Proxy API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/cascade-proxy.yaml): management surface of the Cascade proxy
 - [Cascade Backend API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/cascade-backend-v1.yaml): control-plane contract between the Cascade proxy and a Rusted Warfare backend
 - [Avalon Plugin API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/avalon-plugin-v1.yaml): contract between the Avalon governance server and out-of-process plugins
+- [HA-Services-Deployer API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/ha-services-deployer.yaml): delivery surface plus opt-in bare-metal orchestration endpoints
 
 ### Development and Internal Documentation
 - Development/design documentation lives in each service repository's own
@@ -60,6 +61,7 @@ at the **METHOD + path** level, in **both directions**:
 | MatchCoreArena-Server | `api/router.go` | `docs/api/openapi/matchcorearena-business.yaml` |
 | WinnerProxy | `internal/router/router.go` | `docs/api/openapi/winnerproxy-business.yaml` |
 | Cascade (proxy) | `internal/api/proxy_http.go` | `docs/api/openapi/cascade-proxy.yaml` |
+| HA-Services-Deployer | `internal/server/router.go` | `docs/api/openapi/ha-services-deployer.yaml` |
 
 Run it from a checkout of this repository:
 

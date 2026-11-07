@@ -17,6 +17,10 @@
 #   - Cascade proxy           vs docs/api/openapi/cascade-proxy.yaml
 #     (the backend control plane lives in cascade-backend-v1.yaml and is
 #      implemented outside these repositories; see docs/dev/Cascade/README.md)
+#   - HA-Services-Deployer    vs docs/api/openapi/ha-services-deployer.yaml
+#     (delivery surface plus the opt-in orchestration endpoints; the
+#      orchestration semantics are normative in the Deployer's
+#      knowledge/0007, the contract fixes the METHOD+path surface)
 #
 # Both directions are checked: METHOD+path present in code but missing from
 # the contract, and contract METHOD+path with no registered route.
@@ -25,7 +29,8 @@
 # back to sibling directories of this repository, then to ~/Desktop/HA
 # (~/Cascade for the Cascade proxy):
 #   HRPAUTH_REPO_DIR, HASKINLIB_REPO_DIR, YGGDRASIL_REPO_DIR,
-#   MATCHCOREARENA_REPO_DIR, WINNERPROXY_REPO_DIR, CASCADE_REPO_DIR
+#   MATCHCOREARENA_REPO_DIR, WINNERPROXY_REPO_DIR, CASCADE_REPO_DIR,
+#   DEPLOYER_REPO_DIR
 #
 # Missing repositories or contract files are hard errors (no silent pass).
 
@@ -61,6 +66,7 @@ YGGDRASIL_DIR="$(resolve_repo "${YGGDRASIL_REPO_DIR:-}" HRPAuth-Yggdrasil-API YG
 MATCHCOREARENA_DIR="$(resolve_repo "${MATCHCOREARENA_REPO_DIR:-}" MatchCoreArena-Server MATCHCOREARENA_REPO_DIR)"
 WINNERPROXY_DIR="$(resolve_repo "${WINNERPROXY_REPO_DIR:-}" WinnerProxy WINNERPROXY_REPO_DIR)"
 CASCADE_DIR="$(resolve_repo "${CASCADE_REPO_DIR:-}" Cascade CASCADE_REPO_DIR "$HOME/Cascade")"
+DEPLOYER_DIR="$(resolve_repo "${DEPLOYER_REPO_DIR:-}" HA-Services-Deployer DEPLOYER_REPO_DIR)"
 
 HRPAUTH_YAML="$ROOT/docs/api/openapi/hrpauth-business.yaml"
 HASKINLIB_YAML="$ROOT/docs/api/openapi/haskinlib-business.yaml"
@@ -68,15 +74,17 @@ YGGDRASIL_YAML="$ROOT/docs/api/openapi/hrpauth-yggdrasil-business.yaml"
 MATCHCOREARENA_YAML="$ROOT/docs/api/openapi/matchcorearena-business.yaml"
 WINNERPROXY_YAML="$ROOT/docs/api/openapi/winnerproxy-business.yaml"
 CASCADE_PROXY_YAML="$ROOT/docs/api/openapi/cascade-proxy.yaml"
+DEPLOYER_YAML="$ROOT/docs/api/openapi/ha-services-deployer.yaml"
 
-for f in "$HRPAUTH_YAML" "$HASKINLIB_YAML" "$YGGDRASIL_YAML" "$MATCHCOREARENA_YAML" "$WINNERPROXY_YAML" "$CASCADE_PROXY_YAML"; do
+for f in "$HRPAUTH_YAML" "$HASKINLIB_YAML" "$YGGDRASIL_YAML" "$MATCHCOREARENA_YAML" "$WINNERPROXY_YAML" "$CASCADE_PROXY_YAML" "$DEPLOYER_YAML"; do
   [[ -f "$f" ]] || fail "contract file missing: $f"
 done
 
 command -v rg >/dev/null 2>&1 || fail "ripgrep (rg) is required"
 
 normalize_route() {
-  sed -E 's/:([A-Za-z_][A-Za-z0-9_]*)/{\1}/g'
+  # :param -> {param}; gin catch-all *param -> {param} (OpenAPI spelling).
+  sed -E 's/:([A-Za-z_][A-Za-z0-9_]*)/{\1}/g; s/\*([A-Za-z_][A-Za-z0-9_]*)/{\1}/g'
 }
 
 extract_gin_routes() {
@@ -242,6 +250,15 @@ extract_openapi_routes "$CASCADE_PROXY_YAML" > "$tmpdir/cascade-openapi.txt"
 
 check_set "Cascade-proxy" "$tmpdir/cascade-routes.txt" "$tmpdir/cascade-openapi.txt" impl-vs-contract
 check_set "Cascade-proxy" "$tmpdir/cascade-routes.txt" "$tmpdir/cascade-openapi.txt" contract-vs-impl
+
+# --- HA-Services-Deployer ---
+# Route source is internal/server/router.go; the deploy group registers with
+# its full /api/v1/deploy prefix (single-level Group, drift-extractable).
+extract_gin_routes "$DEPLOYER_DIR/internal/server/router.go" > "$tmpdir/deployer-routes.txt"
+extract_openapi_routes "$DEPLOYER_YAML" > "$tmpdir/deployer-openapi.txt"
+
+check_set "HA-Services-Deployer" "$tmpdir/deployer-routes.txt" "$tmpdir/deployer-openapi.txt" impl-vs-contract
+check_set "HA-Services-Deployer" "$tmpdir/deployer-routes.txt" "$tmpdir/deployer-openapi.txt" contract-vs-impl
 
 if [[ "$DRIFT_FOUND" -eq 1 ]]; then
   echo "Business API drift detected."
