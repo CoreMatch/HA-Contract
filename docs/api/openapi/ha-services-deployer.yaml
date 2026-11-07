@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HA-Services-Deployer API
-  version: 1.1.0
+  version: 1.2.0
   description: >
     Contract for the HA-Services-Deployer HTTP surface. The service has two
     roles: (1) a read-only delivery service for the version manifest and
@@ -205,8 +205,14 @@ paths:
         refuses the run with 400 carrying the full graded report), plans by
         dependency order, then asynchronously executes the per-project
         pipeline (artifact+sha256 -> version dir -> symlink -> Tinyvisor
-        script upsert -> restart -> health probe, with auto-rollback on
-        failed health). The passing preflight report is stored on the run
+        script upsert -> restart -> health probe -> post-deploy smoke
+        verification when `facts.smoke` is declared, with auto-rollback on
+        failed health or smoke). Smoke checks are real requests proving the
+        service actually works (health only proves liveness); a failed
+        smoke is a failed deploy and takes the same auto-rollback path.
+        Smoke secrets are referenced as `${secret:<name>}` and resolved
+        from the orchestrator's credentials file — never stored in
+        manifests. The passing preflight report is stored on the run
         record. dry_run applies the same preflight gate (blockers refused)
         and records the report plus planned steps without executing.
         Single-flight: a second concurrent run is rejected. Re-running is
@@ -244,10 +250,13 @@ paths:
       summary: One-click rollback
       description: >
         Switches `current` back to the previous release (or `to` when given),
-        restarts via Tinyvisor and re-probes health; `cascade` also restarts
-        direct required dependents. Refused for foreign projects. Gated by
-        the preflight in rollback mode (no artifact/disk checks; any blocker
-        refuses with 400 carrying the full graded report).
+        restarts via Tinyvisor and re-probes health; when `facts.smoke` is
+        declared the rolled-back version is smoke-verified too (a failed
+        smoke marks the rollback run failed with the detail, the symlink
+        stays on the target). `cascade` also restarts direct required
+        dependents. Refused for foreign projects. Gated by the preflight in
+        rollback mode (no artifact/disk checks; any blocker refuses with
+        400 carrying the full graded report).
         Auth: X-Deploy-Token (fail-closed).
       security:
         - deployToken: []
