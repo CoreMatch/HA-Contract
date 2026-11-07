@@ -6,6 +6,11 @@
 #
 #   bash /home/lnb/Desktop/HA/HA-Contract/scripts/check-knowledge-anchors.sh
 #
+# With --stamp, the checker does not report: it rewrites knowledge/*.md and
+# adds/refreshes the fp= fingerprint on every non-time-point line anchor
+# (lines containing [xref] are skipped). Re-run --stamp after intentionally
+# editing anchored code so the fingerprints follow the code.
+#
 # Recognized anchor formats in knowledge/*.md:
 #
 #   1. Symbol anchor      path/to/file.ext::SymbolName
@@ -15,6 +20,12 @@
 #        -> the file must exist and have at least <end> lines.
 #        Colons inside URLs (http://host:port) are NOT line anchors; URLs are
 #        stripped before extraction.
+#        Optional content fingerprint suffix:  path:L123-L145 fp=abcd1234
+#        -> additionally, the sha256 (first 8 hex) of the anchored lines
+#        (trailing whitespace stripped) must match. This catches "file is
+#        still long enough but the content moved" drift that the bare
+#        line-count check cannot see. Add/refresh fingerprints with
+#        `--stamp` (see below); time-point anchors are never stamped.
 #   3. Time-point anchor  path:L123-L145 @ <commit>
 #        -> the file must exist in <commit> with at least <end> lines (git-verified).
 #        Use this for historical citations that must keep exact line numbers.
@@ -48,7 +59,11 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELFTEST=0
-[ "${1:-}" = "--self-test" ] && SELFTEST=1
+STAMP=0
+case "${1:-}" in
+  --self-test) SELFTEST=1 ;;
+  --stamp) STAMP=1 ;;
+esac
 
 if [ "$SELFTEST" -eq 1 ]; then
   ROOT="$SCRIPT_DIR/tests/anchor-fixture"
@@ -97,8 +112,79 @@ file_ok() { [ -f "$1" ]; }
 
 line_count() { wc -l < "$1" 2>/dev/null || echo 0; }
 
-check_line_anchor() { # $1=path $2=end-line $3=commit(or empty) $4=raw-anchor
-  local p="$1" end="$2" commit="$3" raw="$4" n
+line_fp() { # $1=path $2=start $3=end -> first 8 hex of sha256 of the
+            # anchored lines with trailing whitespace stripped.
+  sed -n "$2,$3p" "$1" 2>/dev/null | sed -E 's/[[:space:]]+$//' | sha256sum | cut -c1-8
+}
+
+if [ "$STAMP" -eq 1 ]; then
+  command -v python3 >/dev/null 2>&1 || { echo "--stamp requires python3" >&2; exit 2; }
+  python3 - "$ROOT" <<'PYEOF'
+import hashlib, os, re, sys
+root = sys.argv[1]
+RE_COLON = re.compile(r'([A-Za-z0-9_./~-]+):L?(\d+)(?:-L?(\d+))?( @ [0-9a-fA-F]{7,40})?( fp=[0-9a-f]{8})?')
+RE_HASH  = re.compile(r'([A-Za-z0-9_./~-]+)#L(\d+)(?:-L?(\d+))?( @ [0-9a-fA-F]{7,40})?( fp=[0-9a-f]{8})?')
+
+def fp_of(path, a, b):
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return None
+    if a < 1 or b > len(lines) or a > b:
+        return None
+    body = "\n".join(l.rstrip() for l in lines[a-1:b]) + "\n"
+    return hashlib.sha256(body.encode()).hexdigest()[:8]
+
+def stamp_line(line):
+    n = 0
+    def repl(m):
+        nonlocal n
+        if m.group(4):  # time-point anchor: pinned, never stamped
+            return m.group(0)
+        path, a, b = m.group(1), int(m.group(2)), int(m.group(3) or m.group(2))
+        h = fp_of(os.path.join(root, path), a, b)
+        if not h:
+            return m.group(0)
+        base = m.group(0)
+        if m.group(5):
+            if m.group(5) == " fp=" + h:
+                return m.group(0)
+            base = base[:-len(m.group(5))]
+        n += 1
+        return base + " fp=" + h
+    line = RE_COLON.sub(repl, line)
+    line = RE_HASH.sub(repl, line)
+    return line, n
+
+total = 0
+kdir = os.path.join(root, "knowledge")
+for fn in sorted(os.listdir(kdir)):
+    if not fn.endswith(".md"):
+        continue
+    p = os.path.join(kdir, fn)
+    with open(p, encoding="utf-8") as f:
+        lines = f.readlines()
+    out, changed = [], False
+    for line in lines:
+        if "[xref]" in line:
+            out.append(line)
+            continue
+        new, n = stamp_line(line)
+        if n:
+            changed = True
+            total += n
+        out.append(new)
+    if changed:
+        with open(p, "w", encoding="utf-8") as f:
+            f.writelines(out)
+print(f"stamped {total} line anchor(s)")
+PYEOF
+  exit $?
+fi
+
+check_line_anchor() { # $1=path $2=start $3=end $4=commit(or empty) $5=fp(or empty) $6=raw-anchor
+  local p="$1" start="$2" end="$3" commit="$4" fp="$5" raw="$6" n actual
   if [ -n "$commit" ]; then
     if ! git cat-file -e "$commit:$p" >/dev/null 2>&1; then
       if [ ! -e "$p" ] && missing_abs_skippable "$p"; then
@@ -121,6 +207,13 @@ check_line_anchor() { # $1=path $2=end-line $3=commit(or empty) $4=raw-anchor
   n=$(line_count "$p")
   if [ "$n" -lt "$end" ]; then
     report "$raw" "$p has only $n lines, anchor needs line $end"
+    return
+  fi
+  if [ -n "$fp" ]; then
+    actual=$(line_fp "$p" "$start" "$end")
+    if [ "$actual" != "$fp" ]; then
+      report "$raw" "$p lines $start-$end content drifted (fingerprint $fp, current $actual) — re-anchor or re-stamp"
+    fi
   fi
 }
 
@@ -174,62 +267,88 @@ while IFS= read -r m; do
   check_field_anchor "$p" "$key" "$m"
 done <<< "$(printf '%s\n' "$content" | grep -oE '[A-Za-z0-9_./~-]+\.[A-Za-z0-9]+ \(field: [^)]+\)' || true)"
 
-# 3a) line anchors with ':': path:L12-L34 [@ commit]  (bare numbers accepted)
+# 3a) line anchors with ':': path:L12-L34 [@ commit] [fp=abcd1234]  (bare numbers accepted)
 while IFS= read -r m; do
   [ -z "$m" ] && continue
   commit=""
+  fp=""
   rest="$m"
-  case "$m" in
+  case "$rest" in
+    *" fp="*)
+      fp="${rest##* fp=}"
+      rest="${rest% fp=*}"
+      ;;
+  esac
+  case "$rest" in
     *" @ "*)
-      commit="${m##* @ }"
-      rest="${m% @ *}"
+      commit="${rest##* @ }"
+      rest="${rest% @ *}"
+      fp=""  # time-point anchors are pinned in history; no fingerprint
       ;;
   esac
   p="${rest%%:*}"
   rng="${rest#*:}"
   rng="${rng#L}"
+  start="${rng%%-*}"
+  case "$start" in *[!0-9]*|"") start="" ;; esac
   end="${rng##*-L}"
   end="${end##*-}"
   case "$end" in *[!0-9]*|"") continue ;; esac
+  [ -n "$start" ] || start="$end"
   path_plausible "$p" || continue
   checked=$((checked + 1))
-  check_line_anchor "$p" "$end" "$commit" "$m"
-done <<< "$(printf '%s\n' "$content" | grep -oE '[A-Za-z0-9_./~-]+:L?[0-9]+(-L?[0-9]+)?( @ [0-9a-fA-F]{7,40})?' || true)"
+  check_line_anchor "$p" "$start" "$end" "$commit" "$fp" "$m"
+done <<< "$(printf '%s\n' "$content" | grep -oE '[A-Za-z0-9_./~-]+:L?[0-9]+(-L?[0-9]+)?( @ [0-9a-fA-F]{7,40})?( fp=[0-9a-f]{8})?' || true)"
 
-# 3b) line anchors with '#L' (markdown-link spelling): path#L12-L34 [@ commit]
+# 3b) line anchors with '#L' (markdown-link spelling): path#L12-L34 [@ commit] [fp=...]
 while IFS= read -r m; do
   [ -z "$m" ] && continue
   commit=""
+  fp=""
   rest="$m"
-  case "$m" in
+  case "$rest" in
+    *" fp="*)
+      fp="${rest##* fp=}"
+      rest="${rest% fp=*}"
+      ;;
+  esac
+  case "$rest" in
     *" @ "*)
-      commit="${m##* @ }"
-      rest="${m% @ *}"
+      commit="${rest##* @ }"
+      rest="${rest% @ *}"
+      fp=""
       ;;
   esac
   p="${rest%%#*}"
   rng="${rest#*#L}"
+  start="${rng%%-*}"
+  case "$start" in *[!0-9]*|"") start="" ;; esac
   end="${rng##*-L}"
   end="${end##*-}"
   case "$end" in *[!0-9]*|"") continue ;; esac
+  [ -n "$start" ] || start="$end"
   path_plausible "$p" || continue
   checked=$((checked + 1))
-  check_line_anchor "$p" "$end" "$commit" "$m"
-done <<< "$(printf '%s\n' "$content" | grep -oE '[A-Za-z0-9_./~-]+#L[0-9]+(-L?[0-9]+)?( @ [0-9a-fA-F]{7,40})?' || true)"
+  check_line_anchor "$p" "$start" "$end" "$commit" "$fp" "$m"
+done <<< "$(printf '%s\n' "$content" | grep -oE '[A-Za-z0-9_./~-]+#L[0-9]+(-L?[0-9]+)?( @ [0-9a-fA-F]{7,40})?( fp=[0-9a-f]{8})?' || true)"
 
 summary="anchors checked: $checked, problems: $problems"
 [ "$skipped_abs" -gt 0 ] && summary+=", skipped missing absolute paths: $skipped_abs"
 
 if [ "$SELFTEST" -eq 1 ]; then
-  # Expected fixture outcome: exactly 5 problems (see tests/anchor-fixture),
+  # Expected fixture outcome: exactly 6 problems (see tests/anchor-fixture),
   # and no false positives from the URL lines.
   fail=0
-  if [ "$problems" -ne 5 ]; then
-    echo "SELFTEST FAIL: expected 5 problems, got $problems"; fail=1
+  if [ "$problems" -ne 6 ]; then
+    echo "SELFTEST FAIL: expected 6 problems, got $problems"; fail=1
   fi
-  if [ "$checked" -lt 11 ]; then
-    echo "SELFTEST FAIL: expected at least 11 anchors checked (incl. #L forms), got $checked"; fail=1
+  if [ "$checked" -lt 13 ]; then
+    echo "SELFTEST FAIL: expected at least 13 anchors checked (incl. #L and fp forms), got $checked"; fail=1
   fi
+  case "$report_lines" in
+    *"content drifted"*) : ;;
+    *) echo "SELFTEST FAIL: wrong-fingerprint anchor was not reported"; fail=1 ;;
+  esac
   case "$report_lines" in
     *"127.0.0.1"*|*"arena.mcnb.dev"*|*"example.org"*|*"8443/docs"*)
       echo "SELFTEST FAIL: URL text was parsed as an anchor"; fail=1 ;;

@@ -99,6 +99,13 @@ bash scripts/check-knowledge-anchors.sh --self-test
 bash scripts/check-knowledge-anchors.sh
 ```
 
+Line anchors additionally support a content fingerprint suffix
+(`path:L12-L14 fp=abcd1234`): the checker then also verifies that the
+anchored lines still hash to the recorded value, catching "file is still
+long enough but the content moved" drift. `--stamp` adds/refreshes
+fingerprints on all non-time-point line anchors; re-run it after
+intentionally editing anchored code.
+
 In a full workspace checkout,
 [scripts/check-all-knowledge-anchors.sh](scripts/check-all-knowledge-anchors.sh)
 checks every repository's knowledge base in one pass.
