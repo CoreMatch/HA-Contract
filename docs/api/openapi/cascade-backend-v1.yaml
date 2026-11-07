@@ -9,7 +9,7 @@
 openapi: 3.1.0
 info:
   title: Cascade Backend Contract
-  version: 1.2.1
+  version: 1.3.0
   description: >-
     Versioned control API between the Cascade proxy and an independent game
     backend. v1.1 (2026-11-04): backend trust strategies (open/ip/pinned;
@@ -24,7 +24,10 @@ info:
     audit clarifications only (UNSUPPORTED_VERSION reserved, retry scope
     limited to transport failures); no endpoint, field, or response
     semantics changed, so this document carries the contract version for
-    traceability only. See the contract document Changelog
+    traceability only. v1.3 (2026-11-08): read-only room mod manifest and
+    mod file endpoints for client-side mod assembly (RW-Mod-Injector);
+    additive only, no existing endpoint, field, or response semantics
+    changed. See the contract document Changelog
     (docs/dev/Cascade/Cascade-Backend-v1.md).
 servers:
   - url: https://backend.example.invalid/v1
@@ -247,6 +250,52 @@ paths:
           $ref: "#/components/responses/TrustForbidden"
         "404":
           $ref: "#/components/responses/BackendError"
+  /rooms/{code}/mods:
+    get:
+      operationId: listRoomMods
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      responses:
+        "200":
+          description: >-
+            Mod manifest of the backend's game-core mod set for this room
+            (v1.3). Read-only and player-facing: the manifest carries only
+            mod names, safe file names, content hashes, and sizes — no
+            player data and no server-internal fields. Content hashes are
+            the sole trust basis for client-side assembly; sig/sigAlg are
+            reserved for a future publisher signature and are null in v1.3.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomModManifest"
+        "403":
+          $ref: "#/components/responses/TrustForbidden"
+        "404":
+          $ref: "#/components/responses/BackendError"
+  /rooms/{code}/mods/{file}:
+    get:
+      operationId: getRoomModFile
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+        - $ref: "#/components/parameters/ModFile"
+      responses:
+        "200":
+          description: >-
+            Mod file bytes (v1.3). The response body must be exactly the
+            bytes whose SHA-256 and size are declared for this file in the
+            room mod manifest. Served as an opaque octet stream; the
+            backend must not transform the stored file.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BackendError"
+        "403":
+          $ref: "#/components/responses/TrustForbidden"
+        "404":
+          $ref: "#/components/responses/BackendError"
 components:
   securitySchemes:
     # Retained for reference: under the `pinned` trust strategy the backend
@@ -268,6 +317,20 @@ components:
       required: true
       schema:
         type: string
+    ModFile:
+      name: file
+      in: path
+      required: true
+      description: >-
+        Safe file name exactly as declared in the room mod manifest
+        (v1.3). Restricted to a whitelist character set; path separators
+        are not valid file names, and the bare values "." and ".." are
+        rejected. A value outside the whitelist (including "." and "..")
+        is INVALID_REQUEST (400); a well-formed value that is not present
+        in the manifest is ROOM_NOT_FOUND (404).
+      schema:
+        type: string
+        pattern: "^[A-Za-z0-9._-]+$"
   schemas:
     RoomSummary:
       type: object
@@ -335,6 +398,52 @@ components:
       properties:
         playerId:
           type: string
+    RoomModManifest:
+      type: object
+      description: >-
+        Mod manifest for a room's backend mod set (v1.3). Assembly clients
+        must match installed mods against this manifest by content hash
+        only, never by name. sig/sigAlg are reserved for a future publisher
+        signature; v1.3 implementations emit null for both.
+      required: [mods]
+      properties:
+        mods:
+          type: array
+          items:
+            $ref: "#/components/schemas/RoomModEntry"
+        sig:
+          type:
+            - string
+            - "null"
+          description: Reserved publisher signature; null in v1.3.
+        sigAlg:
+          type:
+            - string
+            - "null"
+          description: Reserved signature algorithm identifier; null in v1.3.
+    RoomModEntry:
+      type: object
+      required: [name, file, sha256, size]
+      properties:
+        name:
+          type: string
+          description: Human-readable mod name (display only; never a key).
+        file:
+          type: string
+          pattern: "^[A-Za-z0-9._-]+$"
+          description: >-
+            Safe file name used by the content endpoint. Directory-style
+            mods are packaged; the served artifact is always a single file.
+        sha256:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+          description: >-
+            Lowercase hex SHA-256 of the exact bytes served by the content
+            endpoint. Sole trust basis for assembly verification.
+        size:
+          type: integer
+          minimum: 0
+          description: Size in bytes of the served file.
   responses:
     BackendError:
       description: Stable backend error response.
