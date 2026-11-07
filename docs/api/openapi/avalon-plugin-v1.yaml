@@ -1,0 +1,327 @@
+openapi: 3.1.0
+info:
+  title: Avalon Plugin Contract
+  version: 1.0.0
+  description: >-
+    Versioned contract between the Avalon governance server (caller) and
+    out-of-process plugins (HTTP servers). v1.0.0 (2026-11-07): initial
+    registration — manifest negotiation, the room.create synchronous
+    admission event, and the game.over asynchronous post-match event,
+    including the bidirectional HMAC signature scheme, delivery guarantees,
+    and failure policy. Plugins are independent processes; neither the JVM
+    engine shell nor Avalon loads plugin code. The authoritative design
+    record is Avalon knowledge entry 0006 (out-of-process plugin extension
+    points); this file is the schema/endpoint registration required before
+    server-side implementation.
+servers:
+  - url: http://127.0.0.1:9800/v1
+    description: >-
+      Example plugin-provided base. Each plugin serves its own base URL,
+      declared by the operator in Avalon's plugin configuration. Avalon is
+      the client of every endpoint below.
+
+security:
+  - avalonSignature: []
+
+paths:
+  /manifest:
+    get:
+      operationId: getManifest
+      summary: Plugin self-description and version negotiation
+      description: >-
+        Fetched by Avalon at boot (per-plugin timeout bounded by Avalon's
+        admission timeout) and re-fetched after connection-level delivery
+        failures (backoff 5s..5min). The response must be signed with the
+        plugin's shared secret (see the Avalon-Plugin-Signature header). A
+        missing, unsigned, unparseable, or protocol-incompatible manifest
+        marks the plugin unready: admission calls skip it (fail-open) and
+        queued game.over events are held until negotiation succeeds.
+      responses:
+        "200":
+          description: Manifest accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Manifest"
+        default:
+          description: >-
+            Any non-2xx or unsigned answer is a negotiation failure; Avalon
+            retries with backoff and keeps the plugin unready.
+
+  /events/room.create:
+    post:
+      operationId: eventRoomCreate
+      summary: Synchronous room-creation admission (vetoable)
+      description: >-
+        Sent before Avalon creates a room (boot-time singleton room,
+        Cascade control-plane create, relay room). All subscribed ready
+        plugins are called in parallel, each bounded by its effective
+        timeout min(manifest timeoutMs, Avalon admissionTimeoutMs, default
+        cap 2500ms). Any valid allowed=false vetoes the room; the reason is
+        surfaced to the requester (relay error channel / Cascade 403
+        message / boot console). Timeout, transport errors, non-2xx,
+        invalid signatures, malformed bodies, and denies without a reason
+        are errors and fail open (room allowed), WARN-logged. At-most-once:
+        Avalon never retries this event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoomCreateEvent"
+      responses:
+        "200":
+          description: The admission decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomCreateVerdict"
+        default:
+          description: >-
+            Non-2xx or invalid response: treated as an error, the admission
+            fails open (allowed).
+
+  /events/game.over:
+    post:
+      operationId: eventGameOver
+      summary: Asynchronous post-match notification (non-vetoable)
+      description: >-
+        Emitted after the room fires its game-over event. Delivery is
+        at-least-once: per-plugin FIFO outbox persisted as a write-ahead
+        log, replayed after Avalon restarts, retried with exponential
+        backoff 1s..60s on timeout/transport failure/non-2xx/invalid
+        signature. Each attempt is bounded by Avalon's delivery timeout
+        (default 10s). Events older than the max age (default 24h) are
+        dropped. Plugins MUST deduplicate on eventId and keep dedup state
+        for at least 24 hours. Any 2xx is an ack; the response body is
+        ignored but its signature is verified.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GameOverEvent"
+      responses:
+        "200":
+          description: Ack (any 2xx; body ignored, signature verified)
+        default:
+          description: "Non-ack: Avalon retries per the delivery guarantee."
+
+components:
+  securitySchemes:
+    avalonSignature:
+      type: apiKey
+      in: header
+      name: X-Avalon-Signature
+      description: >-
+        Bidirectional HMAC-SHA256 scheme. Every Avalon request carries
+        X-Avalon-Timestamp (unix seconds) and X-Avalon-Signature with
+        v1=hex(HMAC-SHA256(timestamp + "." + raw_body, secret)). Every
+        response Avalon accepts (manifest, verdict, ack) MUST carry the
+        same two headers computed over the response body with the shared
+        secret; Avalon verifies against the plugin's secret list (list
+        overlap supports rotation; Avalon signs with the first secret and
+        verifies with any). Timestamps off by more than 300s are rejected.
+
+  parameters:
+    AvalonTimestamp:
+      name: X-Avalon-Timestamp
+      in: header
+      required: true
+      schema:
+        type: integer
+      description: Unix seconds at request time; 300s skew tolerance.
+    AvalonSignature:
+      name: X-Avalon-Signature
+      in: header
+      required: true
+      schema:
+        type: string
+      description: >-
+        v1=hex(HMAC-SHA256(timestamp + "." + raw_body, secret)) over the
+        raw request body.
+
+  schemas:
+    Manifest:
+      type: object
+      required: [schema, protocol, id, version, events]
+      properties:
+        schema:
+          type: string
+          const: avalon-plugin/manifest
+        protocol:
+          type: string
+          const: avalon-plugin/v1
+          description: Exact match required in v1.
+        id:
+          type: string
+          description: Plugin self-identifier.
+        version:
+          type: string
+          description: Plugin version, free form.
+        events:
+          type: object
+          description: >-
+            Event name -> supported schema versions. Avalon emits the
+            highest mutually supported version; with no intersection the
+            event is not delivered to this plugin.
+          additionalProperties:
+            type: object
+            required: [versions]
+            properties:
+              versions:
+                type: array
+                items:
+                  type: integer
+                minItems: 1
+        timeoutMs:
+          type: integer
+          description: >-
+            Self-declared processing budget; Avalon caps it with its own
+            admission timeout. Absent or non-positive means the Avalon cap.
+        maxConcurrency:
+          type: integer
+          description: >-
+            Declared but reserved in v1: Avalon runs one worker per plugin
+            (ordering guarantee); values above 1 are treated as 1.
+
+    EventEnvelope:
+      type: object
+      description: Fields shared by every event.
+      required: [eventId, event, eventVersion, occurredAt, server]
+      properties:
+        eventId:
+          type: string
+          description: >-
+            evt_ + 26-char Crockford ULID. Generated once at emit time;
+            stable across retries and replays; plugins deduplicate on it.
+          pattern: "^evt_[0-9A-HJKMNP-TV-Z]{26}$"
+        event:
+          type: string
+        eventVersion:
+          type: integer
+        occurredAt:
+          type: string
+          format: date-time
+          description: RFC 3339 UTC emit time.
+        server:
+          type: object
+          required: [serverId, serverName, coreVersion]
+          properties:
+            serverId:
+              type: string
+            serverName:
+              type: string
+            coreVersion:
+              type: string
+
+    RoomCreateEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          required: [room, creator]
+          properties:
+            event:
+              const: room.create
+            eventVersion:
+              const: 1
+            room:
+              type: object
+              required: [kind, code, maxPlayers, isMod]
+              properties:
+                kind:
+                  type: string
+                  enum: [server, cascade, relay]
+                  description: >-
+                    server = boot-time singleton room; cascade = control
+                    plane POST /v1/rooms/create; relay = relay-protocol
+                    room.
+                code:
+                  type: string
+                  description: >-
+                    Room code/id. ServerID for kind=server; the requested
+                    code for kind=cascade; the requested custom id for
+                    kind=relay, empty when the relay id is auto-generated.
+                maxPlayers:
+                  type: integer
+                isMod:
+                  type: boolean
+                  description: Relay mod-room flag; false for other kinds.
+            creator:
+              type: object
+              required: [name, address]
+              properties:
+                name:
+                  type: string
+                  description: >-
+                    console for kind=server; cascade for kind=cascade; the
+                    creating player's name for kind=relay.
+                address:
+                  type: string
+                  description: Source IP when known, else empty string.
+
+    RoomCreateVerdict:
+      type: object
+      required: [allowed]
+      properties:
+        allowed:
+          type: boolean
+        reason:
+          type: string
+          description: >-
+            Mandatory when allowed=false. Human-readable; Avalon truncates
+            to 200 runes and strips control characters before display. A
+            deny without a reason is a malformed response and fails open.
+
+    GameOverEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          required: [room, result]
+          properties:
+            event:
+              const: game.over
+            eventVersion:
+              const: 1
+            room:
+              type: object
+              required: [kind, code]
+              properties:
+                kind:
+                  type: string
+                  const: server
+                  description: Only server-mode rooms run a simulation in v1.
+                code:
+                  type: string
+            result:
+              description: >-
+                Null when the engine produced no settlement data (e.g. a
+                forced end); the match-end fact is still delivered.
+              oneOf:
+                - type: "null"
+                - type: object
+                  required:
+                    [mapName, gameTime, allPlayerList, winPlayerList, playerData, replayName]
+                  properties:
+                    mapName:
+                      type: string
+                    gameTime:
+                      type: integer
+                      description: Engine-reported game time in seconds.
+                    allPlayerList:
+                      type: array
+                      items:
+                        type: string
+                    winPlayerList:
+                      type: array
+                      items:
+                        type: string
+                    playerData:
+                      type: object
+                      description: Player name -> (stat key -> int).
+                      additionalProperties:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                    replayName:
+                      type: string
