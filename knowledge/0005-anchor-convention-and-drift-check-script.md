@@ -26,6 +26,13 @@ preference:
    current-state citations that have neither a symbol nor a key name;
    expected to drift and to be repaired by the check below. Colons inside
    URLs (`http://host:port`) are never parsed as line anchors.
+   A line anchor may carry a **content fingerprint** suffix:
+   `path/to/file.ext:Lx-Ly fp=abcd1234` — the first 8 hex of the sha256 of
+   the anchored lines (trailing whitespace stripped). With a fingerprint
+   the checker additionally verifies that the anchored lines still hash to
+   the recorded value, closing the hole where a file is still long enough
+   but the anchored content has moved elsewhere in it. Time-point anchors
+   (`... @ <commit>`) never carry fingerprints — they are pinned in history.
 
 Cross-repository citations are prefixed with `[xref]` on the same line and
 are skipped by the checker (it cannot verify other repositories from here).
@@ -42,25 +49,52 @@ bash /home/lnb/Desktop/HA/HA-Contract/scripts/check-knowledge-anchors.sh
 
 The checker carries a self-test fixture (`scripts/tests/anchor-fixture/`,
 run with `--self-test`) covering URL false positives, the `#L` spelling,
-docker-tag/host-port/PHP-constant non-anchors, and each failure mode.
+docker-tag/host-port/PHP-constant non-anchors, a wrong-fingerprint case,
+and each failure mode.
 `scripts/check-all-knowledge-anchors.sh` runs the same checker across every
 main checkout in the workspace that has a `knowledge/` directory and prints
 a per-repo summary (repo / anchors / problems / exit), exiting non-zero if
-any repository fails. CI (`.github/workflows/knowledge-anchors.yml`) runs
+any repository fails.
+
+**Fingerprint workflow (`--stamp`).** Fingerprints are written by the
+checker itself, never by hand:
+
+```bash
+bash /home/lnb/Desktop/HA/HA-Contract/scripts/check-knowledge-anchors.sh --stamp
+```
+
+`--stamp` rewrites `knowledge/*.md`, adding/refreshing `fp=` on every
+non-time-point line anchor (lines containing `[xref]` are skipped). Run it
+**after every intentional edit of anchored content** — the fingerprint must
+follow the code. If a fingerprint is stale, the checker reports
+`content drifted (fingerprint <old>, current <new>) — re-anchor or
+re-stamp`: that is a working alarm, not a false positive. The repair is to
+re-read the cited code and either fix the anchor range (content moved) or
+re-run `--stamp` (the citation was meant to follow the edit). Do not delete
+the fingerprint or bypass the check to silence it.
+
+CI (`.github/workflows/knowledge-anchors.yml`) runs
 the self-test plus this repository's own check on every push/PR; because a
 CI checkout has no sibling repositories, it sets
 `ANCHOR_ALLOW_MISSING_ABS_PATHS=1`, which skips absolute-path anchors whose
 target is absent (they stay fully enforced in a workspace checkout).
+Every other repository with a `knowledge/` directory carries the same
+`knowledge-anchors.yml` workflow; it fetches the checker from this
+repository's `main` branch at run time (no local copies, no pinned forks),
+so all repositories always enforce the current rules — including
+fingerprints — and a checker improvement takes effect everywhere on the
+next CI run.
 
 ## Consequences
 - Costs and limitations:
   - Symbol anchors break on renames; the checker then reports the symbol as
     missing, which is exactly the intended early warning.
-  - The checker verifies existence (file/symbol/key/line count), not
-    semantics; a citation can still be contextually wrong. Human review
-    remains necessary.
-  - Repositories without a local checkout of HA-Contract must copy the script
-    or skip the check; the convention itself is repository-independent.
+  - The checker verifies existence (file/symbol/key/line count) and — with
+    `fp=` — content identity of the anchored lines, but not semantics; a
+    citation can still be contextually wrong. Human review remains
+    necessary.
+  - The checker is fetched from this repository's main branch by each
+    repository's CI; there are no local copies to keep in sync.
   - Slash-less path tokens are only checked when the file exists, so a
     mistyped root-level file name is not flagged (docker tags, host:port
     pairs and similar non-path tokens are skipped by the same rule).
