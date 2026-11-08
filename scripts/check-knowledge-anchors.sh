@@ -116,13 +116,20 @@ path_plausible() { # a candidate path must contain '/' or exist as a root file.
                     # Slash-less tokens that are not existing files (docker
                     # image tags like alpine:3, host:port like localhost:8080,
                     # PHP class constants like PDO::X, convention examples
-                    # like file.ext) are skipped. Known limitation: a
-                    # mistyped root-level file name is not flagged.
+                    # like file.ext) are skipped. Purely numeric tokens
+                    # (times like 12:00, ratios like 1:1) are never paths,
+                    # even if a file with that number happens to exist.
+                    # Known limitation: a mistyped root-level file name is
+                    # not flagged.
   case "$1" in
     /*) return 0 ;;
     */*) return 0 ;;
-    *) [ -f "$1" ] && return 0; return 1 ;;
   esac
+  case "$1" in
+    *[!0-9]*) : ;;
+    *) return 1 ;;
+  esac
+  [ -f "$1" ] && return 0; return 1
 }
 
 file_ok() { [ -f "$1" ]; }
@@ -386,15 +393,21 @@ while IFS= read -r f; do
   fcontent=$(grep -vF '[xref]' "$f" | sed -E 's@(https?|ftp)://[^[:space:]<>"]*@@g')
   while IFS= read -r m; do
     [ -z "$m" ] && continue
+    p="${m%%::*}"
+    path_plausible "$p" || continue
     report "$m (in $f)" "archival-declared doc: rotting symbol anchor forbidden — use a time-point anchor (@ commit) or drop the reference"
   done <<< "$(printf '%s\n' "$fcontent" | grep -oE '[A-Za-z0-9_./~-]+::[A-Za-z_][A-Za-z0-9_]*' || true)"
   while IFS= read -r m; do
     [ -z "$m" ] && continue
+    p="${m%%::*}"
+    path_plausible "$p" || continue
     report "$m (in $f)" "archival-declared doc: rotting continuation symbol forbidden — use a time-point anchor (@ commit) or drop the reference"
   done <<< "$(printf '%s\n' "$fcontent" | sed 's/、/,/g; s/，/,/g' \
     | grep -oE '[A-Za-z0-9_./~-]+::[A-Za-z_][A-Za-z0-9_]*`( *[+/,] *`[A-Za-z_][A-Za-z0-9_]*(\([^)]*\))?`)+' || true)"
   while IFS= read -r m; do
     [ -z "$m" ] && continue
+    p="${m%% (field:*}"
+    path_plausible "$p" || continue
     report "$m (in $f)" "archival-declared doc: rotting field anchor forbidden — use a time-point anchor (@ commit) or drop the reference"
   done <<< "$(printf '%s\n' "$fcontent" | grep -oE '[A-Za-z0-9_./~-]+\.[A-Za-z0-9]+ \(field: [^)]+\)' || true)"
   while IFS= read -r m; do
@@ -417,6 +430,8 @@ while IFS= read -r f; do
         check_line_anchor "$p" "$start" "$end" "$commit" "" "$m (in $f)"
         ;;
       *)
+        p="${m%%:*}"
+        path_plausible "$p" || continue
         report "$m (in $f)" "archival-declared doc: bare line anchor forbidden — use a time-point anchor (@ commit)"
         ;;
     esac
@@ -441,6 +456,8 @@ while IFS= read -r f; do
         check_line_anchor "$p" "$start" "$end" "$commit" "" "$m (in $f)"
         ;;
       *)
+        p="${m%%#*}"
+        path_plausible "$p" || continue
         report "$m (in $f)" "archival-declared doc: bare line anchor forbidden — use a time-point anchor (@ commit)"
         ;;
     esac
@@ -457,8 +474,8 @@ if [ "$SELFTEST" -eq 1 ]; then
   if [ "$problems" -ne 10 ]; then
     echo "SELFTEST FAIL: expected 10 problems, got $problems"; fail=1
   fi
-  if [ "$checked" -lt 17 ]; then
-    echo "SELFTEST FAIL: expected at least 17 anchors checked (incl. #L, fp, continuation and subdir forms), got $checked"; fail=1
+  if [ "$checked" -ne 20 ]; then
+    echo "SELFTEST FAIL: expected exactly 20 anchors checked (incl. #L, fp, continuation and subdir forms), got $checked"; fail=1
   fi
   case "$report_lines" in
     *"archival-declared doc"*) : ;;

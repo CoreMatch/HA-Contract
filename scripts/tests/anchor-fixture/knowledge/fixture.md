@@ -54,3 +54,5 @@ bare line anchor — the inverse check must report both (problems 9 and 10).
 - Host-port pairs without scheme: dev API at localhost:8080 today.
 - PHP class constants in prose: the mock sets PDO::ERRMODE_EXCEPTION.
 - Convention examples in prose: write `file.ext::Symbol` or `file.ext (field: key)`.
+- Times and ratios in prose: the match ended 12:00 with a 1:1 tie — even
+  though a file named `1` exists in the fixture root, these must never parse.
