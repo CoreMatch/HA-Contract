@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MatchCoreArena Business API
-  version: 1.9.1
+  version: 1.10.0
   description: >
     Unified specification for MatchCoreArena server business interfaces.
     Authentication via HRPAuth OAuth2 Authorization Code + PKCE.
@@ -1238,6 +1238,21 @@ paths:
         `200 {assigned: false}` — callers never branch on 404. A failed
         UUID resolution (HRPAuth unreachable, service credential unusable)
         still answers `502 oauth_hrpauth_down`.
+
+        Room layer (1.10.0): when the server runs with a static room
+        inventory (`matchmaking.servers`), every formed group reserves one
+        room at formation time (logical reservation with TTL; released on
+        TTL expiry or on a settlement report carrying the group id). A
+        valid assignment then carries BOTH `join_target` (the bound
+        sub-server address from the inventory) and `room` — both mandatory
+        together. The room identifier lives in the TARGET SUB-SERVER'S
+        namespace (it is the sub-server's own arena/game name, not a
+        global id). When a group is valid but no room can be served
+        (reservation expired, inventory removed), the answer is
+        `assigned: false` with `reason: no_room_available` — never a
+        fabricated or stale room. Deployments without a room inventory
+        keep the 1.9.x shape exactly (no `room`, `join_target` follows the
+        global `matchmaking.join_target` rule).
       tags: [Matchmaking]
       security:
         - BearerAuth: []
@@ -1771,6 +1786,12 @@ components:
             Optional formed-group id from matchmaking; when set, members of
             the same matchmaking party share the average of their rating
             deltas. Unknown group ids answer 400 mca_invalid_request.
+            Round-trip (1.10.0): the group id is delivered to the game side
+            via the assignment chain (`MatchAssignment.group_id`) and
+            SHOULD be echoed back here by reporters that received it; on
+            receipt the server also releases the group's room reservation
+            (1.10.0 room layer), consuming the "settled = consumed"
+            semantics. Omitted remains valid (no linkage, no release).
         started_at:
           type: string
           format: date-time
@@ -1999,6 +2020,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GroupMember'
+        room:
+          type: string
+          description: >
+            Room identifier reserved for this group (1.10.0), in the target
+            sub-server's namespace; omitted when the deployment has no
+            room inventory or the reservation is no longer live.
         join_target:
           $ref: '#/components/schemas/JoinTarget'
 
@@ -2047,10 +2074,23 @@ components:
         (`matchmaking.assignment_ttl_seconds`). All other fields are
         present only when `assigned` is true; `join_target` follows the
         same omit-when-unconfigured rule as in `MatchmakingStatus`.
+        Room layer (1.10.0): with a configured room inventory, `assigned`
+        is true only when a room reservation is live, and `join_target`
+        (the bound sub-server) plus `room` are both present — the room id
+        belongs to the target sub-server's namespace. A valid group whose
+        room cannot be served answers `assigned: false` with
+        `reason: no_room_available`.
       properties:
         assigned:
           type: boolean
           description: Whether the player currently holds a valid assignment
+        reason:
+          type: string
+          enum: [no_room_available]
+          description: >
+            Present only when `assigned` is false because a valid formed
+            group exists but no room can be served (1.10.0). Omitted for
+            the plain no-assignment case.
         group_id:
           type: integer
           format: int64
@@ -2065,6 +2105,13 @@ components:
         team_id:
           type: string
           description: Team label the player was assigned to in this group (A/B/C...)
+        room:
+          type: string
+          description: >
+            Reserved room identifier (1.10.0) — an arena/game name in the
+            TARGET SUB-SERVER'S namespace, resolved against the static
+            room inventory. Present exactly when `join_target` is present
+            under the room layer; omitted in inventory-less deployments.
         join_target:
           $ref: '#/components/schemas/JoinTarget'
 
