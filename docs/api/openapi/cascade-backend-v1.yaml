@@ -404,8 +404,9 @@ components:
         Mod manifest for a room's backend mod set (v1.3). Assembly clients
         must match installed mods against this manifest by content hash
         only, never by name. sig/sigAlg are reserved for a future publisher
-        signature; v1.3 implementations emit null for both.
-      required: [mods]
+        signature; v1.3 implementations emit null for both — the keys are
+        always present (required) with a null value.
+      required: [mods, sig, sigAlg]
       properties:
         mods:
           type: array

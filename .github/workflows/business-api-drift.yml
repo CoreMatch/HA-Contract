@@ -1,0 +1,87 @@
+name: business-api-drift
+
+on:
+  push:
+  pull_request:
+
+# Full-ecosystem contract drift gate (endpoints + fields + consumer URLs +
+# OpenAPI validity). Every check runs twice in effect: the checker's
+# --self-test first proves the checker can FAIL (deliberately broken
+# fixture), then the real check runs against all checked-out repositories.
+# All repositories are public under the CoreMatch organization, so the
+# default workflow token can check them out.
+#
+# Discipline: any unreadable source or empty extraction is a hard error in
+# every checker — no "unreadable therefore skipped" false greens.
+
+jobs:
+  contract-drift:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: HA-Contract
+    steps:
+      - name: Checkout HA-Contract
+        uses: actions/checkout@v7
+        with:
+          path: HA-Contract
+
+      # --- implementation repositories (server side) ---
+      - { name: Checkout HRPAuth, uses: actions/checkout@v7, with: { repository: CoreMatch/HRPAuth, path: HRPAuth } }
+      - { name: Checkout HASkinLib, uses: actions/checkout@v7, with: { repository: CoreMatch/HASkinLib, path: HASkinLib } }
+      - { name: Checkout HRPAuth-Yggdrasil-API, uses: actions/checkout@v7, with: { repository: CoreMatch/HRPAuth-Yggdrasil-API, path: HRPAuth-Yggdrasil-API } }
+      - { name: Checkout MatchCoreArena-Server, uses: actions/checkout@v7, with: { repository: CoreMatch/MatchCoreArena-Server, path: MatchCoreArena-Server } }
+      - { name: Checkout WinnerProxy, uses: actions/checkout@v7, with: { repository: CoreMatch/WinnerProxy, path: WinnerProxy } }
+      - { name: Checkout Cascade, uses: actions/checkout@v7, with: { repository: CoreMatch/Cascade, path: Cascade } }
+      - { name: Checkout HA-Services-Deployer, uses: actions/checkout@v7, with: { repository: CoreMatch/HA-Services-Deployer, path: HA-Services-Deployer } }
+      - { name: Checkout HASkinProxy, uses: actions/checkout@v7, with: { repository: CoreMatch/HASkinProxy, path: HASkinProxy } }
+      - { name: Checkout HA-WebUI-SDKHandler, uses: actions/checkout@v7, with: { repository: CoreMatch/HA-WebUI-SDKHandler, path: HA-WebUI-SDKHandler } }
+      - { name: Checkout Avalon, uses: actions/checkout@v7, with: { repository: CoreMatch/Avalon, path: Avalon } }
+      # --- consumer repositories (caller side) ---
+      - { name: Checkout MatchCoreArena-Client, uses: actions/checkout@v7, with: { repository: CoreMatch/MatchCoreArena-Client, path: MatchCoreArena-Client } }
+      - { name: Checkout MatchCoreArena-VelocityGate, uses: actions/checkout@v7, with: { repository: CoreMatch/MatchCoreArena-VelocityGate, path: MatchCoreArena-VelocityGate } }
+      - { name: Checkout BedwarsRel-MCA, uses: actions/checkout@v7, with: { repository: CoreMatch/BedwarsRel-MCA, path: BedwarsRel-MCA } }
+      - { name: Checkout HRPAuth-Spigot, uses: actions/checkout@v7, with: { repository: CoreMatch/HRPAuth-Spigot, path: HRPAuth-Spigot } }
+      - { name: Checkout SamuelClient, uses: actions/checkout@v7, with: { repository: CoreMatch/SamuelClient, path: SamuelClient } }
+      - { name: Checkout HRPAuth-Web, uses: actions/checkout@v7, with: { repository: CoreMatch/HRPAuth-WebUI, path: HRPAuth-Web } }
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: Avalon/go.mod
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: pip install pyyaml openapi-spec-validator
+
+      - name: Install gawk
+        run: sudo apt-get update && sudo apt-get install -y gawk
+
+      - name: OpenAPI validity (self-test + check)
+        run: |
+          bash scripts/check-openapi-validity.sh --self-test
+          bash scripts/check-openapi-validity.sh
+
+      - name: Route drift (self-test + check)
+        run: |
+          bash scripts/check-business-api-drift.sh --self-test
+          bash scripts/check-business-api-drift.sh
+
+      - name: Field drift (self-test + check)
+        run: |
+          bash scripts/check-business-api-fields.sh --self-test
+          bash scripts/check-business-api-fields.sh
+
+      - name: Consumer URL drift (self-test + check)
+        run: |
+          bash scripts/check-consumer-urls.sh --self-test
+          bash scripts/check-consumer-urls.sh
+
+      - name: Plugin event drift (self-test + check)
+        run: |
+          bash scripts/check-avalon-plugin-event-drift.sh --self-test
+          bash scripts/check-avalon-plugin-event-drift.sh

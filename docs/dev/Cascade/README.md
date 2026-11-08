@@ -26,13 +26,15 @@ independently developed Rusted Warfare backend.
 
 ## Anti-drift status
 
-`scripts/check-business-api-drift.sh` does **not** cover this contract. The
-script extracts gin route registrations from `main.go` of the HA sibling
-service repositories (HRPAuth / HASkinLib / HRPAuth-Yggdrasil-API), while the
-backend routes of this contract are registered with Go `net/http` ServeMux
-patterns (`mux.HandleFunc("GET /v1/health", ...)`) inside
-`internal/net/gateway/control.go` of Avalon, which is outside
-the script's repository resolution. Until the script grows a non-gin,
-cross-repository extractor, conformance is enforced by Avalon's own
-contract tests (`internal/net/gateway`) plus the Cascade-side contract test
-(`internal/backend/contract_test.go`, which parses the OpenAPI file).
+Since 2026-11-08 `scripts/check-business-api-drift.sh` covers this contract.
+It extracts the Go 1.22 `net/http` ServeMux patterns
+(`mux.HandleFunc("GET /v1/health", ...)`) from
+`internal/net/gateway/control.go` of the Avalon checkout (resolved via
+`AVALON_REPO_DIR`, a sibling directory, or `~/Desktop/HA/Avalon`), strips the
+`/v1` prefix, and compares METHOD+path against this file in both directions.
+Field-level conformance for the `/v1` schemas (`RoomSummary`,
+`RoomModManifest`, `RoomModEntry`) is additionally enforced by
+`scripts/check-business-api-fields.sh` against the Avalon Go structs. This is
+complemented by Avalon's own contract tests (`internal/net/gateway`) and the
+Cascade-side contract test (`internal/backend/contract_test.go`, which parses
+the OpenAPI file).
