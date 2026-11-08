@@ -1,0 +1,34 @@
+name: plugin-event-drift
+
+on:
+  push:
+  pull_request:
+
+# Three-way plugin event catalog drift check (avalon-plugin-v1):
+# Avalon hub code (compiled) x this repo's openapi /events/* paths x
+# Avalon docs/plugins/EVENT-CATALOG.md machine block. Any unreadable or
+# empty source is a hard error — no "unreadable therefore skipped" false
+# greens (same discipline as knowledge/0005's checker defense line).
+# Both repositories are public, so the cross-checkout works with the
+# default workflow token.
+
+jobs:
+  plugin-event-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout HA-Contract
+        uses: actions/checkout@v7
+
+      - name: Checkout Avalon
+        uses: actions/checkout@v7
+        with:
+          repository: CoreMatch/Avalon
+          path: Avalon
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: Avalon/go.mod
+
+      - name: Three-way plugin event drift check
+        run: AVALON_REPO_DIR=$GITHUB_WORKSPACE/Avalon bash scripts/check-avalon-plugin-event-drift.sh
