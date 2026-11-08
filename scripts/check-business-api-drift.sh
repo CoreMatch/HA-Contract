@@ -93,7 +93,6 @@ for f in "$HRPAUTH_YAML" "$HASKINLIB_YAML" "$YGGDRASIL_YAML" "$MATCHCOREARENA_YA
   [[ -f "$f" ]] || fail "contract file missing: $f"
 done
 
-command -v rg >/dev/null 2>&1 || fail "ripgrep (rg) is required"
 command -v gawk >/dev/null 2>&1 || fail "gawk is required (route extraction uses match() capture arrays)"
 
 # ---------------------------------------------------------------------------
