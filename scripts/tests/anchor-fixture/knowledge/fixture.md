@@ -1,7 +1,7 @@
 # Anchor-checker self-test fixture
 
 This fixture is consumed by `check-knowledge-anchors.sh --self-test`.
-Expected outcome: exactly 6 problems, 0 URL false positives.
+Expected outcome: exactly 8 problems, 0 URL false positives.
 
 ## URLs must never parse as anchors
 
@@ -26,6 +26,16 @@ may be reported.
 - Field that does not exist: sample.txt (field: nosuchkey)
 - Time point in a nonexistent commit: sample.txt:L1 @ deadbeef0
 - Wrong content fingerprint: sample.txt:L3 fp=deadbeef
+
+## Continuation symbol chains (1 valid, 1 problem)
+
+- Valid chain, continuations inherit the path: `sample.txt::MARKER`, `first`
+- Broken chain, second symbol does not exist: `sample.txt::MARKER` + `NOSUCHCONT`
+
+## Subdirectory coverage (1 problem, in knowledge/sub/nested.md)
+
+knowledge/ must be scanned recursively; `sub/nested.md` carries one valid
+line anchor and one broken symbol anchor (problem 8).
 
 ## Skipped lines
 

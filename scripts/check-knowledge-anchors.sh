@@ -36,6 +36,14 @@
 #   5. Cross-repo marker  [xref]
 #        -> any line containing [xref] is skipped entirely. Mark citations of
 #        other repositories' files with [xref] so they are not checked here.
+#   6. Continuation symbols  `path::A`, `B`, `C`  (backticked chain,
+#      separators: + / , and full-width ，、)
+#        -> B, C inherit the path of A and are checked as symbol anchors in
+#        that file. Only adjacent chains are recognized; symbols continued
+#        across other prose are not — rewrite those in full `path::Sym` form.
+#
+# knowledge/ is scanned recursively (knowledge/**/*.md), so entries in
+# subdirectories (e.g. knowledge/archive/) are checked too.
 #
 # Absolute paths (e.g. /home/lnb/Desktop/HA/Avalon/...) are checked directly.
 # Relative paths are resolved against the repository root.
@@ -159,10 +167,13 @@ def stamp_line(line):
 
 total = 0
 kdir = os.path.join(root, "knowledge")
-for fn in sorted(os.listdir(kdir)):
-    if not fn.endswith(".md"):
-        continue
-    p = os.path.join(kdir, fn)
+md_files = []
+for dirpath, dirnames, filenames in os.walk(kdir):
+    dirnames.sort()
+    for fn in sorted(filenames):
+        if fn.endswith(".md"):
+            md_files.append(os.path.join(dirpath, fn))
+for p in md_files:
     with open(p, encoding="utf-8") as f:
         lines = f.readlines()
     out, changed = [], False
@@ -241,9 +252,9 @@ check_field_anchor() { # $1=path $2=key $3=raw
   fi
 }
 
-# Collect content once: drop [xref] lines, strip URLs so that
-# http://host:port can never be parsed as a path:line anchor.
-content=$(cat knowledge/*.md 2>/dev/null \
+# Collect content once: knowledge/ recursively, drop [xref] lines, strip URLs
+# so that http://host:port can never be parsed as a path:line anchor.
+content=$(find knowledge -type f -name '*.md' | LC_ALL=C sort | while IFS= read -r f; do cat "$f"; done \
   | grep -vF '[xref]' \
   | sed -E 's@(https?|ftp)://[^[:space:]<>"]*@@g')
 
@@ -256,6 +267,23 @@ while IFS= read -r m; do
   checked=$((checked + 1))
   check_symbol_anchor "$p" "$sym" "$m"
 done <<< "$(printf '%s\n' "$content" | grep -oE '[A-Za-z0-9_./~-]+::[A-Za-z_][A-Za-z0-9_]*' || true)"
+
+# 1b) continuation symbol anchors: `path::A`, `B`, `C` — B, C inherit the
+# path of A. Only adjacent backticked chains are recognized (separators
+# + / , plus full-width ，、, normalized below); anything less mechanical
+# must be rewritten in full `path::Sym` form instead of loosening this rule.
+while IFS= read -r chain; do
+  [ -z "$chain" ] && continue
+  path="${chain%%::*}"
+  path_plausible "$path" || continue
+  conts=$(printf '%s' "$chain" | grep -oE '[+/,] *`[A-Za-z_][A-Za-z0-9_]*' | sed -E 's/^[+/,] *`//' || true)
+  while IFS= read -r sym; do
+    [ -z "$sym" ] && continue
+    checked=$((checked + 1))
+    check_symbol_anchor "$path" "$sym" "$path::$sym (continuation)"
+  done <<< "$conts"
+done <<< "$(printf '%s\n' "$content" | sed 's/、/,/g; s/，/,/g' \
+  | grep -oE '[A-Za-z0-9_./~-]+::[A-Za-z_][A-Za-z0-9_]*`( *[+/,] *`[A-Za-z_][A-Za-z0-9_]*(\([^)]*\))?`)+' || true)"
 
 # 2) field anchors: path (field: key)
 while IFS= read -r m; do
@@ -336,14 +364,14 @@ summary="anchors checked: $checked, problems: $problems"
 [ "$skipped_abs" -gt 0 ] && summary+=", skipped missing absolute paths: $skipped_abs"
 
 if [ "$SELFTEST" -eq 1 ]; then
-  # Expected fixture outcome: exactly 6 problems (see tests/anchor-fixture),
+  # Expected fixture outcome: exactly 8 problems (see tests/anchor-fixture),
   # and no false positives from the URL lines.
   fail=0
-  if [ "$problems" -ne 6 ]; then
-    echo "SELFTEST FAIL: expected 6 problems, got $problems"; fail=1
+  if [ "$problems" -ne 8 ]; then
+    echo "SELFTEST FAIL: expected 8 problems, got $problems"; fail=1
   fi
-  if [ "$checked" -lt 13 ]; then
-    echo "SELFTEST FAIL: expected at least 13 anchors checked (incl. #L and fp forms), got $checked"; fail=1
+  if [ "$checked" -lt 17 ]; then
+    echo "SELFTEST FAIL: expected at least 17 anchors checked (incl. #L, fp, continuation and subdir forms), got $checked"; fail=1
   fi
   case "$report_lines" in
     *"content drifted"*) : ;;
