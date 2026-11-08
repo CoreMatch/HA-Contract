@@ -77,12 +77,20 @@ paths:
   /oauth/authorize:
     get:
       summary: Validate authorization request for authorization_code + PKCE
+      description: >
+        Authentication: none up front (the user is redirected to an
+        interactive decision step). Idempotent validation of the query
+        parameters; no state is written.
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
   /oauth/authorize/decision:
     post:
       summary: Complete interactive authorization and issue authorization code
+      description: >
+        Authentication: the user's session/consent context established by
+        `/oauth/authorize`. Idempotency: each approval issues a fresh
+        single-use authorization code.
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -137,6 +145,10 @@ paths:
   /oauth/revoke:
     post:
       summary: Revoke OAuth2 access token
+      description: >
+        Authentication: the token to revoke (Bearer or per-request
+        credential). Idempotency: revoking an already-revoked/unknown token
+        answers success (RFC 7009 behavior).
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -206,6 +218,8 @@ paths:
         Validates the captcha and sends a 4-digit recovery code to the
         provided email address if it is registered. The response is always
         successful to prevent email enumeration.
+        Authentication: none (captcha-gated). Idempotency: resending is
+        rate-limited (`verification_code_already_sent`).
       requestBody:
         required: true
         content:
@@ -231,6 +245,9 @@ paths:
       description: >
         Submits the 4-digit recovery code and a new password to reset the
         account password.
+        Authentication: none (the emailed code is the credential).
+        Idempotency: a code is single-use; replay fails
+        (`verification_code_expired_or_missing` / `verification_code_invalid`).
       requestBody:
         required: true
         content:
@@ -262,6 +279,9 @@ paths:
         Creates a user from `email` + `username` + `password` with captcha
         verification when enabled. There is no Bearer/service-token branch;
         game-account (proxy) registration lives in HRPAuth-Yggdrasil-API.
+        Authentication: none (captcha-gated when enabled). Idempotency:
+        duplicate email/username fail (`email_already_registered` /
+        `username_already_taken`), never double-create.
       requestBody:
         required: true
         content:
@@ -518,6 +538,11 @@ paths:
   /user/security/recovery-key/verify:
     post:
       summary: Verify recovery key with login_ticket and issue OAuth2 tokens
+      description: >
+        Authentication: the `login_ticket` from `/oauth/login-ticket`.
+        Idempotency: a login_ticket is single-use; replay fails
+        (`invalid_login_ticket`). A wrong key answers
+        `invalid_passcode`-class validation per the code path.
       requestBody:
         required: true
         content:
@@ -529,7 +554,12 @@ paths:
                 login_ticket: { type: string }
                 recovery_key: { type: string }
       responses:
-        '200': { description: Success }
+        '200':
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
   /user/security/2fa/status:
@@ -633,6 +663,10 @@ paths:
   /email-verification:
     post:
       summary: Entry point for email verification actions
+      description: >
+        Authentication: none (carries emailed verification codes/tokens).
+        Idempotency: verifying an already-verified state is a no-op success;
+        sending is rate-limited (`verification_code_already_sent`).
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -642,6 +676,11 @@ paths:
   /email-2fa/send:
     post:
       summary: Send 2FA verification code to user's email
+      description: >
+        Authentication: the `login_ticket` from `/oauth/login-ticket`.
+        Idempotency: resending within the rate window fails
+        (`verification_code_already_sent`); otherwise the pending code is
+        replaced.
       requestBody:
         required: true
         content:
@@ -658,6 +697,11 @@ paths:
   /email-2fa/verify:
     post:
       summary: Verify email 2FA code and issue tokens
+      description: >
+        Authentication: the `login_ticket` from `/oauth/login-ticket`.
+        Idempotency: a login_ticket is single-use; replay fails
+        (`invalid_login_ticket`). Wrong/expired codes answer
+        `verification_code_invalid` / `verification_code_expired_or_missing`.
       requestBody:
         required: true
         content:
@@ -669,7 +713,12 @@ paths:
                 login_ticket: { type: string }
                 code: { type: string }
       responses:
-        '200': { description: Success }
+        '200':
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
   /email-2fa/toggle:
@@ -696,6 +745,10 @@ paths:
   /totpgen:
     get:
       summary: Generate current OTP for a specified secret
+      description: >
+        Authentication: none (setup helper for displaying the current code
+        of a secret the caller already holds). Idempotent for a fixed
+        secret and time window.
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -715,8 +768,29 @@ paths:
   /totp/verify:
     post:
       summary: Verify TOTP with login_ticket and issue first-party OAuth2 tokens
+      description: >
+        Authentication: the `login_ticket` from `/oauth/login-ticket` (no
+        Bearer yet — this endpoint completes the login). Idempotency: a
+        login_ticket is single-use; replay fails (`invalid_login_ticket`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [login_ticket, passcode]
+              properties:
+                login_ticket: { type: string }
+                passcode:
+                  type: string
+                  description: 6-digit TOTP passcode
       responses:
-        '200': { description: Success }
+        '200':
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
   /totp/toggle:
@@ -834,6 +908,9 @@ paths:
         Starts a passkey / security-key login flow. If `email` is provided, the
         server uses an account-bound ceremony; if omitted, it starts a
         discoverable passkey ceremony.
+        Authentication: none (this begins a login). Idempotency: each call
+        issues a fresh flow id.
+      security: []
       requestBody:
         required: false
         content:
@@ -847,6 +924,10 @@ paths:
   /webauthn/login/finish:
     post:
       summary: Finish a WebAuthn primary login ceremony and issue OAuth2 tokens
+      description: >
+        Authentication: the flow started by `/webauthn/login/begin` (no
+        Bearer yet). Idempotency: a flow id is single-use; replay fails
+        (`invalid_webauthn_flow`).
       requestBody:
         required: true
         content:
@@ -854,12 +935,20 @@ paths:
             schema:
               $ref: '#/components/schemas/WebAuthnFinishRequest'
       responses:
-        '200': { description: Success }
+        '200':
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
   /webauthn/2fa/begin:
     post:
       summary: Start a WebAuthn second-factor ceremony from login_ticket
+      description: >
+        Authentication: the `login_ticket` from `/oauth/login-ticket`.
+        Idempotency: each call issues a fresh flow id.
       requestBody:
         required: true
         content:
@@ -873,6 +962,10 @@ paths:
   /webauthn/2fa/finish:
     post:
       summary: Finish a WebAuthn second-factor ceremony and issue OAuth2 tokens
+      description: >
+        Authentication: the `login_ticket`-bound flow started by
+        `/webauthn/2fa/begin`. Idempotency: a flow id is single-use; replay
+        fails (`invalid_webauthn_flow`).
       requestBody:
         required: true
         content:
@@ -880,7 +973,12 @@ paths:
             schema:
               $ref: '#/components/schemas/WebAuthnFinishRequest'
       responses:
-        '200': { description: Success }
+        '200':
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
   /change-username:
@@ -901,6 +999,10 @@ paths:
   /captcha:
     post:
       summary: Generate captcha
+      description: >
+        Authentication: none. Idempotency: each call issues a fresh
+        captcha token; when captcha is disabled the endpoint answers
+        `captcha_disabled`.
       responses:
         '200': { description: Success }
         '403': { $ref: '#/components/responses/Error' }
@@ -908,6 +1010,7 @@ paths:
   /captcha/enabled:
     get:
       summary: Query captcha switch
+      description: 'Authentication: none. Idempotent read.'
       responses:
         '200': { description: Success }
   /captcha/image/{token}:
@@ -927,6 +1030,10 @@ paths:
   /services/presence:
     post:
       summary: Register or heartbeat a microservice (bonjour handshake)
+      description: >
+        Authentication: none (bootstrap handshake; the service identifies
+        itself by `name`). Idempotency: re-registering the same name
+        refreshes (heartbeats) the registration.
       requestBody:
         required: true
         content:
@@ -975,6 +1082,10 @@ paths:
   /services/route:
     post:
       summary: Register routing rules (pre/post) for a registered service
+      description: >
+        Authentication: service identity established via
+        `/services/presence` (`service_not_registered` otherwise).
+        Idempotency: re-registering replaces the service's rule set.
       requestBody:
         required: true
         content:
@@ -987,6 +1098,10 @@ paths:
   /services/relay:
     post:
       summary: Register relay rules for a registered service
+      description: >
+        Authentication: service identity established via
+        `/services/presence`. Idempotency: re-registering the same `dest`
+        replaces that relay rule.
       requestBody:
         required: true
         content:
@@ -998,6 +1113,10 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
     delete:
       summary: Delete a relay rule of a service
+      description: >
+        Authentication: service identity established via
+        `/services/presence`. Idempotency: deleting an unknown rule fails
+        (`relay_not_found`, 404).
       requestBody:
         required: true
         content:
@@ -1010,6 +1129,9 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
     get:
       summary: List relay rules, optionally filtered by service
+      description: >
+        Authentication: service identity established via
+        `/services/presence`. Idempotent read.
       parameters:
         - in: query
           name: name
@@ -1294,6 +1416,9 @@ paths:
         `auth.input`, `auth.risk`, and `auth.post_verify`, with capabilities
         `observe`, `patch`, or `veto` and fail policies `ignore` (default),
         `fail_open`, or `fail_closed`.
+        Authentication: service identity established via `/services/presence`
+        (`service_not_registered` otherwise). Idempotency: re-registering
+        replaces the service's hook set.
       requestBody:
         required: true
         content:
@@ -1497,6 +1622,38 @@ components:
                 expires_in:
                   type: integer
                   description: Ticket lifetime in seconds
+        meta:
+          $ref: '#/components/schemas/Meta'
+    TokenResponse:
+      type: object
+      description: >
+        Unified envelope whose `data` carries a fresh first-party OAuth2
+        token pair. Shared by every second-factor completion endpoint that
+        issues tokens (`/totp/verify`, `/email-2fa/verify`,
+        `/webauthn/login/finish`, `/webauthn/2fa/finish`,
+        `/user/security/recovery-key/verify`).
+      required: [success, message, data, meta]
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+        data:
+          type: object
+          required: [access_token, refresh_token, expires_in]
+          properties:
+            access_token: { type: string }
+            refresh_token: { type: string }
+            expires_in:
+              type: integer
+              description: Access token lifetime in seconds
+            token_type:
+              type: string
+              description: Typically `Bearer`
+            scope:
+              type: string
+              description: Space-delimited scopes carried by the access token
         meta:
           $ref: '#/components/schemas/Meta'
     ServiceScope:
