@@ -1,7 +1,7 @@
 # Anchor-checker self-test fixture
 
 This fixture is consumed by `check-knowledge-anchors.sh --self-test`.
-Expected outcome: exactly 8 problems, 0 URL false positives.
+Expected outcome: exactly 10 problems, 0 URL false positives.
 
 ## URLs must never parse as anchors
 
@@ -36,6 +36,13 @@ may be reported.
 
 knowledge/ must be scanned recursively; `sub/nested.md` carries one valid
 line anchor and one broken symbol anchor (problem 8).
+
+## Archival declaration (2 problems, in knowledge/archived-*.md)
+
+`archived-declared.md` carries the archival-policy HTML comment marker
+(`anchor-policy: archival`) and no rotting anchors — it must pass clean.
+`archived-violation.md` carries the same marker plus a symbol anchor and a
+bare line anchor — the inverse check must report both (problems 9 and 10).
 
 ## Skipped lines
 

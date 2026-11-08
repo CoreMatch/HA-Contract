@@ -41,6 +41,15 @@
 #        -> B, C inherit the path of A and are checked as symbol anchors in
 #        that file. Only adjacent chains are recognized; symbols continued
 #        across other prose are not — rewrite those in full `path::Sym` form.
+#   7. Archival declaration  <!-- anchor-policy: archival -->
+#        -> a document-level (never directory-level) opt-in for frozen
+#        historical documents. Declared docs get an INVERSE check: rotting
+#        reference forms (symbol, continuation, field, bare line anchors)
+#        are forbidden and reported; only time-point anchors (path:Lx @ commit)
+#        and plain dates/version numbers are allowed. Time-point anchors in
+#        declared docs are still verified normally. Undeclared docs under
+#        knowledge/ (including archive/ subdirectories) get the full check.
+#        The marker may appear anywhere in the doc; put it at the top.
 #
 # knowledge/ is scanned recursively (knowledge/**/*.md), so entries in
 # subdirectories (e.g. knowledge/archive/) are checked too.
@@ -167,6 +176,7 @@ def stamp_line(line):
 
 total = 0
 kdir = os.path.join(root, "knowledge")
+ARCHIVAL = "<!-- anchor-policy: archival -->"
 md_files = []
 for dirpath, dirnames, filenames in os.walk(kdir):
     dirnames.sort()
@@ -176,6 +186,8 @@ for dirpath, dirnames, filenames in os.walk(kdir):
 for p in md_files:
     with open(p, encoding="utf-8") as f:
         lines = f.readlines()
+    if ARCHIVAL in "".join(lines):
+        continue  # declared archival: bare line anchors are forbidden, nothing to stamp
     out, changed = [], False
     for line in lines:
         if "[xref]" in line:
@@ -254,7 +266,13 @@ check_field_anchor() { # $1=path $2=key $3=raw
 
 # Collect content once: knowledge/ recursively, drop [xref] lines, strip URLs
 # so that http://host:port can never be parsed as a path:line anchor.
-content=$(find knowledge -type f -name '*.md' | LC_ALL=C sort | while IFS= read -r f; do cat "$f"; done \
+# Documents declaring the archival policy are excluded here — they get the
+# inverse check below instead of the normal one.
+ARCHIVAL_MARKER='<!-- anchor-policy: archival -->'
+content=$(find knowledge -type f -name '*.md' | LC_ALL=C sort | while IFS= read -r f; do
+    grep -qF "$ARCHIVAL_MARKER" "$f" && continue
+    cat "$f"
+  done \
   | grep -vF '[xref]' \
   | sed -E 's@(https?|ftp)://[^[:space:]<>"]*@@g')
 
@@ -360,19 +378,92 @@ while IFS= read -r m; do
   check_line_anchor "$p" "$start" "$end" "$commit" "$fp" "$m"
 done <<< "$(printf '%s\n' "$content" | grep -oE '[A-Za-z0-9_./~-]+#L[0-9]+(-L?[0-9]+)?( @ [0-9a-fA-F]{7,40})?( fp=[0-9a-f]{8})?' || true)"
 
+# 4) archival-declared documents: inverse check. Rotting reference forms are
+# forbidden; only time-point anchors are allowed (and still verified).
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  grep -qF "$ARCHIVAL_MARKER" "$f" || continue
+  fcontent=$(grep -vF '[xref]' "$f" | sed -E 's@(https?|ftp)://[^[:space:]<>"]*@@g')
+  while IFS= read -r m; do
+    [ -z "$m" ] && continue
+    report "$m (in $f)" "archival-declared doc: rotting symbol anchor forbidden — use a time-point anchor (@ commit) or drop the reference"
+  done <<< "$(printf '%s\n' "$fcontent" | grep -oE '[A-Za-z0-9_./~-]+::[A-Za-z_][A-Za-z0-9_]*' || true)"
+  while IFS= read -r m; do
+    [ -z "$m" ] && continue
+    report "$m (in $f)" "archival-declared doc: rotting continuation symbol forbidden — use a time-point anchor (@ commit) or drop the reference"
+  done <<< "$(printf '%s\n' "$fcontent" | sed 's/、/,/g; s/，/,/g' \
+    | grep -oE '[A-Za-z0-9_./~-]+::[A-Za-z_][A-Za-z0-9_]*`( *[+/,] *`[A-Za-z_][A-Za-z0-9_]*(\([^)]*\))?`)+' || true)"
+  while IFS= read -r m; do
+    [ -z "$m" ] && continue
+    report "$m (in $f)" "archival-declared doc: rotting field anchor forbidden — use a time-point anchor (@ commit) or drop the reference"
+  done <<< "$(printf '%s\n' "$fcontent" | grep -oE '[A-Za-z0-9_./~-]+\.[A-Za-z0-9]+ \(field: [^)]+\)' || true)"
+  while IFS= read -r m; do
+    [ -z "$m" ] && continue
+    case "$m" in
+      *" @ "*)
+        rest="$m"
+        case "$rest" in *" fp="*) rest="${rest% fp=*}" ;; esac
+        commit="${rest##* @ }"
+        rest="${rest% @ *}"
+        p="${rest%%:*}"
+        rng="${rest#*:}"; rng="${rng#L}"
+        start="${rng%%-*}"
+        case "$start" in *[!0-9]*|"") start="" ;; esac
+        end="${rng##*-L}"; end="${end##*-}"
+        case "$end" in *[!0-9]*|"") continue ;; esac
+        [ -n "$start" ] || start="$end"
+        path_plausible "$p" || continue
+        checked=$((checked + 1))
+        check_line_anchor "$p" "$start" "$end" "$commit" "" "$m (in $f)"
+        ;;
+      *)
+        report "$m (in $f)" "archival-declared doc: bare line anchor forbidden — use a time-point anchor (@ commit)"
+        ;;
+    esac
+  done <<< "$(printf '%s\n' "$fcontent" | grep -oE '[A-Za-z0-9_./~-]+:L?[0-9]+(-L?[0-9]+)?( @ [0-9a-fA-F]{7,40})?( fp=[0-9a-f]{8})?' || true)"
+  while IFS= read -r m; do
+    [ -z "$m" ] && continue
+    case "$m" in
+      *" @ "*)
+        rest="$m"
+        case "$rest" in *" fp="*) rest="${rest% fp=*}" ;; esac
+        commit="${rest##* @ }"
+        rest="${rest% @ *}"
+        p="${rest%%#*}"
+        rng="${rest#*#L}"
+        start="${rng%%-*}"
+        case "$start" in *[!0-9]*|"") start="" ;; esac
+        end="${rng##*-L}"; end="${end##*-}"
+        case "$end" in *[!0-9]*|"") continue ;; esac
+        [ -n "$start" ] || start="$end"
+        path_plausible "$p" || continue
+        checked=$((checked + 1))
+        check_line_anchor "$p" "$start" "$end" "$commit" "" "$m (in $f)"
+        ;;
+      *)
+        report "$m (in $f)" "archival-declared doc: bare line anchor forbidden — use a time-point anchor (@ commit)"
+        ;;
+    esac
+  done <<< "$(printf '%s\n' "$fcontent" | grep -oE '[A-Za-z0-9_./~-]+#L[0-9]+(-L?[0-9]+)?( @ [0-9a-fA-F]{7,40})?( fp=[0-9a-f]{8})?' || true)"
+done <<< "$(find knowledge -type f -name '*.md' | LC_ALL=C sort)"
+
 summary="anchors checked: $checked, problems: $problems"
 [ "$skipped_abs" -gt 0 ] && summary+=", skipped missing absolute paths: $skipped_abs"
 
 if [ "$SELFTEST" -eq 1 ]; then
-  # Expected fixture outcome: exactly 8 problems (see tests/anchor-fixture),
+  # Expected fixture outcome: exactly 10 problems (see tests/anchor-fixture),
   # and no false positives from the URL lines.
   fail=0
-  if [ "$problems" -ne 8 ]; then
-    echo "SELFTEST FAIL: expected 8 problems, got $problems"; fail=1
+  if [ "$problems" -ne 10 ]; then
+    echo "SELFTEST FAIL: expected 10 problems, got $problems"; fail=1
   fi
   if [ "$checked" -lt 17 ]; then
     echo "SELFTEST FAIL: expected at least 17 anchors checked (incl. #L, fp, continuation and subdir forms), got $checked"; fail=1
   fi
+  case "$report_lines" in
+    *"archival-declared doc"*) : ;;
+    *) echo "SELFTEST FAIL: archival policy violations were not reported"; fail=1 ;;
+  esac
   case "$report_lines" in
     *"content drifted"*) : ;;
     *) echo "SELFTEST FAIL: wrong-fingerprint anchor was not reported"; fail=1 ;;
