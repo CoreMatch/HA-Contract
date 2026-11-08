@@ -73,6 +73,15 @@ re-read the cited code and either fix the anchor range (content moved) or
 re-run `--stamp` (the citation was meant to follow the edit). Do not delete
 the fingerprint or bypass the check to silence it.
 
+**Manual defense line for checker changes.** HA-Contract main has no branch
+protection (deliberate, 2026-11-08: many sessions push directly), so the
+only gate on the checker script itself is this rule: **any change to
+`scripts/check-knowledge-anchors.sh` must pass `--self-test` locally before
+it is pushed.** Every consuming repo runs the fetched script's self-test
+before checking, so a broken script pushed to main turns all consuming
+repos red with a clear reason — loud batch failure by design, never a
+silent false green.
+
 CI (`.github/workflows/knowledge-anchors.yml`) runs
 the self-test plus this repository's own check on every push/PR; because a
 CI checkout has no sibling repositories, it sets
@@ -98,6 +107,11 @@ next CI run.
   - Slash-less path tokens are only checked when the file exists, so a
     mistyped root-level file name is not flagged (docker tags, host:port
     pairs and similar non-path tokens are skipped by the same rule).
+  - Field record 2026-11-08: on the first day the per-repo CI ran, it
+    caught 9 cross-repo anchors missing `[xref]` in HA-Services-Deployer
+    (knowledge/0009 + 0010 citing Avalon/Cascade/sibling-service files),
+    which the workspace-anchored convention had not caught — the mechanism
+    proved it is not decorative.
 
 ## Evidence
 - scripts/check-knowledge-anchors.sh (run from any repository root,
