@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MatchCoreArena Business API
-  version: 1.8.0
+  version: 1.9.0
   description: >
     Unified specification for MatchCoreArena server business interfaces.
     Authentication via HRPAuth OAuth2 Authorization Code + PKCE.
@@ -1205,6 +1205,70 @@ paths:
                         $ref: '#/components/schemas/MatchmakingStatus'
         '401': { $ref: '#/components/responses/Error' }
 
+  /api/matchmaking/assignment/{uuid}:
+    get:
+      summary: Query a player's current formed-group assignment (OPS only)
+      description: >
+        Resolves the Minecraft player UUID (via HRPAuth, same trust
+        boundary as match reporting) and reports whether that player
+        currently holds a valid formed-group assignment. This is the hook
+        trusted infrastructure — specifically the Velocity proxy plugin —
+        uses to route a connecting player either to the game server of
+        their formed match or to the lobby, with zero client-side changes.
+
+        Validity (1.9.0): the player's MOST RECENT formed group is their
+        assignment while (a) no reported match references that group via
+        `matchmaking_group_id` (once settled, the assignment is consumed)
+        and (b) `formed_at` lies within `matchmaking.assignment_ttl_seconds`
+        (server configuration, default 1800s). Settled or expired groups
+        answer `assigned: false`; the endpoint never falls back to older
+        groups.
+
+        Access follows the operational read endpoints: an OPS-level
+        credential (maintenance token or a `tokens.yaml` service token) is
+        required; ordinary player tokens are rejected with
+        `403 oauth_insufficient_scope` even with scopes. The response is
+        the minimal routing surface by design — no member lists, no
+        scores, no payloads. `join_target` is attached exactly as in
+        `/api/matchmaking/status` (omitted when the server has no
+        `matchmaking.join_target` configured).
+      tags: [Matchmaking]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          description: Minecraft player UUID (with or without dashes)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Assignment state (valid assignment or `assigned: false`)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/MatchAssignment'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404':
+          description: '`mca_user_not_found` — the UUID is unknown to HRPAuth'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: '`oauth_hrpauth_down` — UUID resolution failed (HRPAuth unreachable or service credential unusable)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
   # ─── Observability ─────────────────────────────────────────────────────
   /api/metrics:
     get:
@@ -1971,6 +2035,38 @@ components:
           type: integer
           format: int64
           description: Party id when the member queued as part of a party (omitted for solo)
+
+    MatchAssignment:
+      type: object
+      required: [assigned]
+      description: >
+        A player's current formed-group assignment (1.9.0). `assigned` is
+        false when the player has no formed group, or the most recent one
+        was already settled (a match references it via
+        `matchmaking_group_id`) or expired
+        (`matchmaking.assignment_ttl_seconds`). All other fields are
+        present only when `assigned` is true; `join_target` follows the
+        same omit-when-unconfigured rule as in `MatchmakingStatus`.
+      properties:
+        assigned:
+          type: boolean
+          description: Whether the player currently holds a valid assignment
+        group_id:
+          type: integer
+          format: int64
+          description: Formed group id
+        match_type:
+          type: string
+          description: Queue mode of the formed group (e.g. "1v1", "2v2")
+        formed_at:
+          type: string
+          format: date-time
+          description: Group formation time (UTC)
+        team_id:
+          type: string
+          description: Team label the player was assigned to in this group (A/B/C...)
+        join_target:
+          $ref: '#/components/schemas/JoinTarget'
 
     MetricsSnapshot:
       type: object
