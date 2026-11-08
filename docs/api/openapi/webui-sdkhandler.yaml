@@ -1,0 +1,253 @@
+openapi: 3.1.0
+info:
+  title: HA-WebUI-SDKHandler API
+  version: 1.0.0
+  description: >
+    Contract for the HA-WebUI-SDKHandler HTTP surface. The service builds
+    the WebUI host bundle with the registered SDK packages merged in and
+    publishes it behind a `current` link. It listens on TWO ports:
+
+    - the main port: liveness, build control (`X-Internal-Key` protected)
+      and optional static hosting of the published artifact;
+    - the maintenance port: ops-only template/SDK management
+      (`Authorization: Bearer` OPS credential protected).
+
+    Response shape: this service does not use the unified HA envelope on
+    every endpoint. Each endpoint's documented shape below is authoritative;
+    internal-key rejections use
+    `{"success": false, "code": "invalid_credentials", "message": "invalid internal key"}`
+    and OPS middleware rejections use bare `{"error": "<reason>"}` objects.
+servers:
+  - url: /
+    description: Main port (build control + optional static hosting)
+  - url: https://maintenance.example.invalid
+    description: >
+      Maintenance port (separate listener; path space is disjoint from the
+      main port).
+security: []
+paths:
+  /health:
+    get:
+      summary: Liveness probe (main port)
+      description: >
+        Returns `200` with `{"status": "ok"}`. No auth (liveness probes are
+        exempt from the internal key by convention). No build-state access.
+      responses:
+        '200':
+          description: Service is alive
+
+  /api/build/status:
+    get:
+      summary: Latest build result (main port)
+      description: >
+        Returns the most recent build record. When no build has run yet the
+        answer is `{"state": "empty", "build_id": "", "sdk_list": []}`.
+        Auth: `X-Internal-Key` (fail-closed; an unconfigured key rejects
+        every request). Idempotent read.
+      security:
+        - internalKey: []
+      responses:
+        '200':
+          description: Latest build record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildStatus'
+        '401':
+          description: >
+            Missing or mismatched `X-Internal-Key`;
+            `{"success": false, "code": "invalid_credentials", "message": "invalid internal key"}`
+
+  /api/build/trigger:
+    post:
+      summary: Trigger a build now (main port)
+      description: >
+        Runs a build synchronously and answers the finished record. NOT
+        idempotent under concurrency: while a build is already running the
+        request is refused with `409 {"success": false, "message": ...}`
+        (busy). Auth: `X-Internal-Key` (fail-closed).
+      security:
+        - internalKey: []
+      responses:
+        '200':
+          description: Build finished
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, build]
+                properties:
+                  success: { type: boolean, const: true }
+                  message: { type: string }
+                  build:
+                    $ref: '#/components/schemas/BuildStatus'
+        '401':
+          description: >
+            Missing or mismatched `X-Internal-Key`;
+            `{"success": false, "code": "invalid_credentials", "message": "invalid internal key"}`
+        '409':
+          description: 'A build is already in progress; `{"success": false, "message": "<reason>"}`'
+
+  /api/revision:
+    get:
+      summary: Currently published revision (main port)
+      description: >
+        Resolves the `current` link and reports the published revision.
+        Auth: `X-Internal-Key` (fail-closed). Idempotent read.
+      security:
+        - internalKey: []
+      responses:
+        '200':
+          description: Revision info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Revision'
+        '401':
+          description: >
+            Missing or mismatched `X-Internal-Key`;
+            `{"success": false, "code": "invalid_credentials", "message": "invalid internal key"}`
+        '500':
+          description: 'Revision unreadable; `{"error": "<reason>"}`'
+
+  /:
+    get:
+      summary: Published artifact index (main port, opt-in)
+      description: >
+        Only present when static artifact serving is enabled
+        (`ServeArtifacts`, default off). Serves the published `index.html`;
+        `404 {"error": "无已发布产物"}` when nothing is published. Unmatched
+        non-`/api` paths fall back to `index.html` (SPA routing) with a
+        path-traversal guard (`400 {"error": "非法路径"}`); unmatched `/api`
+        paths answer `404 {"error": "route not found"}`.
+      responses:
+        '200':
+          description: Published index.html
+        '404':
+          description: 'No published artifact; `{"error": "无已发布产物"}`'
+
+  /api/maintenance/template/pull:
+    post:
+      summary: Pull the latest WebUI template now (maintenance port)
+      description: >
+        Pulls the upstream template source. When nothing changed the answer
+        says so and no build happens; when the pull brought changes a forced
+        build is triggered asynchronously (the response returns before that
+        build finishes). Idempotent in effect (an unchanged pull is a
+        no-op). Auth: `Authorization: Bearer <OPS credential>` verified
+        against the auth broker (ops level required).
+      security:
+        - opsBearer: []
+      responses:
+        '200':
+          description: >
+            `{"success": true, "message": ...}` — either "no changes" or
+            "pull ok, forced build triggered in background"
+        '401':
+          description: 'Missing Authorization header or not `Bearer <token>`; `{"error": "<reason>"}`'
+        '403':
+          description: 'Credential below ops level; `{"error": "Insufficient auth level"}`'
+        '500':
+          description: >
+            Pull failed (`{"success": false, "message": "<reason>"}`) or
+            credential verification failed (`{"error": "Failed to verify credential"}`)
+
+  /api/maintenance/sdk/list:
+    get:
+      summary: SDK package inventory (maintenance port)
+      description: >
+        Lists the SDK package metadata currently known to the broker (the
+        same metadata shape the HRPAuth core serves for SDK packages).
+        Auth: `Authorization: Bearer <OPS credential>`. Idempotent read.
+      security:
+        - opsBearer: []
+      responses:
+        '200':
+          description: SDK inventory
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, packages]
+                properties:
+                  success: { type: boolean, const: true }
+                  count: { type: integer }
+                  packages:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                    description: >
+                      SDK package metadata objects (name, version, sha256,
+                      size, uploaded_at, run_scripts, ... — same shape as
+                      hrpauth-business.yaml `SdkPackageMeta`).
+        '401':
+          description: 'Missing Authorization header or not `Bearer <token>`; `{"error": "<reason>"}`'
+        '403':
+          description: 'Credential below ops level; `{"error": "Insufficient auth level"}`'
+        '500':
+          description: >
+            Inventory unavailable (`{"error": "获取 SDK 列表失败: <reason>"}`)
+            or credential verification failed (`{"error": "Failed to verify credential"}`)
+
+components:
+  securitySchemes:
+    internalKey:
+      type: apiKey
+      in: header
+      name: X-Internal-Key
+      description: >
+        Shared internal key (same convention as HRPAuth-Yggdrasil-API
+        internal endpoints). Fail-closed: when the key is not configured on
+        the server, every protected request is rejected with 401.
+    opsBearer:
+      type: http
+      scheme: bearer
+      description: >
+        OPS-level credential verified through the auth broker
+        (HRPAuth-backed); below-ops credentials answer 403.
+  schemas:
+    BuildStatus:
+      type: object
+      required: [state, build_id, sdk_list]
+      properties:
+        state:
+          type: string
+          description: >
+            Build state; `empty` when no build has run, otherwise the stored
+            record status (e.g. success/failed/running).
+        build_id:
+          type: string
+          description: Empty string when state is `empty`
+        time:
+          type: string
+          description: Build start timestamp (omitted when state is `empty`)
+        sdk_list:
+          type: array
+          items: { type: string }
+          description: SDK package names merged into this build
+        error:
+          type: string
+          description: Last build error (empty when none)
+        artifact:
+          type: string
+          description: Artifact directory of this build
+    Revision:
+      type: object
+      required: [build_id, published_at, artifact_dir, current, exists]
+      properties:
+        build_id:
+          type: string
+        published_at:
+          type: string
+        artifact_dir:
+          type: string
+          description: artifacts/<build-id>/dist
+        current:
+          type: string
+          description: Resolved real directory behind the `current` link
+        exists:
+          type: boolean
+        switched:
+          type: boolean
+          description: Present on publish results (whether the link was switched)

@@ -47,8 +47,31 @@ paths:
         `login_ticket` plus `totp_required`, `webauthn_required`, `email_required`,
         `recovery_key_required`, and `second_factors` so the client can choose
         an allowed second factor.
+
+        Authentication: none (this IS the password entrypoint; the request
+        carries `identifier` + `password`). Idempotency: not idempotent —
+        each successful call issues fresh ticket/token material. Rate
+        limiting and lockout policy are deployment configuration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, password]
+              properties:
+                identifier:
+                  type: string
+                  description: User email or username
+                password:
+                  type: string
       responses:
-        '200': { description: Success }
+        '200':
+          description: Direct tokens or a login ticket for the second-factor flow
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginTicketResponse'
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
   /oauth/authorize:
@@ -82,8 +105,32 @@ paths:
         client secret are skipped with a warning (the root credential is
         never copied into an ordinary client row). Their tokens resolve as
         service tokens and satisfy ops (level 2) auth checks.
+
+        Authentication: client authentication per RFC 6749 (client_id /
+        client_secret, basic or post). Idempotency: each call issues fresh
+        tokens; a `refresh_token` grant rotates the refresh token.
       responses:
-        '200': { description: Success }
+        '200':
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access_token, expires_in, token_type]
+                properties:
+                  access_token: { type: string }
+                  refresh_token:
+                    type: string
+                    description: Present for grants that issue refresh tokens
+                  expires_in:
+                    type: integer
+                    description: Access token lifetime in seconds
+                  token_type:
+                    type: string
+                    description: Typically `Bearer`
+                  scope:
+                    type: string
+                    description: Space-delimited scopes carried by the access token
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
@@ -237,12 +284,22 @@ paths:
   /logout:
     get:
       summary: Revoke current Bearer access token
+      description: >
+        Authentication: Bearer access token (the token to revoke).
+        Idempotency: revoking an already-revoked token answers success.
+      security:
+        - BearerAuth: []
       responses:
         '200': { description: Success }
         '401': { $ref: '#/components/responses/Error' }
   /user/deleted:
     get:
       summary: List accounts in deletion cooling period (Operator only)
+      description: >
+        Authentication: ops-level (level 2) Bearer credential. Idempotent
+        read.
+      security:
+        - BearerAuth: []
       responses:
         '200':
           description: Success
@@ -265,6 +322,11 @@ paths:
   /user:
     post:
       summary: Get user information via Bearer token
+      description: >
+        Authentication: Bearer access token, or an ops-level service token
+        resolving another user. Idempotent read.
+      security:
+        - BearerAuth: []
       responses:
         '200': { description: Success }
         '401': { $ref: '#/components/responses/Error' }
@@ -275,6 +337,11 @@ paths:
       description: >
         Soft-deletes the user and revokes all tokens. The account remains in a
         cooling period (3-8 days) and can be restored by logging in again.
+        Authentication: Bearer access token of the account to delete.
+        Idempotency: deleting an account already in cooling period is a
+        no-op success.
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -310,7 +377,13 @@ paths:
   /user/security/change-email/send-code:
     post:
       summary: Send verification code to current email for email change
-      description: Requires `user.security.manage` scope.
+      description: >
+        Requires `user.security.manage` scope. Authentication: Bearer access
+        token. Idempotency: resending is rate-limited
+        (`verification_code_already_sent`), otherwise replaces the pending
+        code.
+      security:
+        - BearerAuth: []
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -320,7 +393,11 @@ paths:
   /user/security/change-email/webauthn-begin:
     post:
       summary: Start WebAuthn sudo authentication for email change
-      description: Requires `user.security.manage` scope.
+      description: >
+        Requires `user.security.manage` scope. Authentication: Bearer access
+        token. Idempotency: each call issues a fresh flow id.
+      security:
+        - BearerAuth: []
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -332,7 +409,10 @@ paths:
         Requires `user.security.manage` scope. The request must carry at least
         one verified second factor (TOTP, email code, WebAuthn sudo flow, or
         recovery key); there is no password-based path and no password change
-        in this endpoint.
+        in this endpoint. Authentication: Bearer access token. Idempotency:
+        changing to the already-current email is a no-op success.
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -363,7 +443,10 @@ paths:
       description: >
         Requires `user.security.manage` scope. Does not require any verification
         factor, only the user's login session. Fails if a recovery key is already
-        configured.
+        configured. Authentication: Bearer access token. Idempotency: second
+        create attempt fails (`recovery_key_already_configured`).
+      security:
+        - BearerAuth: []
       responses:
         '200':
           description: Recovery key created successfully.
@@ -385,6 +468,10 @@ paths:
       summary: Regenerate recovery key
       description: >
         Requires `user.security.manage` scope and at least one verification factor.
+        Authentication: Bearer access token. Idempotency: each success rotates
+        the key (not idempotent).
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -413,6 +500,10 @@ paths:
       summary: Revoke recovery key
       description: >
         Requires `user.security.manage` scope and at least one verification factor.
+        Authentication: Bearer access token. Idempotency: revoking when no key
+        is configured fails (`recovery_key_not_configured`).
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -447,7 +538,10 @@ paths:
       description: >
         Requires `user.security.manage` scope. Supports providing `uid` via
         query parameter or JSON request body. Returns status for TOTP, WebAuthn,
-        Email 2FA, and Recovery Key.
+        Email 2FA, and Recovery Key. Authentication: Bearer access token.
+        Idempotent read.
+      security:
+        - BearerAuth: []
       requestBody:
         required: false
         content:
@@ -581,6 +675,11 @@ paths:
   /email-2fa/toggle:
     post:
       summary: Enable or disable email 2FA via Bearer token
+      description: >
+        Authentication: Bearer access token. Idempotency: toggling to the
+        already-current state is a no-op success.
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -603,6 +702,12 @@ paths:
   /totp/setup:
     post:
       summary: Setup TOTP via Bearer token
+      description: >
+        Authentication: Bearer access token. Idempotency: setting up while
+        TOTP is already configured fails (`totp_secret_required`-class
+        validation per the code path).
+      security:
+        - BearerAuth: []
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -617,6 +722,11 @@ paths:
   /totp/toggle:
     post:
       summary: Enable or disable two-factor authentication via Bearer token
+      description: >
+        Authentication: Bearer access token. Idempotency: toggling to the
+        already-current state is a no-op success.
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -638,6 +748,10 @@ paths:
         Begins a WebAuthn registration ceremony for the authenticated user.
         The optional request body may provide a friendly credential name and an
         `attachment` hint (`platform` or `cross-platform`).
+        Authentication: Bearer access token. Idempotency: each call issues a
+        fresh flow id.
+      security:
+        - BearerAuth: []
       requestBody:
         required: false
         content:
@@ -651,6 +765,11 @@ paths:
   /webauthn/register/finish:
     post:
       summary: Finish WebAuthn credential registration via Bearer token
+      description: >
+        Authentication: Bearer access token. Idempotency: a flow id is
+        single-use; replaying a finished flow fails (`invalid_webauthn_flow`).
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -664,12 +783,20 @@ paths:
   /webauthn/credentials:
     get:
       summary: List the authenticated user's WebAuthn credentials
+      description: 'Authentication: Bearer access token. Idempotent read.'
+      security:
+        - BearerAuth: []
       responses:
         '200': { description: Success }
         '401': { $ref: '#/components/responses/Error' }
   /webauthn/credentials/{id}:
     delete:
       summary: Delete a WebAuthn credential via Bearer token
+      description: >
+        Authentication: Bearer access token. Idempotency: deleting an
+        unknown credential id fails (`webauthn_credential_not_found`, 404).
+      security:
+        - BearerAuth: []
       parameters:
         - in: path
           name: id
@@ -685,6 +812,11 @@ paths:
   /webauthn/2fa/toggle:
     post:
       summary: Enable or disable WebAuthn as the password second factor
+      description: >
+        Authentication: Bearer access token. Idempotency: toggling to the
+        already-current state is a no-op success.
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -754,6 +886,12 @@ paths:
   /change-username:
     post:
       summary: Change username via Bearer token
+      description: >
+        Authentication: Bearer access token. Idempotency: changing to the
+        already-current username is a no-op success; a taken username fails
+        (`username_already_taken` / `username_conflict`).
+      security:
+        - BearerAuth: []
       responses:
         '200': { description: Success }
         '400': { $ref: '#/components/responses/Error' }
@@ -804,6 +942,9 @@ paths:
       description: >
         Requires OAuth2 service credentials. The key is generated and stored
         in memory, overwriting any previous key for the same service name.
+        Idempotency: re-requesting overwrites (rotates) the previous key.
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -959,6 +1100,7 @@ paths:
       operationId: getSdkPackage
       security:
         - BearerAuth: []
+      parameters:
         - $ref: '#/components/parameters/PackageNamePath'
       responses:
         '200':
@@ -981,6 +1123,7 @@ paths:
       operationId: deleteSdkPackage
       security:
         - BearerAuth: []
+      parameters:
         - $ref: '#/components/parameters/PackageNamePath'
       responses:
         '200':
@@ -1006,6 +1149,7 @@ paths:
       operationId: downloadSdkPackage
       security:
         - BearerAuth: []
+      parameters:
         - $ref: '#/components/parameters/PackageNamePath'
       responses:
         '200':
@@ -1025,6 +1169,9 @@ paths:
         email/username + password pair against the core user database. The
         200 body is the raw user identity object (not wrapped in the unified
         envelope); failures return a plain `{"error": "..."}` body.
+        Idempotent read.
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -1053,7 +1200,9 @@ paths:
         Requires ops (level 2) auth. Used by satellite services to resolve a
         site-side OAuth2 access token. User tokens resolve to the owning
         user; service tokens (client_credentials) resolve to their scope
-        set without a user.
+        set without a user. Idempotent read.
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -1084,6 +1233,8 @@ paths:
         Idempotent by username: if the username already belongs to a user
         with the same email, that user is returned; the same username with
         a different email yields 409.
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -1120,7 +1271,10 @@ paths:
         Registered consumer: MatchCoreArena resolves match-report
         participant UUIDs to UIDs here (see
         `matchcorearena-business.yaml` POST /api/matches). Unknown UUIDs
-        answer `404 user_not_found`.
+        answer `404 user_not_found`. Authentication: ops-level (level 2)
+        service token. Idempotent read.
+      security:
+        - BearerAuth: []
       parameters:
         - in: path
           name: uuid
@@ -1286,6 +1440,63 @@ components:
         error:
           type: string
           description: Compatible alias, value matches code
+        meta:
+          $ref: '#/components/schemas/Meta'
+    LoginTicketResponse:
+      type: object
+      description: >
+        Unified envelope whose `data` is ONE OF two shapes: direct tokens
+        (no second factor configured) or a login ticket plus the allowed
+        second-factor methods. This is the source shape that
+        MatchCoreArena's `/api/auth/login-ticket` proxy mirrors.
+      required: [success, message, data, meta]
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+        data:
+          oneOf:
+            - type: object
+              description: Direct token response (no second factor required)
+              required: [access_token, refresh_token, expires_in]
+              properties:
+                access_token: { type: string }
+                refresh_token: { type: string }
+                expires_in:
+                  type: integer
+                  description: Access token lifetime in seconds
+                token_type: { type: string }
+                scope: { type: string }
+            - type: object
+              description: Additional second factor required before token issuance
+              required: [totp_required, webauthn_required, second_factors, login_ticket, expires_in]
+              properties:
+                totp_required:
+                  type: boolean
+                  description: Whether TOTP is an allowed second factor
+                webauthn_required:
+                  type: boolean
+                  description: Whether WebAuthn is an allowed second factor
+                email_required:
+                  type: boolean
+                  description: Whether email 2FA is an allowed second factor
+                recovery_key_required:
+                  type: boolean
+                  description: Whether the recovery key is an allowed second factor
+                second_factors:
+                  type: array
+                  items:
+                    type: string
+                    enum: [totp, webauthn, email, recovery_key]
+                  description: Allowed second-factor methods for this login_ticket
+                login_ticket:
+                  type: string
+                  description: Short-lived ticket for the second-factor endpoints
+                expires_in:
+                  type: integer
+                  description: Ticket lifetime in seconds
         meta:
           $ref: '#/components/schemas/Meta'
     ServiceScope:

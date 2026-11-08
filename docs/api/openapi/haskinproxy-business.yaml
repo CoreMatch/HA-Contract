@@ -1,0 +1,150 @@
+openapi: 3.1.0
+info:
+  title: HASkinProxy Business API
+  version: 1.0.0
+  description: >
+    Unified specification for the HASkinProxy HTTP surface. HASkinProxy is a
+    protocol-translation edge service that bridges the HA skin backend
+    (HRPAuth + HRPAuth-Yggdrasil-API, reached through the core's
+    `/yggdrasil-api` relay) to CustomSkinLoader (CSL) compatible clients.
+
+    Error shape: HASkinProxy does NOT use the HA unified response envelope.
+    CSL endpoints follow CustomSkinLoader conventions (bare JSON / bare
+    status codes), and failures use a bare `{"error": "<reason>"}` object.
+    This deviation is intentional for launcher/mod compatibility.
+
+    Authentication: the CSL read surface is unauthenticated (launchers fetch
+    it anonymously). `POST /{username}/texture/delete` forwards the caller's
+    `Authorization` header unchanged to the upstream; HASkinProxy itself
+    performs no authentication.
+
+    Known upstream mismatch (recorded 2026-11-08): the delete forwarding
+    targets `POST /yggdrasil-api/texture/delete`, which is not a registered
+    route of HRPAuth-Yggdrasil-API (the registered route is
+    `DELETE /texture/delete/{uuid}/{type}`). Until the proxy or the upstream
+    is aligned, the forwarded request answers the upstream's 404
+    `route_not_found`, which this surface passes through verbatim.
+servers:
+  - url: /
+paths:
+  /health:
+    get:
+      summary: Liveness probe
+      description: >
+        Returns `200` with `{"status": "ok"}` (bare JSON, not the unified
+        envelope). No upstream or cache access.
+      responses:
+        '200':
+          description: Service is alive
+  /{username}:
+    get:
+      summary: CSL profile lookup (CustomSkinLoader)
+      description: >
+        The path value MUST end with `.json` (CSL convention, e.g.
+        `/SomePlayer.json`); any other value answers a bare `404` with an
+        empty body. Resolves the username to an HA profile through the
+        upstream (username -> UUID -> profile), decodes the Yggdrasil
+        textures property, and answers the CSL profile shape. Results are
+        cached in-process for the configured profile TTL.
+
+        Texture keys: the skin is filed under its model (`default`, or
+        `slim` when the skin metadata says so); cape and elytra are filed
+        under `cape` / `elytra` when present. Values are the texture hash
+        (the last path segment of the HA texture URL), resolvable via
+        `GET /textures/{hash}`.
+      parameters:
+        - in: path
+          name: username
+          required: true
+          schema: { type: string }
+          description: Player name with a mandatory `.json` suffix
+      responses:
+        '200':
+          description: CSL profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CSLProfile'
+        '404':
+          description: >
+            Path without the `.json` suffix (empty body), or the username is
+            unknown to HA / has no profile (`{"error": "<reason>"}`)
+  /textures/{hash}:
+    get:
+      summary: Pull a texture by hash
+      description: >
+        Serves the texture bytes for a hash taken from a CSL profile. Warm
+        cache entries are served with `X-Cache: HIT`; misses are fetched
+        from the upstream texture endpoint, cacheable for the configured
+        texture TTL. `Content-Type`, `Last-Modified` and `Cache-Control`
+        are forwarded from the upstream when present (Content-Type defaults
+        to `image/png`).
+      parameters:
+        - in: path
+          name: hash
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Texture bytes
+          headers:
+            X-Cache:
+              description: '`HIT` when served from the local cache.'
+              schema: { type: string }
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '404':
+          description: Hash unknown to the upstream (empty body)
+  /{username}/texture/delete:
+    post:
+      summary: Forward a texture deletion to the upstream (legacy)
+      description: >
+        Reads the request body unchanged and forwards it to the upstream
+        `POST /texture/delete` together with the caller's `Authorization`
+        header; HASkinProxy does not authenticate the call itself. The
+        upstream status code and response body are passed through verbatim
+        (Content-Type forced to `application/json`). On a 2xx upstream
+        answer the local profile cache entry for `username` and the cached
+        texture entries referenced by it are evicted; the `username` path
+        segment is used ONLY for this cache eviction.
+
+        Transport failure toward the upstream answers
+        `502 {"error": "<reason>"}`; an unreadable request body answers
+        `400 {"error": "cannot read body"}`.
+
+        Known upstream mismatch: see the info description — the upstream
+        route this forwards to is not currently registered, so the passed-
+        through answer is the upstream's 404 `route_not_found` until the
+        surfaces are aligned.
+      parameters:
+        - in: path
+          name: username
+          required: true
+          schema: { type: string }
+          description: Used only to evict local cache entries on success
+      responses:
+        '200':
+          description: Upstream 2xx answer passed through verbatim
+        '400':
+          description: '`{"error": "cannot read body"}` (unreadable request body)'
+        '502':
+          description: '`{"error": "<reason>"}` (upstream transport failure)'
+components:
+  schemas:
+    CSLProfile:
+      type: object
+      required: [username, textures]
+      properties:
+        username:
+          type: string
+          description: Player name as recorded in the HA profile
+        textures:
+          type: object
+          additionalProperties:
+            type: string
+          description: >
+            Texture map keyed by slot/model: `default` or `slim` (skin),
+            `cape`, `elytra`; values are texture hashes resolvable via
+            `GET /textures/{hash}`. Empty object when the profile carries
+            no decodable textures.

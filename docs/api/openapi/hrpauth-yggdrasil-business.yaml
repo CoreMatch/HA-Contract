@@ -258,7 +258,17 @@ paths:
         - BearerAuth: []
       responses:
         '200':
-          description: Success; `data` contains `uid`, `account_id`, `mbe`, `mojang_uuid`, `cbh`, `skin_sync`
+          description: Success; `data` is the player summary
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    properties:
+                      success: { type: boolean, const: true }
+                      message: { type: string }
+                      data:
+                        $ref: '#/components/schemas/PlayerSummary'
         '401': { $ref: '#/components/responses/Error' }
   /player/mojang-bind-enable:
     post:
@@ -545,6 +555,32 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
   schemas:
+    PlayerSummary:
+      type: object
+      description: >
+        Game account summary (HRPAuth-Yggdrasil-API
+        services/player_service.go::PlayerInfo). Every field is always
+        present; `mojang_uuid` is an empty string while unbound.
+      required: [uid, account_id, mbe, mojang_uuid, cbh, skin_sync]
+      properties:
+        uid:
+          type: string
+          description: Core user UUID (string form)
+        account_id:
+          type: integer
+          description: Local game account row id (accounts.id)
+        mbe:
+          type: boolean
+          description: Whether the Mojang bind flow window is enabled
+        mojang_uuid:
+          type: string
+          description: Bound Mojang UUID (32-hex); empty string when unbound
+        cbh:
+          type: boolean
+          description: True when the account is claimed by a human (not a proxy bot)
+        skin_sync:
+          type: boolean
+          description: Whether the official Mojang skin is auto-synced after binds
     Meta:
       type: object
       required: [request_id]

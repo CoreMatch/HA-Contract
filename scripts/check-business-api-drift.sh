@@ -15,12 +15,18 @@
 #     (the /winnerproxy-prefixed alias registrations are excluded; the
 #      contract documents the canonical prefix-less form)
 #   - Cascade proxy           vs docs/api/openapi/cascade-proxy.yaml
-#     (the backend control plane lives in cascade-backend-v1.yaml and is
-#      implemented outside these repositories; see docs/dev/Cascade/README.md)
 #   - HA-Services-Deployer    vs docs/api/openapi/ha-services-deployer.yaml
 #     (delivery surface plus the opt-in orchestration endpoints; the
 #      orchestration semantics are normative in the Deployer's
 #      knowledge/0007, the contract fixes the METHOD+path surface)
+#   - HASkinProxy             vs docs/api/openapi/haskinproxy-business.yaml
+#     (CSL protocol-translation surface)
+#   - HA-WebUI-SDKHandler     vs docs/api/openapi/webui-sdkhandler.yaml
+#     (main port + maintenance port; both engines register in main.go)
+#   - Avalon cascade backend  vs docs/api/openapi/cascade-backend-v1.yaml
+#     (Go 1.22 ServeMux patterns in internal/net/gateway/control.go; the
+#      contract paths are relative to the /v1 server URL, so the /v1 prefix
+#      is stripped before comparison)
 #
 # Both directions are checked: METHOD+path present in code but missing from
 # the contract, and contract METHOD+path with no registered route.
@@ -30,7 +36,8 @@
 # (~/Cascade for the Cascade proxy):
 #   HRPAUTH_REPO_DIR, HASKINLIB_REPO_DIR, YGGDRASIL_REPO_DIR,
 #   MATCHCOREARENA_REPO_DIR, WINNERPROXY_REPO_DIR, CASCADE_REPO_DIR,
-#   DEPLOYER_REPO_DIR
+#   DEPLOYER_REPO_DIR, HASKINPROXY_REPO_DIR, SDKHANDLER_REPO_DIR,
+#   AVALON_REPO_DIR
 #
 # Missing repositories or contract files are hard errors (no silent pass).
 
@@ -67,6 +74,9 @@ MATCHCOREARENA_DIR="$(resolve_repo "${MATCHCOREARENA_REPO_DIR:-}" MatchCoreArena
 WINNERPROXY_DIR="$(resolve_repo "${WINNERPROXY_REPO_DIR:-}" WinnerProxy WINNERPROXY_REPO_DIR)"
 CASCADE_DIR="$(resolve_repo "${CASCADE_REPO_DIR:-}" Cascade CASCADE_REPO_DIR "$HOME/Cascade")"
 DEPLOYER_DIR="$(resolve_repo "${DEPLOYER_REPO_DIR:-}" HA-Services-Deployer DEPLOYER_REPO_DIR)"
+HASKINPROXY_DIR="$(resolve_repo "${HASKINPROXY_REPO_DIR:-}" HASkinProxy HASKINPROXY_REPO_DIR)"
+SDKHANDLER_DIR="$(resolve_repo "${SDKHANDLER_REPO_DIR:-}" HA-WebUI-SDKHandler SDKHANDLER_REPO_DIR)"
+AVALON_DIR="$(resolve_repo "${AVALON_REPO_DIR:-}" Avalon AVALON_REPO_DIR)"
 
 HRPAUTH_YAML="$ROOT/docs/api/openapi/hrpauth-business.yaml"
 HASKINLIB_YAML="$ROOT/docs/api/openapi/haskinlib-business.yaml"
@@ -75,12 +85,74 @@ MATCHCOREARENA_YAML="$ROOT/docs/api/openapi/matchcorearena-business.yaml"
 WINNERPROXY_YAML="$ROOT/docs/api/openapi/winnerproxy-business.yaml"
 CASCADE_PROXY_YAML="$ROOT/docs/api/openapi/cascade-proxy.yaml"
 DEPLOYER_YAML="$ROOT/docs/api/openapi/ha-services-deployer.yaml"
+HASKINPROXY_YAML="$ROOT/docs/api/openapi/haskinproxy-business.yaml"
+SDKHANDLER_YAML="$ROOT/docs/api/openapi/webui-sdkhandler.yaml"
+CASCADE_BACKEND_YAML="$ROOT/docs/api/openapi/cascade-backend-v1.yaml"
 
-for f in "$HRPAUTH_YAML" "$HASKINLIB_YAML" "$YGGDRASIL_YAML" "$MATCHCOREARENA_YAML" "$WINNERPROXY_YAML" "$CASCADE_PROXY_YAML" "$DEPLOYER_YAML"; do
+for f in "$HRPAUTH_YAML" "$HASKINLIB_YAML" "$YGGDRASIL_YAML" "$MATCHCOREARENA_YAML" "$WINNERPROXY_YAML" "$CASCADE_PROXY_YAML" "$DEPLOYER_YAML" "$HASKINPROXY_YAML" "$SDKHANDLER_YAML" "$CASCADE_BACKEND_YAML"; do
   [[ -f "$f" ]] || fail "contract file missing: $f"
 done
 
 command -v rg >/dev/null 2>&1 || fail "ripgrep (rg) is required"
+command -v gawk >/dev/null 2>&1 || fail "gawk is required (route extraction uses match() capture arrays)"
+
+# ---------------------------------------------------------------------------
+# --self-test: proves this checker actually FAILS on drift, by re-running it
+# against a fixture copy of the contract tree where ONE mutation is injected
+# (a contract-only ghost route). The clean fixture must pass, the mutated
+# fixture must fail. Never a silent green.
+# ---------------------------------------------------------------------------
+if [[ "${1:-}" == "--self-test" ]]; then
+  FIX="$(mktemp -d)"
+  trap 'rm -rf "$FIX"' EXIT
+  mkdir -p "$FIX/scripts" "$FIX/docs/api/openapi"
+  cp "$ROOT/docs/api/openapi/"*.yaml "$FIX/docs/api/openapi/"
+  cp "$0" "$FIX/scripts/"
+  SCRIPT_NAME="$(basename "$0")"
+
+  # Repo locations: honour caller env, fall back to siblings of this repo
+  # (the CI layout checks every implementation repo out next to HA-Contract).
+  REPO_ENV=(
+    HRPAUTH_REPO_DIR="${HRPAUTH_REPO_DIR:-$ROOT/../HRPAuth}"
+    HASKINLIB_REPO_DIR="${HASKINLIB_REPO_DIR:-$ROOT/../HASkinLib}"
+    YGGDRASIL_REPO_DIR="${YGGDRASIL_REPO_DIR:-$ROOT/../HRPAuth-Yggdrasil-API}"
+    MATCHCOREARENA_REPO_DIR="${MATCHCOREARENA_REPO_DIR:-$ROOT/../MatchCoreArena-Server}"
+    WINNERPROXY_REPO_DIR="${WINNERPROXY_REPO_DIR:-$ROOT/../WinnerProxy}"
+    CASCADE_REPO_DIR="${CASCADE_REPO_DIR:-$ROOT/../Cascade}"
+    DEPLOYER_REPO_DIR="${DEPLOYER_REPO_DIR:-$ROOT/../HA-Services-Deployer}"
+    HASKINPROXY_REPO_DIR="${HASKINPROXY_REPO_DIR:-$ROOT/../HASkinProxy}"
+    SDKHANDLER_REPO_DIR="${SDKHANDLER_REPO_DIR:-$ROOT/../HA-WebUI-SDKHandler}"
+    AVALON_REPO_DIR="${AVALON_REPO_DIR:-$ROOT/../Avalon}"
+  )
+
+  echo "self-test[1/2]: clean fixture must pass"
+  if ! env "${REPO_ENV[@]}" bash "$FIX/scripts/$SCRIPT_NAME" >"$FIX/clean.log" 2>&1; then
+    cat "$FIX/clean.log" >&2
+    echo "SELF-TEST FAILED: clean fixture reported drift" >&2
+    exit 1
+  fi
+
+  echo "self-test[2/2]: contract-only ghost route must fail"
+  sed -i $'s#^components:#  /selftest-ghost:\\n    get:\\n      summary: self-test ghost route (never implemented)\\ncomponents:#' \
+    "$FIX/docs/api/openapi/haskinproxy-business.yaml"
+  grep -q "selftest-ghost" "$FIX/docs/api/openapi/haskinproxy-business.yaml" || {
+    echo "SELF-TEST FAILED: could not inject the mutation" >&2
+    exit 1
+  }
+  if env "${REPO_ENV[@]}" bash "$FIX/scripts/$SCRIPT_NAME" >"$FIX/mutated.log" 2>&1; then
+    cat "$FIX/mutated.log" >&2
+    echo "SELF-TEST FAILED: mutated contract did NOT trigger drift" >&2
+    exit 1
+  fi
+  grep -q "selftest-ghost" "$FIX/mutated.log" || {
+    cat "$FIX/mutated.log" >&2
+    echo "SELF-TEST FAILED: drift report does not name the ghost route" >&2
+    exit 1
+  }
+
+  echo "self-test passed: clean fixture green, mutated fixture red."
+  exit 0
+fi
 
 normalize_route() {
   # :param -> {param}; gin catch-all *param -> {param} (OpenAPI spelling).
@@ -93,7 +165,7 @@ extract_gin_routes() {
   # (e.g. auth := r.Group("/authserver")). Group variables that are function
   # parameters (not assigned via :=) resolve to an empty prefix, which is the
   # canonical form for alias-registered routes.
-  awk '
+  gawk '
     match($0, /([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*:=[[:space:]][^=].*\.Group\("([^"]*)"\)/, g) {
       groups[g[1]] = g[2]
     }
@@ -106,11 +178,25 @@ extract_gin_routes() {
   ' "$1" | normalize_route | sort -u
 }
 
+extract_mux_routes() {
+  # $1 = Go file with Go 1.22+ ServeMux registrations; emits "METHOD /path"
+  # lines. Matches mux.HandleFunc("METHOD /prefix/path", ...) and strips the
+  # /v1 prefix so the result is comparable with cascade-backend-v1.yaml
+  # paths (which are relative to the /v1 server URL).
+  gawk '
+    match($0, /HandleFunc\("(GET|POST|PUT|DELETE|PATCH) \/v1([^"]*)"/, m) {
+      path = m[2]
+      if (path == "") path = "/"
+      print m[1] " " path
+    }
+  ' "$1" | sort -u
+}
+
 extract_openapi_routes() {
   # Emits "METHOD /path" lines from an OpenAPI file: top-level path keys under
   # `paths:` (two-space indent) and operation keys (four-space indent) up to
   # the `components:` section.
-  awk '
+  gawk '
     /^components:/ { in_paths = 0 }
     /^paths:/ { in_paths = 1; next }
     in_paths && /^  \/[^ ]*:[[:space:]]*$/ {
@@ -243,8 +329,7 @@ check_set "WinnerProxy" "$tmpdir/winnerproxy-routes.txt" "$tmpdir/winnerproxy-op
 
 # --- Cascade proxy ---
 # The backend control plane (cascade-backend-v1.yaml) is implemented in the
-# Avalon Go server (CoreMatch/Avalon) outside these repositories and is intentionally not
-# checked here (see docs/dev/Cascade/README.md, "Anti-drift status").
+# Avalon Go server and is checked separately below ("Avalon cascade backend").
 extract_gin_routes "$CASCADE_DIR/internal/api/proxy_http.go" > "$tmpdir/cascade-routes.txt"
 extract_openapi_routes "$CASCADE_PROXY_YAML" > "$tmpdir/cascade-openapi.txt"
 
@@ -259,6 +344,36 @@ extract_openapi_routes "$DEPLOYER_YAML" > "$tmpdir/deployer-openapi.txt"
 
 check_set "HA-Services-Deployer" "$tmpdir/deployer-routes.txt" "$tmpdir/deployer-openapi.txt" impl-vs-contract
 check_set "HA-Services-Deployer" "$tmpdir/deployer-routes.txt" "$tmpdir/deployer-openapi.txt" contract-vs-impl
+
+# --- HASkinProxy ---
+# Route source is internal/router/router.go (CSL surface).
+[[ -f "$HASKINPROXY_DIR/internal/router/router.go" ]] || fail "HASkinProxy route file missing: $HASKINPROXY_DIR/internal/router/router.go"
+extract_gin_routes "$HASKINPROXY_DIR/internal/router/router.go" > "$tmpdir/haskinproxy-routes.txt"
+extract_openapi_routes "$HASKINPROXY_YAML" > "$tmpdir/haskinproxy-openapi.txt"
+
+check_set "HASkinProxy" "$tmpdir/haskinproxy-routes.txt" "$tmpdir/haskinproxy-openapi.txt" impl-vs-contract
+check_set "HASkinProxy" "$tmpdir/haskinproxy-routes.txt" "$tmpdir/haskinproxy-openapi.txt" contract-vs-impl
+
+# --- HA-WebUI-SDKHandler ---
+# Both listeners (main port and maintenance port) register their routes in
+# main.go; the path spaces are disjoint, so one extraction covers both.
+[[ -f "$SDKHANDLER_DIR/main.go" ]] || fail "HA-WebUI-SDKHandler route file missing: $SDKHANDLER_DIR/main.go"
+extract_gin_routes "$SDKHANDLER_DIR/main.go" > "$tmpdir/sdkhandler-routes.txt"
+extract_openapi_routes "$SDKHANDLER_YAML" > "$tmpdir/sdkhandler-openapi.txt"
+
+check_set "HA-WebUI-SDKHandler" "$tmpdir/sdkhandler-routes.txt" "$tmpdir/sdkhandler-openapi.txt" impl-vs-contract
+check_set "HA-WebUI-SDKHandler" "$tmpdir/sdkhandler-routes.txt" "$tmpdir/sdkhandler-openapi.txt" contract-vs-impl
+
+# --- Avalon cascade backend control plane ---
+# Go 1.22 ServeMux patterns in internal/net/gateway/control.go; the /v1
+# prefix is stripped by the extractor (contract paths are /v1-relative).
+[[ -f "$AVALON_DIR/internal/net/gateway/control.go" ]] || fail "Avalon control-plane route file missing: $AVALON_DIR/internal/net/gateway/control.go"
+extract_mux_routes "$AVALON_DIR/internal/net/gateway/control.go" > "$tmpdir/avalon-backend-routes.txt"
+[[ -s "$tmpdir/avalon-backend-routes.txt" ]] || fail "Avalon control-plane extraction yielded 0 routes — refusing to compare against nothing"
+extract_openapi_routes "$CASCADE_BACKEND_YAML" > "$tmpdir/avalon-backend-openapi.txt"
+
+check_set "Avalon-cascade-backend" "$tmpdir/avalon-backend-routes.txt" "$tmpdir/avalon-backend-openapi.txt" impl-vs-contract
+check_set "Avalon-cascade-backend" "$tmpdir/avalon-backend-routes.txt" "$tmpdir/avalon-backend-openapi.txt" contract-vs-impl
 
 if [[ "$DRIFT_FOUND" -eq 1 ]]; then
   echo "Business API drift detected."

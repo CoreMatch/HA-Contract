@@ -1265,7 +1265,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Assignment state (valid assignment or `assigned: false`)
+          description: 'Assignment state (valid assignment or `assigned: false`)'
           content:
             application/json:
               schema:

@@ -62,7 +62,15 @@ During the transition period, some success fields will be mirrored at the top le
 
 - `openapi/hrpauth-business.yaml`: HRPAuth Core Business API specification
 - `openapi/hrpauth-yggdrasil-business.yaml`: HRPAuth-Yggdrasil-API business wrapper specification
-- `openapi/cascade-backend-v1.yaml`: Cascade proxy↔backend control-plane contract (`/v1`, mutual TLS). Not an HA business API: it does not follow the unified business response format, and it is not covered by the gin-based anti-drift check (see `docs/dev/Cascade/README.md`)
+- `openapi/haskinlib-business.yaml`: HASkinLib (texture library) specification
+- `openapi/haskinproxy-business.yaml`: HASkinProxy (CSL protocol translation) specification
+- `openapi/matchcorearena-business.yaml`: MatchCoreArena (matchmaking/settlement) specification
+- `openapi/winnerproxy-business.yaml`: WinnerProxy (Yggdrasil edge proxy) specification
+- `openapi/cascade-proxy.yaml`: Cascade proxy management API
+- `openapi/cascade-backend-v1.yaml`: Cascade proxy↔backend control-plane contract (`/v1`, mutual TLS). Not an HA business API: it does not follow the unified business response format. Implemented by the Avalon gateway (`internal/net/gateway/control.go`) and covered by the anti-drift checks since 2026-11-08
+- `openapi/ha-services-deployer.yaml`: HA-Services-Deployer delivery + orchestration surface
+- `openapi/webui-sdkhandler.yaml`: HA-WebUI-SDKHandler build/maintenance surface
+- `openapi/avalon-plugin-v1.yaml`: Avalon out-of-process plugin contract (manifest + events)
 - `error-codes.md`: Unified error code registry
 
 ## Anti-Drift
@@ -70,7 +78,21 @@ During the transition period, some success fields will be mirrored at the top le
 Run before submission:
 
 ```bash
-./scripts/check-business-api-drift.sh
+./scripts/check-openapi-validity.sh        # every yaml is valid OpenAPI (mature validator)
+./scripts/check-business-api-drift.sh      # METHOD+path, code <-> contract, both directions
+./scripts/check-business-api-fields.sh     # schema fields <-> Go struct json tags (go/ast)
+./scripts/check-consumer-urls.sh           # every consumer-called URL resolves to a contract path
+./scripts/check-avalon-plugin-event-drift.sh  # hub code <-> openapi <-> EVENT-CATALOG <-> template subscriptions
 ```
 
-It checks whether all business routes appear in the OpenAPI specification.
+Each script also supports `--self-test`, which re-runs the checker against a
+fixture copy of the contract tree with ONE deliberate mutation injected and
+asserts the checker turns red (clean fixture green, mutated fixture red).
+The CI workflow `.github/workflows/business-api-drift.yml` runs every check
+in self-test + real mode against all CoreMatch repositories.
+
+Discipline: an unreadable source or an empty extraction is a hard error in
+every checker — never "unreadable, therefore skipped". Known-broken consumer
+paths (e.g. HASkinProxy's legacy `POST /texture/delete` forward) are listed
+explicitly inside `check-consumer-urls.sh` and reported as loud warnings on
+every run until the owning repo fixes them.

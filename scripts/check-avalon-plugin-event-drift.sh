@@ -9,6 +9,10 @@
 #                              docs/api/openapi/avalon-plugin-v1.yaml
 #   3. Avalon developer docs — the machine-readable ```plugin-events block in
 #                              docs/plugins/EVENT-CATALOG.md
+#   4. Avalon template plugin — the p.Handle("<event>") subscription points in
+#                              docs/plugins/template (the reference plugin must
+#                              only subscribe to events the hub/contract/catalog
+#                              all know; a stale subscription is drift)
 #
 # Discipline (Cascade contract-test false-green lesson, same spirit as
 # knowledge/0005's "loud failure, never silent false green"):
@@ -61,6 +65,49 @@ CATALOG_MD="$AVALON_DIR/docs/plugins/EVENT-CATALOG.md"
 command -v go >/dev/null 2>&1 || fail "go toolchain required (Avalon module build)"
 command -v python3 >/dev/null 2>&1 || fail "python3 required (openapi parse)"
 
+# ---------------------------------------------------------------------------
+# --self-test: proves this checker actually FAILS on event drift. A fixture
+# copy of this contract tree is mutated (one /events/* path renamed) and
+# re-checked against the real Avalon checkout: the clean fixture must pass,
+# the mutated fixture must fail and name the event.
+# ---------------------------------------------------------------------------
+if [[ "${1:-}" == "--self-test" ]]; then
+	FIX="$(mktemp -d)"
+	trap 'rm -rf "$FIX"' EXIT
+	mkdir -p "$FIX/scripts" "$FIX/docs/api/openapi"
+	cp "$CONTRACT_YAML" "$FIX/docs/api/openapi/"
+	cp "$0" "$FIX/scripts/"
+	SCRIPT_NAME="$(basename "$0")"
+	FIX_ENV=(AVALON_REPO_DIR="${AVALON_REPO_DIR:-}")
+
+	echo "self-test[1/2]: clean fixture must pass"
+	if ! env "${FIX_ENV[@]}" bash "$FIX/scripts/$SCRIPT_NAME" >"$FIX/clean.log" 2>&1; then
+		cat "$FIX/clean.log" >&2
+		echo "SELF-TEST FAILED: clean fixture reported drift" >&2
+		exit 1
+	fi
+
+	echo "self-test[2/2]: renaming /events/player.kicked must fail"
+	sed -i 's#^  /events/player.kicked:#  /events/player.kicked-renamed:#' "$FIX/docs/api/openapi/avalon-plugin-v1.yaml"
+	grep -q "player.kicked-renamed" "$FIX/docs/api/openapi/avalon-plugin-v1.yaml" || {
+		echo "SELF-TEST FAILED: could not inject the mutation" >&2
+		exit 1
+	}
+	if env "${FIX_ENV[@]}" bash "$FIX/scripts/$SCRIPT_NAME" >"$FIX/mutated.log" 2>&1; then
+		cat "$FIX/mutated.log" >&2
+		echo "SELF-TEST FAILED: mutated contract did NOT trigger drift" >&2
+		exit 1
+	fi
+	grep -q "player.kicked" "$FIX/mutated.log" || {
+		cat "$FIX/mutated.log" >&2
+		echo "SELF-TEST FAILED: drift report does not name the missing event" >&2
+		exit 1
+	}
+
+	echo "self-test passed: clean fixture green, mutated fixture red."
+	exit 0
+fi
+
 # --- source 1: Avalon hub code (compiled truth, not source grep) ---
 if ! code_events="$(cd "$AVALON_DIR" && go run ./scripts/plugin-events)"; then
 	fail "Avalon hub code: 'go run ./scripts/plugin-events' failed (build or empty event set)"
@@ -99,9 +146,28 @@ catalog_events="$(awk '
 code_events="$(printf '%s\n' "$code_events" | sort)"
 contract_events="$(printf '%s\n' "$contract_events" | sort)"
 
+# --- source 4: template plugin subscription points (reference plugin) ---
+drift=0
+TEMPLATE_DIR="$AVALON_DIR/docs/plugins/template"
+[[ -d "$TEMPLATE_DIR" ]] || fail "template plugin directory missing: $TEMPLATE_DIR"
+template_events="$(gawk '
+	match($0, /\.Handle\("([a-z][a-z0-9_.]*)"/, m) { print m[1] }
+' "$TEMPLATE_DIR"/*.go | sort -u)"
+[[ -n "$template_events" ]] || fail "template plugin subscribes to 0 events — refusing to compare against nothing"
+while IFS= read -r name; do
+	[[ -n "$name" ]] || continue
+	if ! grep -qxF "$name" <<<"$code_events"; then
+		echo "DRIFT: template plugin subscribes to event '$name' which the Avalon hub code does not define"
+		drift=1
+	fi
+	if ! grep -qxF "$name" <<<"$contract_events"; then
+		echo "DRIFT: template plugin subscribes to event '$name' missing from the HA-Contract openapi /events/* paths"
+		drift=1
+	fi
+done <<<"$template_events"
+
 # --- three-way comparison: report every event with its presence vector ---
 union="$(printf '%s\n%s\n%s\n' "$code_events" "$contract_events" "$catalog_events" | sort -u)"
-drift=0
 while IFS= read -r name; do
 	[[ -n "$name" ]] || continue
 	in_code=0; in_contract=0; in_catalog=0

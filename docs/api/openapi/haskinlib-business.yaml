@@ -78,8 +78,23 @@ paths:
   /texture/listpreview:
     get:
       summary: Get preview list
+      description: >
+        Public read (no auth). Idempotent read. Returns the preview catalog
+        as `data` — an array of texture records.
       responses:
-        '200': { description: Success }
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TextureRecord'
         '400': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
   /texture/preview/{preview_file}:
@@ -115,10 +130,25 @@ paths:
   /profile/textures:
     get:
       summary: Get current user's texture list
+      description: >
+        Returns the authenticated user's texture records as `data` (array).
+        Idempotent read.
       security:
         - BearerAuth: []
       responses:
-        '200': { description: Success }
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TextureRecord'
         '401': { $ref: '#/components/responses/Error' }
   /texture/delete:
     post:
@@ -167,6 +197,50 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
   schemas:
+    TextureRecord:
+      type: object
+      description: >
+        Texture library record (HASkinLib
+        controllers/list_preview_controller.go::listPreviewItem and
+        controllers/profile_controller.go::profileTextureItem share this
+        shape). `model` is optional (omitempty in the Go structs); every
+        other field is always present.
+      required: [id, hash, type, uid, width, height, file_name, preview_file, name, description, tags, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+        hash:
+          type: string
+          description: SHA-256 hash (64-char hex) of the original texture
+        type:
+          type: string
+          enum: [skin, cape]
+        model:
+          type: string
+          description: Skin model; omitted when empty
+        uid:
+          type: integer
+          description: Owning user UID
+        width:
+          type: integer
+        height:
+          type: integer
+        file_name:
+          type: string
+          description: Stored original file name
+        preview_file:
+          type: string
+          description: Generated WebP preview file name (served by /texture/preview/{preview_file})
+        name:
+          type: string
+        description:
+          type: string
+        tags:
+          type: string
+        created_at:
+          type: string
+        updated_at:
+          type: string
     Meta:
       type: object
       required: [request_id]
