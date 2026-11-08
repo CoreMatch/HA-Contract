@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MatchCoreArena Business API
-  version: 1.7.0
+  version: 1.8.0
   description: >
     Unified specification for MatchCoreArena server business interfaces.
     Authentication via HRPAuth OAuth2 Authorization Code + PKCE.
@@ -15,14 +15,77 @@ paths:
       description: >
         Public liveness/status endpoint (no auth). Returns the unified
         success envelope with the server `version` in `data`.
+
+        CORS (1.8.0): this endpoint alone is readable cross-origin, so the
+        mcnb.dev portal can show service liveness in a browser. The
+        `Access-Control-Allow-Origin` response header is set ONLY when the
+        request `Origin` is exactly `https://mcnb.dev` or
+        `https://www.mcnb.dev` (exact match, no wildcards, never `*`); any
+        other or missing `Origin` gets the normal 200 WITHOUT CORS headers
+        and the request `Origin` is never echoed back. Responses carry
+        `Vary: Origin` and never carry `Access-Control-Allow-Credentials`.
+        No other path in this contract is CORS-enabled; authenticated
+        endpoints are unaffected.
       tags: [System]
       responses:
         '200':
           description: Success
+          headers:
+            Access-Control-Allow-Origin:
+              description: >
+                Echoed only for the whitelisted origins `https://mcnb.dev`
+                and `https://www.mcnb.dev`; omitted for every other origin
+                and for requests without an `Origin` header.
+              schema:
+                type: string
+                enum: ['https://mcnb.dev', 'https://www.mcnb.dev']
+            Vary:
+              description: Always includes `Origin` on this endpoint.
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessEnvelope'
+    options:
+      summary: CORS preflight for the status endpoint
+      description: >
+        Preflight for `GET /api/status` (1.8.0). Answers `204` with no body.
+        For a whitelisted `Origin` (`https://mcnb.dev` or
+        `https://www.mcnb.dev`) the response carries
+        `Access-Control-Allow-Origin: <origin>`,
+        `Access-Control-Allow-Methods: GET`, `Vary: Origin`, and — only when
+        the preflight requested headers via `Access-Control-Request-Headers`
+        — `Access-Control-Allow-Headers: Content-Type`. Any other or missing
+        `Origin` still answers `204` but WITHOUT CORS headers (the browser
+        then blocks the actual request). `Access-Control-Allow-Credentials`
+        is never sent.
+      tags: [System]
+      responses:
+        '204':
+          description: Preflight answered (CORS headers only for whitelisted origins)
+          headers:
+            Access-Control-Allow-Origin:
+              description: Whitelisted request origin; omitted otherwise.
+              schema:
+                type: string
+                enum: ['https://mcnb.dev', 'https://www.mcnb.dev']
+            Access-Control-Allow-Methods:
+              description: '`GET` — present only for whitelisted origins.'
+              schema:
+                type: string
+                enum: [GET]
+            Access-Control-Allow-Headers:
+              description: >
+                `Content-Type` — present only for whitelisted origins and
+                only when the preflight carried `Access-Control-Request-Headers`.
+              schema:
+                type: string
+                enum: [Content-Type]
+            Vary:
+              description: Always includes `Origin` on this endpoint.
+              schema:
+                type: string
 
   # ─── Authentication ────────────────────────────────────────────────────
   /api/auth/login-ticket:
