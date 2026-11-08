@@ -1,7 +1,7 @@
 # Anchor-checker self-test fixture
 
 This fixture is consumed by `check-knowledge-anchors.sh --self-test`.
-Expected outcome: exactly 6 problems, 0 URL false positives.
+Expected outcome: exactly 10 problems, 0 URL false positives.
 
 ## URLs must never parse as anchors
 
@@ -27,6 +27,23 @@ may be reported.
 - Time point in a nonexistent commit: sample.txt:L1 @ deadbeef0
 - Wrong content fingerprint: sample.txt:L3 fp=deadbeef
 
+## Continuation symbol chains (1 valid, 1 problem)
+
+- Valid chain, continuations inherit the path: `sample.txt::MARKER`, `first`
+- Broken chain, second symbol does not exist: `sample.txt::MARKER` + `NOSUCHCONT`
+
+## Subdirectory coverage (1 problem, in knowledge/sub/nested.md)
+
+knowledge/ must be scanned recursively; `sub/nested.md` carries one valid
+line anchor and one broken symbol anchor (problem 8).
+
+## Archival declaration (2 problems, in knowledge/archived-*.md)
+
+`archived-declared.md` carries the archival-policy HTML comment marker
+(`anchor-policy: archival`) and no rotting anchors — it must pass clean.
+`archived-violation.md` carries the same marker plus a symbol anchor and a
+bare line anchor — the inverse check must report both (problems 9 and 10).
+
 ## Skipped lines
 
 - [xref] nonexistent/foo.go:123 — cross-repo marker, must be skipped entirely.
@@ -37,3 +54,5 @@ may be reported.
 - Host-port pairs without scheme: dev API at localhost:8080 today.
 - PHP class constants in prose: the mock sets PDO::ERRMODE_EXCEPTION.
 - Convention examples in prose: write `file.ext::Symbol` or `file.ext (field: key)`.
+- Times and ratios in prose: the match ended 12:00 with a 1:1 tie — even
+  though a file named `1` exists in the fixture root, these must never parse.
