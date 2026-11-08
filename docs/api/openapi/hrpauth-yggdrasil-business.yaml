@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HRPAuth Yggdrasil Business API
-  version: 1.0.0
+  version: 1.1.0
   description: Unified specification for HRPAuth-Yggdrasil-API business interfaces (textures, game accounts, Mojang proxy).
 servers:
   - url: /
@@ -258,7 +258,7 @@ paths:
         - BearerAuth: []
       responses:
         '200':
-          description: Success; `data` contains `uid`, `account_id`, `mbe`, `mojang_uuid`, `cbh`
+          description: Success; `data` contains `uid`, `account_id`, `mbe`, `mojang_uuid`, `cbh`, `skin_sync`
         '401': { $ref: '#/components/responses/Error' }
   /player/mojang-bind-enable:
     post:
@@ -278,7 +278,7 @@ paths:
         - BearerAuth: []
       responses:
         '200':
-          description: Success; `data` is the updated player summary (`uid`, `account_id`, `mbe`, `mojang_uuid`, `cbh`)
+          description: Success; `data` is the updated player summary (`uid`, `account_id`, `mbe`, `mojang_uuid`, `cbh`, `skin_sync`)
         '401': { $ref: '#/components/responses/Error' }
   /player/mojang-bind-disable:
     post:
@@ -288,7 +288,40 @@ paths:
         - BearerAuth: []
       responses:
         '200':
-          description: Success; `data` is the updated player summary (`uid`, `account_id`, `mbe`, `mojang_uuid`, `cbh`)
+          description: Success; `data` is the updated player summary (`uid`, `account_id`, `mbe`, `mojang_uuid`, `cbh`, `skin_sync`)
+        '401': { $ref: '#/components/responses/Error' }
+  /player/skin-sync-enable:
+    post:
+      summary: Enable automatic official-skin sync for the authenticated account
+      description: >
+        Sets `skin_sync=true` (the default state for all accounts). While
+        enabled, every Mojang bind completion (proxy-register mbe hit, new
+        proxy registration, claim, force-bind, `/register` with a
+        `mojang_uuid`) schedules an asynchronous mirror of the bound
+        account's official skin into the local profile textures, and a
+        failed or missing sync is retried on the next Yggdrasil login.
+        Skin sync never blocks or fails the bind itself. Enabling while a
+        `mojang_uuid` is already bound schedules a sync immediately, so the
+        endpoint doubles as a manual retry.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Success; `data` is the updated player summary (`uid`, `account_id`, `mbe`, `mojang_uuid`, `cbh`, `skin_sync`)
+        '401': { $ref: '#/components/responses/Error' }
+  /player/skin-sync-disable:
+    post:
+      summary: Disable automatic official-skin sync for the authenticated account
+      description: >
+        Sets `skin_sync=false` and forgets the last successful sync state.
+        While disabled, binds and logins never touch the profile textures
+        (a manually uploaded skin is kept). Re-enabling syncs from the
+        official profile again.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Success; `data` is the updated player summary (`uid`, `account_id`, `mbe`, `mojang_uuid`, `cbh`, `skin_sync`)
         '401': { $ref: '#/components/responses/Error' }
   /register:
     post:
@@ -296,6 +329,10 @@ paths:
       description: >
         Verifies the user's core credentials and creates the local game
         account plus its first profile. Subject to login rate limiting.
+        When a `mojang_uuid` is supplied, the account starts with official
+        skin sync enabled (`skin_sync=1`): the bound account's official
+        skin is mirrored into the profile textures asynchronously; a
+        failure never blocks the registration.
       requestBody:
         required: true
         content:
@@ -344,6 +381,15 @@ paths:
         - Username collides with an account already bound to a different
           `mojang_uuid`: rejected with `409 username_already_bound`
           regardless of `mbe`.
+
+        Official skin sync: every successful outcome (new proxy account,
+        mbe-window bind, idempotent return of an already-bound account)
+        schedules an asynchronous mirror of the bound `mojang_uuid`'s
+        official skin into the account's profile textures when that
+        account has `skin_sync=1` (the default). The sync is best-effort:
+        an unreachable Mojang API or a failed texture update never blocks
+        or fails the registration, and a missed sync is retried on the
+        next Yggdrasil login.
       parameters:
         - $ref: '#/components/parameters/InternalKeyHeader'
       requestBody:
@@ -386,7 +432,10 @@ paths:
         `POST /internal/claim-user`, then links the core user to the game
         account and sets `cbh=1`. Email uniqueness is enforced against the
         core user table by the core. The proxy account's `mojang_uuid` is
-        kept unchanged.
+        kept unchanged. If the claimed account carries a `mojang_uuid`
+        and has `skin_sync=1` (the default), the claim additionally
+        schedules the asynchronous official-skin mirror (best-effort; a
+        sync failure never blocks or fails the claim).
       security:
         - BearerAuth: []
       requestBody:
@@ -437,7 +486,11 @@ paths:
         one is created (`cbh=1`) as part of the same transaction. Called by
         the Velocity plugin (`/ha forcebind`). Unknown target email and
         wrong password are both reported as `403 invalid_credentials`
-        (merged relative to the legacy pre-split endpoint).
+        (merged relative to the legacy pre-split endpoint). After a
+        successful transfer, the target account's official-skin sync is
+        scheduled when it has `skin_sync=1` (the default) and a profile
+        to apply the textures to (best-effort; a sync failure never
+        blocks or fails the transfer).
       security:
         - BearerAuth: []
       requestBody:
