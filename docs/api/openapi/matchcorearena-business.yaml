@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MatchCoreArena Business API
-  version: 1.9.0
+  version: 1.9.1
   description: >
     Unified specification for MatchCoreArena server business interfaces.
     Authentication via HRPAuth OAuth2 Authorization Code + PKCE.
@@ -1232,6 +1232,12 @@ paths:
         scores, no payloads. `join_target` is attached exactly as in
         `/api/matchmaking/status` (omitted when the server has no
         `matchmaking.join_target` configured).
+
+        Unknown UUIDs (1.9.1): a UUID that HRPAuth does not know is
+        routing-equivalent to "no assignment" and answers
+        `200 {assigned: false}` — callers never branch on 404. A failed
+        UUID resolution (HRPAuth unreachable, service credential unusable)
+        still answers `502 oauth_hrpauth_down`.
       tags: [Matchmaking]
       security:
         - BearerAuth: []
@@ -1256,12 +1262,6 @@ paths:
                         $ref: '#/components/schemas/MatchAssignment'
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
-        '404':
-          description: '`mca_user_not_found` — the UUID is unknown to HRPAuth'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
         '502':
           description: '`oauth_hrpauth_down` — UUID resolution failed (HRPAuth unreachable or service credential unusable)'
           content:
@@ -2041,9 +2041,9 @@ components:
       required: [assigned]
       description: >
         A player's current formed-group assignment (1.9.0). `assigned` is
-        false when the player has no formed group, or the most recent one
-        was already settled (a match references it via
-        `matchmaking_group_id`) or expired
+        false when the UUID is unknown to HRPAuth (1.9.1), the player has
+        no formed group, or the most recent one was already settled (a
+        match references it via `matchmaking_group_id`) or expired
         (`matchmaking.assignment_ttl_seconds`). All other fields are
         present only when `assigned` is true; `join_target` follows the
         same omit-when-unconfigured rule as in `MatchmakingStatus`.
