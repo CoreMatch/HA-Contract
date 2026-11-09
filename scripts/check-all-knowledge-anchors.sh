@@ -8,9 +8,10 @@
 #   bash check-all-knowledge-anchors.sh [root ...]
 #   default roots: /home/lnb/Desktop/HA /home/lnb
 #
-# Scans each root's top-level directories for main git checkouts that carry a
-# knowledge/ directory (a directory counts as a main checkout when .git is a
-# directory; linked worktrees have a .git file and are skipped), runs
+# Scans each root's top-level directories and the workspace's matchcore/,
+# hrpauth/, rw/, and maintanance/ grouping directories for main git checkouts
+# that carry a knowledge/ directory (a directory counts as a main checkout
+# when .git is a directory; linked worktrees have a .git file and are skipped), runs
 # check-knowledge-anchors.sh in each, and prints one summary line per repo:
 #
 #   repo | anchors | problems | exit
@@ -41,7 +42,7 @@ failed=0
 
 for root in "${roots[@]}"; do
   [ -d "$root" ] || continue
-  for d in "$root"/*/; do
+  for d in "$root"/*/ "$root"/matchcore/*/ "$root"/hrpauth/*/ "$root"/rw/*/ "$root"/maintanance/*/; do
     d="${d%/}"
     [ -d "$d/knowledge" ] || continue
     [ -d "$d/.git" ] || continue   # skip linked worktrees (.git is a file)

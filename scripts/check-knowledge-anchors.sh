@@ -54,7 +54,7 @@
 # knowledge/ is scanned recursively (knowledge/**/*.md), so entries in
 # subdirectories (e.g. knowledge/archive/) are checked too.
 #
-# Absolute paths (e.g. /home/lnb/Desktop/HA/Avalon/...) are checked directly.
+# Absolute paths (e.g. /home/lnb/Desktop/HA/rw/Avalon/...) are checked directly.
 # Relative paths are resolved against the repository root.
 #
 # Environment:
