@@ -17,7 +17,7 @@
 #   - Cascade backend client     (Go -> cascade-backend-v1.yaml control plane)
 #   - MCA-Cascade                (Go library -> matchcorearena-business.yaml)
 #   - MatchCoreArena-MaintenanceView (Go ops console -> matchcorearena-business.yaml)
-#   - HA-Services-MaintenanceView (Go ops panel -> ha-services-deployer.yaml)
+#   - HA-Services-MaintenanceView (Go ops panel -> ha-cupbearer.yaml)
 #   - Grail CLI + mirror client  (Go -> grail.yaml)
 #   - RW-Mod-Injector            (Java -> cascade-backend-v1.yaml mod surface)
 #   - Cascade plugin hub         (Go -> cascade-plugin-v1.yaml plugin endpoints)
@@ -232,11 +232,11 @@ YGG_YAML="$ROOT/docs/api/openapi/hrpauth-yggdrasil-business.yaml"
 SKINLIB_YAML="$ROOT/docs/api/openapi/haskinlib-business.yaml"
 CASCADE_PROXY_YAML="$ROOT/docs/api/openapi/cascade-proxy.yaml"
 CASCADE_BACKEND_YAML="$ROOT/docs/api/openapi/cascade-backend-v1.yaml"
-DEPLOYER_YAML="$ROOT/docs/api/openapi/ha-services-deployer.yaml"
+CUPBEARER_YAML="$ROOT/docs/api/openapi/ha-cupbearer.yaml"
 GRAIL_YAML="$ROOT/docs/api/openapi/grail.yaml"
 CASCADE_PLUGIN_YAML="$ROOT/docs/api/openapi/cascade-plugin-v1.yaml"
 AVALON_PLUGIN_YAML="$ROOT/docs/api/openapi/avalon-plugin-v1.yaml"
-for f in "$MCA_YAML" "$HRPAUTH_YAML" "$YGG_YAML" "$SKINLIB_YAML" "$CASCADE_PROXY_YAML" "$CASCADE_BACKEND_YAML" "$DEPLOYER_YAML" "$GRAIL_YAML" "$CASCADE_PLUGIN_YAML" "$AVALON_PLUGIN_YAML"; do
+for f in "$MCA_YAML" "$HRPAUTH_YAML" "$YGG_YAML" "$SKINLIB_YAML" "$CASCADE_PROXY_YAML" "$CASCADE_BACKEND_YAML" "$CUPBEARER_YAML" "$GRAIL_YAML" "$CASCADE_PLUGIN_YAML" "$AVALON_PLUGIN_YAML"; do
   [[ -f "$f" ]] || fail "contract file missing: $f"
 done
 
@@ -249,7 +249,7 @@ openapi_paths "$SKINLIB_YAML" > "$tmpdir/skinlib-paths.txt"
 openapi_paths "$CASCADE_PROXY_YAML" > "$tmpdir/cascade-paths.txt"
 # Control-plane, delivery/orchestration, artifact and plugin surfaces.
 openapi_paths "$CASCADE_BACKEND_YAML" > "$tmpdir/backend-paths.txt"
-openapi_paths "$DEPLOYER_YAML" > "$tmpdir/deployer-paths.txt"
+openapi_paths "$CUPBEARER_YAML" > "$tmpdir/cupbearer-paths.txt"
 openapi_paths "$GRAIL_YAML" > "$tmpdir/grail-paths.txt"
 openapi_paths "$CASCADE_PLUGIN_YAML" > "$tmpdir/cascade-plugin-paths.txt"
 openapi_paths "$AVALON_PLUGIN_YAML" > "$tmpdir/avalon-plugin-paths.txt"
@@ -442,8 +442,8 @@ while IFS= read -r path; do
   check_url "MatchCoreArena-MaintenanceView" "-" "$path" "$tmpdir/mca-paths.txt"
 done <<<"$mca_mv_urls"
 
-# --- 12. HA-Services-MaintenanceView (Go ops panel -> Deployer) ---
-# Client package renamed deployer -> cupbearer by the product rename; the
+# --- 12. HA-Services-MaintenanceView (Go ops panel -> Cupbearer) ---
+# Client package: internal/cupbearer; the
 # called surface is unchanged (/api/v1/deploy/*) plus the delivery face
 # (/api/v1/healthz, /api/v1/manifest, /api/v1/projects).
 ha_mv_urls="$(gawk '
@@ -454,9 +454,9 @@ ha_mv_urls="$(gawk '
     print m[2]
   }
 ' "$HA_MAINTVIEW_DIR/internal/cupbearer/client.go" | sort -u)"
-[[ -n "$ha_mv_urls" ]] || fail "HA-Services-MaintenanceView: extracted 0 Deployer URLs — refusing to pass silently"
+[[ -n "$ha_mv_urls" ]] || fail "HA-Services-MaintenanceView: extracted 0 Cupbearer URLs — refusing to pass silently"
 while IFS= read -r path; do
-  check_url "HA-Services-MaintenanceView" "-" "$path" "$tmpdir/deployer-paths.txt"
+  check_url "HA-Services-MaintenanceView" "-" "$path" "$tmpdir/cupbearer-paths.txt"
 done <<<"$ha_mv_urls"
 
 # --- 13. Grail CLI + mirror client (Go -> Grail node surface) ---

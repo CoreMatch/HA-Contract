@@ -33,7 +33,7 @@ jobs:
       - { name: Checkout MatchCoreArena-Server, uses: actions/checkout@v7, with: { repository: CoreMatch/MatchCoreArena-Server, path: MatchCoreArena-Server } }
       - { name: Checkout WinnerProxy, uses: actions/checkout@v7, with: { repository: CoreMatch/WinnerProxy, path: WinnerProxy } }
       - { name: Checkout Cascade, uses: actions/checkout@v7, with: { repository: CoreMatch/Cascade, path: Cascade } }
-      - { name: Checkout HA-Services-Deployer, uses: actions/checkout@v7, with: { repository: CoreMatch/HA-Services-Deployer, path: HA-Services-Deployer } }
+      - { name: Checkout HA-Cupbearer, uses: actions/checkout@v7, with: { repository: CoreMatch/HA-Cupbearer, path: HA-Cupbearer } }
       - { name: Checkout HASkinProxy, uses: actions/checkout@v7, with: { repository: CoreMatch/HASkinProxy, path: HASkinProxy } }
       - { name: Checkout HA-WebUI-SDKHandler, uses: actions/checkout@v7, with: { repository: CoreMatch/HA-WebUI-SDKHandler, path: HA-WebUI-SDKHandler } }
       - { name: Checkout Avalon, uses: actions/checkout@v7, with: { repository: CoreMatch/Avalon, path: Avalon } }

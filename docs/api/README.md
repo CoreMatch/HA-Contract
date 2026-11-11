@@ -68,7 +68,7 @@ During the transition period, some success fields will be mirrored at the top le
 - `openapi/winnerproxy-business.yaml`: WinnerProxy (Yggdrasil edge proxy) specification
 - `openapi/cascade-proxy.yaml`: Cascade proxy management API
 - `openapi/cascade-backend-v1.yaml`: Cascade proxy↔backend control-plane contract (`/v1`, mutual TLS). Not an HA business API: it does not follow the unified business response format. Implemented by the Avalon gateway (`internal/net/gateway/control.go`) and covered by the anti-drift checks since 2026-11-08
-- `openapi/ha-services-deployer.yaml`: HA-Services-Deployer delivery + orchestration surface
+- `openapi/ha-cupbearer.yaml`: HA-Cupbearer delivery + orchestration surface
 - `openapi/grail.yaml`: Grail artifact distribution upstream (origin + tiered pull-only mirrors). Not an HA business API: raw-byte and metadata endpoints do not follow the unified business response format
 - `openapi/webui-sdkhandler.yaml`: HA-WebUI-SDKHandler build/maintenance surface
 - `openapi/avalon-plugin-v1.yaml`: Avalon out-of-process plugin contract (manifest + events)

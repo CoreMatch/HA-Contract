@@ -108,7 +108,7 @@ next CI run.
     mistyped root-level file name is not flagged (docker tags, host:port
     pairs and similar non-path tokens are skipped by the same rule).
   - Field record 2026-11-08: on the first day the per-repo CI ran, it
-    caught 9 cross-repo anchors missing `[xref]` in HA-Services-Deployer
+    caught 9 cross-repo anchors missing `[xref]` in HA-Cupbearer
     (knowledge/0009 + 0010 citing Avalon/Cascade/sibling-service files),
     which the workspace-anchored convention had not caught — the mechanism
     proved it is not decorative.

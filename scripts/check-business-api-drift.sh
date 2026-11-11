@@ -15,9 +15,9 @@
 #     (the /winnerproxy-prefixed alias registrations are excluded; the
 #      contract documents the canonical prefix-less form)
 #   - Cascade proxy           vs docs/api/openapi/cascade-proxy.yaml
-#   - HA-Services-Deployer    vs docs/api/openapi/ha-services-deployer.yaml
+#   - HA-Cupbearer    vs docs/api/openapi/ha-cupbearer.yaml
 #     (delivery surface plus the opt-in orchestration endpoints; the
-#      orchestration semantics are normative in the Deployer's
+#      orchestration semantics are normative in the Cupbearer's
 #      knowledge/0007, the contract fixes the METHOD+path surface)
 #   - HASkinProxy             vs docs/api/openapi/haskinproxy-business.yaml
 #     (CSL protocol-translation surface)
@@ -39,7 +39,7 @@
 # (~/Cascade for the Cascade proxy):
 #   HRPAUTH_REPO_DIR, HASKINLIB_REPO_DIR, YGGDRASIL_REPO_DIR,
 #   MATCHCOREARENA_REPO_DIR, WINNERPROXY_REPO_DIR, CASCADE_REPO_DIR,
-#   DEPLOYER_REPO_DIR, HASKINPROXY_REPO_DIR, SDKHANDLER_REPO_DIR,
+#   CUPBEARER_REPO_DIR, HASKINPROXY_REPO_DIR, SDKHANDLER_REPO_DIR,
 #   AVALON_REPO_DIR, GRAIL_REPO_DIR
 #
 # Missing repositories or contract files are hard errors (no silent pass).
@@ -76,7 +76,7 @@ YGGDRASIL_DIR="$(resolve_repo "${YGGDRASIL_REPO_DIR:-}" HRPAuth-Yggdrasil-API YG
 MATCHCOREARENA_DIR="$(resolve_repo "${MATCHCOREARENA_REPO_DIR:-}" MatchCoreArena-Server MATCHCOREARENA_REPO_DIR)"
 WINNERPROXY_DIR="$(resolve_repo "${WINNERPROXY_REPO_DIR:-}" WinnerProxy WINNERPROXY_REPO_DIR)"
 CASCADE_DIR="$(resolve_repo "${CASCADE_REPO_DIR:-}" Cascade CASCADE_REPO_DIR "$HOME/Cascade")"
-DEPLOYER_DIR="$(resolve_repo "${DEPLOYER_REPO_DIR:-}" HA-Services-Deployer DEPLOYER_REPO_DIR)"
+CUPBEARER_DIR="$(resolve_repo "${CUPBEARER_REPO_DIR:-}" HA-Cupbearer CUPBEARER_REPO_DIR)"
 HASKINPROXY_DIR="$(resolve_repo "${HASKINPROXY_REPO_DIR:-}" HASkinProxy HASKINPROXY_REPO_DIR)"
 SDKHANDLER_DIR="$(resolve_repo "${SDKHANDLER_REPO_DIR:-}" HA-WebUI-SDKHandler SDKHANDLER_REPO_DIR)"
 AVALON_DIR="$(resolve_repo "${AVALON_REPO_DIR:-}" Avalon AVALON_REPO_DIR)"
@@ -88,13 +88,13 @@ YGGDRASIL_YAML="$ROOT/docs/api/openapi/hrpauth-yggdrasil-business.yaml"
 MATCHCOREARENA_YAML="$ROOT/docs/api/openapi/matchcorearena-business.yaml"
 WINNERPROXY_YAML="$ROOT/docs/api/openapi/winnerproxy-business.yaml"
 CASCADE_PROXY_YAML="$ROOT/docs/api/openapi/cascade-proxy.yaml"
-DEPLOYER_YAML="$ROOT/docs/api/openapi/ha-services-deployer.yaml"
+CUPBEARER_YAML="$ROOT/docs/api/openapi/ha-cupbearer.yaml"
 HASKINPROXY_YAML="$ROOT/docs/api/openapi/haskinproxy-business.yaml"
 SDKHANDLER_YAML="$ROOT/docs/api/openapi/webui-sdkhandler.yaml"
 CASCADE_BACKEND_YAML="$ROOT/docs/api/openapi/cascade-backend-v1.yaml"
 GRAIL_YAML="$ROOT/docs/api/openapi/grail.yaml"
 
-for f in "$HRPAUTH_YAML" "$HASKINLIB_YAML" "$YGGDRASIL_YAML" "$MATCHCOREARENA_YAML" "$WINNERPROXY_YAML" "$CASCADE_PROXY_YAML" "$DEPLOYER_YAML" "$HASKINPROXY_YAML" "$SDKHANDLER_YAML" "$CASCADE_BACKEND_YAML" "$GRAIL_YAML"; do
+for f in "$HRPAUTH_YAML" "$HASKINLIB_YAML" "$YGGDRASIL_YAML" "$MATCHCOREARENA_YAML" "$WINNERPROXY_YAML" "$CASCADE_PROXY_YAML" "$CUPBEARER_YAML" "$HASKINPROXY_YAML" "$SDKHANDLER_YAML" "$CASCADE_BACKEND_YAML" "$GRAIL_YAML"; do
   [[ -f "$f" ]] || fail "contract file missing: $f"
 done
 
@@ -124,7 +124,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
     MATCHCOREARENA_REPO_DIR="$MATCHCOREARENA_DIR"
     WINNERPROXY_REPO_DIR="$WINNERPROXY_DIR"
     CASCADE_REPO_DIR="$CASCADE_DIR"
-    DEPLOYER_REPO_DIR="$DEPLOYER_DIR"
+    CUPBEARER_REPO_DIR="$CUPBEARER_DIR"
     HASKINPROXY_REPO_DIR="$HASKINPROXY_DIR"
     SDKHANDLER_REPO_DIR="$SDKHANDLER_DIR"
     AVALON_REPO_DIR="$AVALON_DIR"
@@ -368,17 +368,17 @@ extract_openapi_routes "$CASCADE_PROXY_YAML" > "$tmpdir/cascade-openapi.txt"
 check_set "Cascade-proxy" "$tmpdir/cascade-routes.txt" "$tmpdir/cascade-openapi.txt" impl-vs-contract
 check_set "Cascade-proxy" "$tmpdir/cascade-routes.txt" "$tmpdir/cascade-openapi.txt" contract-vs-impl
 
-# --- HA-Services-Deployer ---
+# --- HA-Cupbearer ---
 # Route source is internal/server/router.go; the deploy group registers with
 # its full /api/v1/deploy prefix (single-level Group, drift-extractable).
-extract_gin_routes "$DEPLOYER_DIR/internal/server/router.go" > "$tmpdir/deployer-routes.txt"
-extract_openapi_routes "$DEPLOYER_YAML" > "$tmpdir/deployer-openapi.txt"
+extract_gin_routes "$CUPBEARER_DIR/internal/server/router.go" > "$tmpdir/cupbearer-routes.txt"
+extract_openapi_routes "$CUPBEARER_YAML" > "$tmpdir/cupbearer-openapi.txt"
 
 # 2026-11-12：bootstrap 端点曾在此以 planned 清单豁免（契约先行窗口期）；
-# 实现已随 HA-Services-Deployer 0df8152 落在 main，豁免连根移除——
+# 实现已随 HA-Cupbearer 0df8152 落在 main，豁免连根移除——
 # 豁免清单本质是断链校验的后门，代码落地后必须删除，双向全量比对。
-check_set "HA-Services-Deployer" "$tmpdir/deployer-routes.txt" "$tmpdir/deployer-openapi.txt" impl-vs-contract
-check_set "HA-Services-Deployer" "$tmpdir/deployer-routes.txt" "$tmpdir/deployer-openapi.txt" contract-vs-impl
+check_set "HA-Cupbearer" "$tmpdir/cupbearer-routes.txt" "$tmpdir/cupbearer-openapi.txt" impl-vs-contract
+check_set "HA-Cupbearer" "$tmpdir/cupbearer-routes.txt" "$tmpdir/cupbearer-openapi.txt" contract-vs-impl
 
 # --- HASkinProxy ---
 # Route source is internal/router/router.go (CSL surface).

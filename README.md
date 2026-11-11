@@ -12,8 +12,8 @@ This project is the core contract and service collection of the [CoreMatch](http
 - [Cascade](https://github.com/CoreMatch/Cascade): Rusted Warfare edge proxy (backend contract lives in this repository)
 - [Avalon](https://github.com/CoreMatch/Avalon): Rusted Warfare game engine / governance server (implements the Cascade backend control plane and the Avalon plugin host)
 - [MatchCoreArena-Server](https://github.com/CoreMatch/MatchCoreArena-Server): Matchmaking/settlement arena service
-- [HA-Services-Deployer](https://github.com/CoreMatch/HA-Services-Deployer): Delivery surface plus opt-in bare-metal orchestration
-- [HA-Services-MaintenanceView](https://github.com/CoreMatch/HA-Services-MaintenanceView): Operations panel (maintenance window + Deployer front end)
+- [HA-Cupbearer](https://github.com/CoreMatch/HA-Cupbearer): Delivery surface plus opt-in bare-metal orchestration
+- [HA-Services-MaintenanceView](https://github.com/CoreMatch/HA-Services-MaintenanceView): Operations panel (maintenance window + Cupbearer front end)
 - [HA-WebUI-SDKHandler](https://github.com/CoreMatch/HA-WebUI-SDKHandler): WebUI SDK build/maintenance service
 - [Grail](https://github.com/CoreMatch/Grail): Artifact distribution (origin + tiered pull-only mirrors)
 - [HRPAuth-WebUI](https://github.com/CoreMatch/HRPAuth-WebUI): Frontend interface for the authentication service
@@ -38,14 +38,14 @@ To prevent documentation drift from the actual project, this project adopts a un
 - [Cascade Plugin API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/cascade-plugin-v1.yaml): contract between the Cascade proxy and out-of-process plugins (isomorphic to the Avalon one)
 - [HASkinProxy Business API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/haskinproxy-business.yaml): HASkinProxy (CSL protocol translation) surface
 - [HA-WebUI-SDKHandler API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/webui-sdkhandler.yaml): WebUI SDK build/maintenance surface
-- [HA-Services-Deployer API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/ha-services-deployer.yaml): delivery surface plus opt-in bare-metal orchestration endpoints
+- [HA-Cupbearer API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/ha-cupbearer.yaml): delivery surface plus opt-in bare-metal orchestration endpoints
 - [Grail API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/grail.yaml): artifact distribution upstream (origin + tiered pull-only mirrors; canonical fetch URL, signed manifests, sync)
 
 ### Development and Internal Documentation
 - Development/design documentation lives in each service repository's own
   `knowledge/` directory (repatriated from this repository on 2026-11-07):
   HRPAuth, HRPAuth-Yggdrasil-API, HASkinLib, HASkinProxy, WinnerProxy,
-  HA-Services-Deployer, Avalon, and the other service repositories. See
+  HA-Cupbearer, Avalon, and the other service repositories. See
   [knowledge/README.md](knowledge/README.md) for the directory map.
 - [Cascade Backend Contract](https://github.com/CoreMatch/HA-Contract/tree/main/docs/dev/Cascade/): Authoritative proxy↔backend contract (transport, preamble, session gating, control plane).
 
@@ -71,7 +71,7 @@ at the **METHOD + path** level, in **both directions**:
 | MatchCoreArena-Server | `api/router.go` | `docs/api/openapi/matchcorearena-business.yaml` |
 | WinnerProxy | `internal/router/router.go` | `docs/api/openapi/winnerproxy-business.yaml` |
 | Cascade (proxy) | `internal/api/proxy_http.go` | `docs/api/openapi/cascade-proxy.yaml` |
-| HA-Services-Deployer | `internal/server/router.go` | `docs/api/openapi/ha-services-deployer.yaml` |
+| HA-Cupbearer | `internal/server/router.go` | `docs/api/openapi/ha-cupbearer.yaml` |
 | HASkinProxy | `internal/router/router.go` | `docs/api/openapi/haskinproxy-business.yaml` |
 | HA-WebUI-SDKHandler | `main.go` | `docs/api/openapi/webui-sdkhandler.yaml` |
 | Avalon (cascade backend) | `internal/net/gateway/control.go` | `docs/api/openapi/cascade-backend-v1.yaml` |
@@ -87,7 +87,7 @@ It prints `Business API drift check passed.` and exits 0 when every pair
 agrees. Implementation repositories are resolved through the environment
 variables `HRPAUTH_REPO_DIR`, `HASKINLIB_REPO_DIR`, `YGGDRASIL_REPO_DIR`,
 `MATCHCOREARENA_REPO_DIR`, `WINNERPROXY_REPO_DIR`, `CASCADE_REPO_DIR`,
-`DEPLOYER_REPO_DIR`, `HASKINPROXY_REPO_DIR`, `SDKHANDLER_REPO_DIR`,
+`CUPBEARER_REPO_DIR`, `HASKINPROXY_REPO_DIR`, `SDKHANDLER_REPO_DIR`,
 `AVALON_REPO_DIR`, `GRAIL_REPO_DIR`,
 falling back to sibling directories of this repository and then to
 `~/Desktop/HA` (`~/Cascade` for Cascade). A missing repository or contract

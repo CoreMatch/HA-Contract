@@ -15,7 +15,7 @@ scripts, and the anchor-convention entry below.
 | HASkinLib | `HASkinLib/knowledge/` (incl. `archive/`) |
 | HASkinProxy | `HASkinProxy/knowledge/` |
 | WinnerProxy | `WinnerProxy/knowledge/` (incl. `archive/`) |
-| HA-Services-Deployer | `HA-Services-Deployer/knowledge/` |
+| HA-Cupbearer | `HA-Cupbearer/knowledge/` |
 | HA-Services-MaintenanceView | `HA-Services-MaintenanceView/knowledge/` |
 | HA-WebUI-SDKHandler | `HA-WebUI-SDKHandler/knowledge/` |
 | MatchCoreArena-Server | `MatchCoreArena-Server/knowledge/` |

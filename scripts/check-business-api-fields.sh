@@ -59,7 +59,7 @@ YGGDRASIL_DIR="$(resolve_repo "${YGGDRASIL_REPO_DIR:-}" HRPAuth-Yggdrasil-API YG
 MATCHCOREARENA_DIR="$(resolve_repo "${MATCHCOREARENA_REPO_DIR:-}" MatchCoreArena-Server MATCHCOREARENA_REPO_DIR)"
 AVALON_DIR="$(resolve_repo "${AVALON_REPO_DIR:-}" Avalon AVALON_REPO_DIR)"
 HASKINPROXY_DIR="$(resolve_repo "${HASKINPROXY_REPO_DIR:-}" HASkinProxy HASKINPROXY_REPO_DIR)"
-DEPLOYER_DIR="$(resolve_repo "${DEPLOYER_REPO_DIR:-}" HA-Services-Deployer DEPLOYER_REPO_DIR)"
+CUPBEARER_DIR="$(resolve_repo "${CUPBEARER_REPO_DIR:-}" HA-Cupbearer CUPBEARER_REPO_DIR)"
 GRAIL_DIR="$(resolve_repo "${GRAIL_REPO_DIR:-}" Grail GRAIL_REPO_DIR)"
 SDKHANDLER_DIR="$(resolve_repo "${SDKHANDLER_REPO_DIR:-}" HA-WebUI-SDKHandler SDKHANDLER_REPO_DIR)"
 
@@ -105,7 +105,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
     AVALON_REPO_DIR="$AVALON_DIR"
     CASCADE_REPO_DIR="$CASCADE_DIR"
     HASKINPROXY_REPO_DIR="$HASKINPROXY_DIR"
-    DEPLOYER_REPO_DIR="$DEPLOYER_DIR"
+    CUPBEARER_REPO_DIR="$CUPBEARER_DIR"
     GRAIL_REPO_DIR="$GRAIL_DIR"
     SDKHANDLER_REPO_DIR="$SDKHANDLER_DIR"
   )
@@ -179,20 +179,20 @@ if [[ "${1:-}" == "--self-test" ]]; then
     exit 1
   }
 
-  echo "self-test[5/5]: renaming a nested Deployer bootstrap field must fail"
+  echo "self-test[5/5]: renaming a nested Cupbearer bootstrap field must fail"
   # Restore clean contracts, then rename database.admin_host in the bootstrap
   # inputs (two-level subpath extraction). The code field keeps its name, so
   # the name sets diverge.
   cp -r "$ROOT/docs/api/openapi/"*.yaml "$FIX/docs/api/openapi/"
   sed -i 's#admin_host: { type: string }#admin_host_renamed: { type: string }#' \
-    "$FIX/docs/api/openapi/ha-services-deployer.yaml"
-  grep -q "admin_host_renamed" "$FIX/docs/api/openapi/ha-services-deployer.yaml" || {
-    echo "SELF-TEST FAILED: could not inject the Deployer bootstrap mutation" >&2
+    "$FIX/docs/api/openapi/ha-cupbearer.yaml"
+  grep -q "admin_host_renamed" "$FIX/docs/api/openapi/ha-cupbearer.yaml" || {
+    echo "SELF-TEST FAILED: could not inject the Cupbearer bootstrap mutation" >&2
     exit 1
   }
   if env "${REPO_ENV[@]}" bash "$FIX/scripts/$SCRIPT_NAME" >"$FIX/mutated4.log" 2>&1; then
     cat "$FIX/mutated4.log" >&2
-    echo "SELF-TEST FAILED: mutated Deployer bootstrap schema did NOT trigger drift" >&2
+    echo "SELF-TEST FAILED: mutated Cupbearer bootstrap schema did NOT trigger drift" >&2
     exit 1
   fi
   grep -q "admin_host" "$FIX/mutated4.log" || {
@@ -201,7 +201,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
     exit 1
   }
 
-  echo "self-test passed: clean green; QueueStats, Cascade PlayerInfo, Avalon PlayerInfo and Deployer bootstrap mutations red."
+  echo "self-test passed: clean green; QueueStats, Cascade PlayerInfo, Avalon PlayerInfo and Cupbearer bootstrap mutations red."
   exit 0
 fi
 
@@ -430,23 +430,23 @@ check_fields "HASkinLib/TextureRecord(profile)"     "$SKINLIB_YAML" TextureRecor
 HASKINPROXY_YAML="$ROOT/docs/api/openapi/haskinproxy-business.yaml"
 check_fields "HASkinProxy/CSLProfile" "$HASKINPROXY_YAML" CSLProfile "$HASKINPROXY_DIR/internal/model/csl.go" CSLProfile omitempty
 
-# HA-Services-Deployer bootstrap inputs (internal/bootstrap/types.go::Inputs,
+# HA-Cupbearer bootstrap inputs (internal/bootstrap/types.go::Inputs,
 # the /api/v1/deploy/bootstrap/run request body). Request struct whose zero
 # values are meaningful inputs (defaults are filled server-side), so only the
 # field name sets are compared, top level and every nested block via subpath.
-DEPLOYER_YAML="$ROOT/docs/api/openapi/ha-services-deployer.yaml"
-DEPLOYER_TYPES_GO="$DEPLOYER_DIR/internal/bootstrap/types.go"
-check_fields "Deployer/BootstrapInputs"       "$DEPLOYER_YAML" BootstrapInputs                      "$DEPLOYER_TYPES_GO" Inputs      names-only
-check_fields "Deployer/BootstrapTargets"      "$DEPLOYER_YAML" "BootstrapInputs/targets"             "$DEPLOYER_TYPES_GO" Targets     names-only
-check_fields "Deployer/BootstrapInfra"        "$DEPLOYER_YAML" "BootstrapInputs/infra"               "$DEPLOYER_TYPES_GO" Infra       names-only
-check_fields "Deployer/BootstrapDatabase"     "$DEPLOYER_YAML" "BootstrapInputs/database"            "$DEPLOYER_TYPES_GO" Database    names-only
-check_fields "Deployer/BootstrapDBNames"      "$DEPLOYER_YAML" "BootstrapInputs/database/names"      "$DEPLOYER_TYPES_GO" DBNames     names-only
-check_fields "Deployer/BootstrapRedis"        "$DEPLOYER_YAML" "BootstrapInputs/redis"               "$DEPLOYER_TYPES_GO" Redis       names-only
-check_fields "Deployer/BootstrapPublicURLs"   "$DEPLOYER_YAML" "BootstrapInputs/public_urls"         "$DEPLOYER_TYPES_GO" PublicURLs  names-only
-check_fields "Deployer/BootstrapInternalURLs" "$DEPLOYER_YAML" "BootstrapInputs/internal_urls"       "$DEPLOYER_TYPES_GO" InternalURLs names-only
-check_fields "Deployer/BootstrapSMTP"         "$DEPLOYER_YAML" "BootstrapInputs/smtp"                "$DEPLOYER_TYPES_GO" SMTP        names-only
-check_fields "Deployer/BootstrapClientIDs"    "$DEPLOYER_YAML" "BootstrapInputs/client_ids"          "$DEPLOYER_TYPES_GO" ClientIDs   names-only
-check_fields "Deployer/BootstrapPaths"        "$DEPLOYER_YAML" "BootstrapInputs/paths"               "$DEPLOYER_TYPES_GO" Paths       names-only
+CUPBEARER_YAML="$ROOT/docs/api/openapi/ha-cupbearer.yaml"
+CUPBEARER_TYPES_GO="$CUPBEARER_DIR/internal/bootstrap/types.go"
+check_fields "Cupbearer/BootstrapInputs"       "$CUPBEARER_YAML" BootstrapInputs                      "$CUPBEARER_TYPES_GO" Inputs      names-only
+check_fields "Cupbearer/BootstrapTargets"      "$CUPBEARER_YAML" "BootstrapInputs/targets"             "$CUPBEARER_TYPES_GO" Targets     names-only
+check_fields "Cupbearer/BootstrapInfra"        "$CUPBEARER_YAML" "BootstrapInputs/infra"               "$CUPBEARER_TYPES_GO" Infra       names-only
+check_fields "Cupbearer/BootstrapDatabase"     "$CUPBEARER_YAML" "BootstrapInputs/database"            "$CUPBEARER_TYPES_GO" Database    names-only
+check_fields "Cupbearer/BootstrapDBNames"      "$CUPBEARER_YAML" "BootstrapInputs/database/names"      "$CUPBEARER_TYPES_GO" DBNames     names-only
+check_fields "Cupbearer/BootstrapRedis"        "$CUPBEARER_YAML" "BootstrapInputs/redis"               "$CUPBEARER_TYPES_GO" Redis       names-only
+check_fields "Cupbearer/BootstrapPublicURLs"   "$CUPBEARER_YAML" "BootstrapInputs/public_urls"         "$CUPBEARER_TYPES_GO" PublicURLs  names-only
+check_fields "Cupbearer/BootstrapInternalURLs" "$CUPBEARER_YAML" "BootstrapInputs/internal_urls"       "$CUPBEARER_TYPES_GO" InternalURLs names-only
+check_fields "Cupbearer/BootstrapSMTP"         "$CUPBEARER_YAML" "BootstrapInputs/smtp"                "$CUPBEARER_TYPES_GO" SMTP        names-only
+check_fields "Cupbearer/BootstrapClientIDs"    "$CUPBEARER_YAML" "BootstrapInputs/client_ids"          "$CUPBEARER_TYPES_GO" ClientIDs   names-only
+check_fields "Cupbearer/BootstrapPaths"        "$CUPBEARER_YAML" "BootstrapInputs/paths"               "$CUPBEARER_TYPES_GO" Paths       names-only
 
 # Grail artifact-distribution wire structures (internal/model/model.go).
 # Every signed payload and response shape is a named struct serialized with
