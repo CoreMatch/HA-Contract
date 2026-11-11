@@ -1,11 +1,16 @@
 openapi: 3.1.0
 info:
   title: HASkinLib Business API
-  version: 1.0.0
+  version: 1.1.0
   description: >
     Unified specification for HASkinLib business interfaces. Rebuilt
     2026-11-04 from the current implementation (the previous version of this
     file was removed in HA-Contract commit badff2a, 2026-10-07).
+
+    1.1.0 (2026-11-12): `GET /profile/textures` confirmed by the author as
+    part of the contract surface (previously shelved). Its `data` envelope is
+    specified as `{uid, items[]}` to match the implementation, and the `type`
+    query parameter is documented.
 
     Authentication model: HASkinLib has no local credential store. Endpoints
     marked with BearerAuth validate the OAuth2 access token by calling the
@@ -131,10 +136,20 @@ paths:
     get:
       summary: Get current user's texture list
       description: >
-        Returns the authenticated user's texture records as `data` (array).
-        Idempotent read.
+        Returns the authenticated user's texture records. `data` is an object
+        carrying the caller's `uid` and an `items` array of texture records,
+        newest first (`id desc`). Idempotent read.
       security:
         - BearerAuth: []
+      parameters:
+        - in: query
+          name: type
+          required: false
+          schema:
+            type: string
+            enum: [all, skin, cape]
+            default: all
+          description: Filter by texture type; `all` returns skins then capes.
       responses:
         '200':
           description: Success
@@ -146,9 +161,16 @@ paths:
                   success: { type: boolean, const: true }
                   message: { type: string }
                   data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/TextureRecord'
+                    type: object
+                    required: [uid, items]
+                    properties:
+                      uid:
+                        type: integer
+                        description: Owning user UID
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TextureRecord'
         '401': { $ref: '#/components/responses/Error' }
   /texture/delete:
     post:
