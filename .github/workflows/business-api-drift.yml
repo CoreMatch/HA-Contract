@@ -45,6 +45,10 @@ jobs:
       - { name: Checkout HRPAuth-Spigot, uses: actions/checkout@v7, with: { repository: CoreMatch/HRPAuth-Spigot, path: HRPAuth-Spigot } }
       - { name: Checkout SamuelClient, uses: actions/checkout@v7, with: { repository: CoreMatch/SamuelClient, path: SamuelClient } }
       - { name: Checkout HRPAuth-Web, uses: actions/checkout@v7, with: { repository: CoreMatch/HRPAuth-WebUI, path: HRPAuth-Web } }
+      - { name: Checkout MCA-Cascade, uses: actions/checkout@v7, with: { repository: CoreMatch/MCA-Cascade, path: MCA-Cascade } }
+      - { name: Checkout MatchCoreArena-MaintenanceView, uses: actions/checkout@v7, with: { repository: CoreMatch/MatchCoreArena-MaintenanceView, path: MatchCoreArena-MaintenanceView } }
+      - { name: Checkout HA-Services-MaintenanceView, uses: actions/checkout@v7, with: { repository: CoreMatch/HA-Services-MaintenanceView, path: HA-Services-MaintenanceView } }
+      - { name: Checkout RW-Mod-Injector, uses: actions/checkout@v7, with: { repository: CoreMatch/RW-Mod-Injector, path: RW-Mod-Injector } }
 
       - name: Set up Go
         uses: actions/setup-go@v7

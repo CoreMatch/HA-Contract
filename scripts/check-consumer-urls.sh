@@ -13,6 +13,15 @@
 #   - SamuelClient               (Go -> Yggdrasil protocol surface)
 #   - HASkinProxy upstream client (Go -> hrpauth/yggdrasil business yamls)
 #   - HRPAuth-Web                (TS -> hrpauth/yggdrasil/haskinlib yamls)
+#   - HRPAuth-Yggdrasil-API core client (Go -> hrpauth-business.yaml /internal/*)
+#   - Cascade backend client     (Go -> cascade-backend-v1.yaml control plane)
+#   - MCA-Cascade                (Go library -> matchcorearena-business.yaml)
+#   - MatchCoreArena-MaintenanceView (Go ops console -> matchcorearena-business.yaml)
+#   - HA-Services-MaintenanceView (Go ops panel -> ha-services-deployer.yaml)
+#   - Grail CLI + mirror client  (Go -> grail.yaml)
+#   - RW-Mod-Injector            (Java -> cascade-backend-v1.yaml mod surface)
+#   - Cascade plugin hub         (Go -> cascade-plugin-v1.yaml plugin endpoints)
+#   - Avalon plugin hub          (Go -> avalon-plugin-v1.yaml plugin endpoints)
 #
 # The Yggdrasil PROTOCOL surface (/authserver/*, /sessionserver/*, ...) is
 # specified in HRPAuth-Yggdrasil-API knowledge/0010, not in a business yaml;
@@ -65,6 +74,14 @@ HRPAUTH_SPIGOT_DIR="$(resolve_repo "${HRPAUTH_SPIGOT_REPO_DIR:-}" HRPAuth-Spigot
 SAMUELCLIENT_DIR="$(resolve_repo "${SAMUELCLIENT_REPO_DIR:-}" SamuelClient SAMUELCLIENT_REPO_DIR)"
 HASKINPROXY_DIR="$(resolve_repo "${HASKINPROXY_REPO_DIR:-}" HASkinProxy HASKINPROXY_REPO_DIR)"
 HRPAUTH_WEB_DIR="$(resolve_repo "${HRPAUTH_WEB_REPO_DIR:-}" HRPAuth-Web HRPAUTH_WEB_REPO_DIR)"
+YGGDRASIL_DIR="$(resolve_repo "${YGGDRASIL_REPO_DIR:-}" HRPAuth-Yggdrasil-API YGGDRASIL_REPO_DIR)"
+CASCADE_DIR="$(resolve_repo "${CASCADE_REPO_DIR:-}" Cascade CASCADE_REPO_DIR "$HOME/Cascade")"
+AVALON_DIR="$(resolve_repo "${AVALON_REPO_DIR:-}" Avalon AVALON_REPO_DIR)"
+GRAIL_DIR="$(resolve_repo "${GRAIL_REPO_DIR:-}" Grail GRAIL_REPO_DIR)"
+MCA_CASCADE_DIR="$(resolve_repo "${MCA_CASCADE_REPO_DIR:-}" MCA-Cascade MCA_CASCADE_REPO_DIR)"
+MCA_MAINTVIEW_DIR="$(resolve_repo "${MCA_MAINTVIEW_REPO_DIR:-}" MatchCoreArena-MaintenanceView MCA_MAINTVIEW_REPO_DIR)"
+HA_MAINTVIEW_DIR="$(resolve_repo "${HA_MAINTVIEW_REPO_DIR:-}" HA-Services-MaintenanceView HA_MAINTVIEW_REPO_DIR)"
+RWMI_DIR="$(resolve_repo "${RWMI_REPO_DIR:-}" RW-Mod-Injector RWMI_REPO_DIR)"
 
 command -v gawk >/dev/null 2>&1 || fail "gawk is required"
 command -v python3 >/dev/null 2>&1 || fail "python3 is required"
@@ -92,9 +109,17 @@ if [[ "${1:-}" == "--self-test" ]]; then
     SAMUELCLIENT_REPO_DIR="$SAMUELCLIENT_DIR"
     HASKINPROXY_REPO_DIR="$HASKINPROXY_DIR"
     HRPAUTH_WEB_REPO_DIR="$HRPAUTH_WEB_DIR"
+    YGGDRASIL_REPO_DIR="$YGGDRASIL_DIR"
+    CASCADE_REPO_DIR="$CASCADE_DIR"
+    AVALON_REPO_DIR="$AVALON_DIR"
+    GRAIL_REPO_DIR="$GRAIL_DIR"
+    MCA_CASCADE_REPO_DIR="$MCA_CASCADE_DIR"
+    MCA_MAINTVIEW_REPO_DIR="$MCA_MAINTVIEW_DIR"
+    HA_MAINTVIEW_REPO_DIR="$HA_MAINTVIEW_DIR"
+    RWMI_REPO_DIR="$RWMI_DIR"
   )
 
-  echo "self-test[1/3]: clean fixture must pass"
+  echo "self-test[1/4]: clean fixture must pass"
   if ! env "${REPO_ENV[@]}" bash "$FIX/scripts/$SCRIPT_NAME" >"$FIX/clean.log" 2>&1; then
     cat "$FIX/clean.log" >&2
     echo "SELF-TEST FAILED: clean fixture reported drift" >&2
@@ -106,7 +131,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
     exit 1
   fi
 
-  echo "self-test[2/3]: renaming /api/matchmaking/leave must fail"
+  echo "self-test[2/4]: renaming /api/matchmaking/leave must fail"
   sed -i 's#^  /api/matchmaking/leave:#  /api/matchmaking/leave-renamed:#' \
     "$FIX/docs/api/openapi/matchcorearena-business.yaml"
   grep -q "leave-renamed" "$FIX/docs/api/openapi/matchcorearena-business.yaml" || {
@@ -124,7 +149,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
     exit 1
   }
 
-  echo "self-test[3/3]: re-breaking the two fixed texture links must fail hard (no warning backdoor)"
+  echo "self-test[3/4]: re-breaking the two fixed texture links must fail hard (no warning backdoor)"
   # Restore clean contracts, then drop the two texture targets that the fixed
   # consumers now call (HASkinProxy -> DELETE /texture/delete/{uuid}/{type},
   # HRPAuth-Web -> POST /texture/upload/{uuid}). With the known-broken
@@ -163,7 +188,27 @@ if [[ "${1:-}" == "--self-test" ]]; then
     exit 1
   fi
 
-  echo "self-test passed: clean green; both breakage mutations red with no warning backdoor."
+  echo "self-test[4/4]: dropping the Grail sync endpoint must fail (new consumer)"
+  # Restore clean contracts, then remove /v1/sync/changes which the Grail
+  # mirror client calls — the expanded consumer surface must turn red.
+  cp "$ROOT/docs/api/openapi/"*.yaml "$FIX/docs/api/openapi/"
+  sed -i 's#^  /v1/sync/changes:#  /v1/sync/changes-removed:#' "$FIX/docs/api/openapi/grail.yaml"
+  grep -q "sync/changes-removed" "$FIX/docs/api/openapi/grail.yaml" || {
+    echo "SELF-TEST FAILED: could not inject the Grail sync mutation" >&2
+    exit 1
+  }
+  if env "${REPO_ENV[@]}" bash "$FIX/scripts/$SCRIPT_NAME" >"$FIX/mutated3.log" 2>&1; then
+    cat "$FIX/mutated3.log" >&2
+    echo "SELF-TEST FAILED: orphaned Grail sync URL did NOT trigger drift" >&2
+    exit 1
+  fi
+  grep -q "/v1/sync/changes" "$FIX/mutated3.log" || {
+    cat "$FIX/mutated3.log" >&2
+    echo "SELF-TEST FAILED: drift report does not name /v1/sync/changes" >&2
+    exit 1
+  }
+
+  echo "self-test passed: clean green; all breakage mutations red with no warning backdoor."
   exit 0
 fi
 
@@ -186,7 +231,12 @@ HRPAUTH_YAML="$ROOT/docs/api/openapi/hrpauth-business.yaml"
 YGG_YAML="$ROOT/docs/api/openapi/hrpauth-yggdrasil-business.yaml"
 SKINLIB_YAML="$ROOT/docs/api/openapi/haskinlib-business.yaml"
 CASCADE_PROXY_YAML="$ROOT/docs/api/openapi/cascade-proxy.yaml"
-for f in "$MCA_YAML" "$HRPAUTH_YAML" "$YGG_YAML" "$SKINLIB_YAML" "$CASCADE_PROXY_YAML"; do
+CASCADE_BACKEND_YAML="$ROOT/docs/api/openapi/cascade-backend-v1.yaml"
+DEPLOYER_YAML="$ROOT/docs/api/openapi/ha-services-deployer.yaml"
+GRAIL_YAML="$ROOT/docs/api/openapi/grail.yaml"
+CASCADE_PLUGIN_YAML="$ROOT/docs/api/openapi/cascade-plugin-v1.yaml"
+AVALON_PLUGIN_YAML="$ROOT/docs/api/openapi/avalon-plugin-v1.yaml"
+for f in "$MCA_YAML" "$HRPAUTH_YAML" "$YGG_YAML" "$SKINLIB_YAML" "$CASCADE_PROXY_YAML" "$CASCADE_BACKEND_YAML" "$DEPLOYER_YAML" "$GRAIL_YAML" "$CASCADE_PLUGIN_YAML" "$AVALON_PLUGIN_YAML"; do
   [[ -f "$f" ]] || fail "contract file missing: $f"
 done
 
@@ -197,6 +247,12 @@ openapi_paths "$SKINLIB_YAML" > "$tmpdir/skinlib-paths.txt"
 # Cascade management surface (cascade-proxy.yaml) is a valid contract target
 # too — e.g. the contract-first GET /api/plugins plugin-status endpoint.
 openapi_paths "$CASCADE_PROXY_YAML" > "$tmpdir/cascade-paths.txt"
+# Control-plane, delivery/orchestration, artifact and plugin surfaces.
+openapi_paths "$CASCADE_BACKEND_YAML" > "$tmpdir/backend-paths.txt"
+openapi_paths "$DEPLOYER_YAML" > "$tmpdir/deployer-paths.txt"
+openapi_paths "$GRAIL_YAML" > "$tmpdir/grail-paths.txt"
+openapi_paths "$CASCADE_PLUGIN_YAML" > "$tmpdir/cascade-plugin-paths.txt"
+openapi_paths "$AVALON_PLUGIN_YAML" > "$tmpdir/avalon-plugin-paths.txt"
 
 # Yggdrasil protocol surface (knowledge/0010; same list as the route drift
 # script's exclusion set).
@@ -338,6 +394,109 @@ while IFS= read -r path; do
     check_url "HRPAuth-Web" "-" "$path" "$tmpdir/hrpauth-paths.txt" "$tmpdir/ygg-paths.txt" "$tmpdir/cascade-paths.txt"
   fi
 done <<<"$web_urls"
+
+# --- 8. HRPAuth-Yggdrasil-API core client (Go -> HRPAuth /internal/*) ---
+ygg_core_urls="$(gawk '
+  match($0, /doRequest(WithCode)?\("(GET|POST|PUT|DELETE)", "(\/[^"]+)"/, m) {
+    print m[2] " " m[3]
+  }
+' "$YGGDRASIL_DIR/clients/core_client.go" | sort -u)"
+[[ -n "$ygg_core_urls" ]] || fail "HRPAuth-Yggdrasil-API: extracted 0 core-client URLs — refusing to pass silently"
+while read -r method path; do
+  check_url "HRPAuth-Yggdrasil-API" "$method" "$path" "$tmpdir/hrpauth-paths.txt"
+done <<<"$ygg_core_urls"
+
+# --- 9. Cascade backend client (Go -> cascade-backend-v1 control plane) ---
+# Direct literals in internal/backend/client.go and internal/proxy/server.go,
+# the concatenated /sessions/{sessionID}/identity, and the room-scoped
+# suffixes forwarded by the management API (proxy_http.go).
+cascade_backend_urls="$(
+  {
+    # trailing-slash literals are concatenation prefixes (the full path is
+    # assembled below), not standalone URLs
+    gawk 'match($0, /http\.Method(Get|Post|Put|Delete), "(\/[^"]+)"/, m) { print m[2] }' "$CASCADE_DIR/internal/backend/client.go" | grep -v '/$'
+    gawk 'match($0, /client\.Request\(ctx, "(GET|POST|PUT|DELETE)", "(\/[^"]+)"/, m) { print m[2] }' "$CASCADE_DIR/internal/proxy/server.go"
+    grep -q '"/sessions/"+url.PathEscape(sessionID)+"/identity"' "$CASCADE_DIR/internal/backend/client.go" && echo "/sessions/{sessionID}/identity"
+    gawk 'match($0, /(RoomRequest|forwardRoom)\([^;]*"(\/[a-z]+)"/, m) { print "/rooms/{code}" m[2] }' "$CASCADE_DIR/internal/api/proxy_http.go"
+  } | sort -u)"
+[[ -n "$cascade_backend_urls" ]] || fail "Cascade: extracted 0 backend control-plane URLs — refusing to pass silently"
+while IFS= read -r path; do
+  check_url "Cascade-backend-client" "-" "$path" "$tmpdir/backend-paths.txt"
+done <<<"$cascade_backend_urls"
+
+# --- 10. MCA-Cascade library (Go -> MCA matchmaking assignment) ---
+grep -q '"/api/matchmaking/assignment/"' "$MCA_CASCADE_DIR/client.go" || fail "MCA-Cascade: assignment URL not found — refusing to pass silently"
+check_url "MCA-Cascade" GET "/api/matchmaking/assignment/{uuid}" "$tmpdir/mca-paths.txt"
+
+# --- 11. MatchCoreArena-MaintenanceView (Go ops console -> MCA business API) ---
+mca_mv_urls="$(
+  {
+    gawk 'match($0, /doMCARequest\(ctx, http\.Method(Get|Post|Put|Delete), "(\/api\/[^"?]+)/, m) { print m[2] }' "$MCA_MAINTVIEW_DIR"/internal/logic/*.go
+    gawk 'match($0, /doRequest\(ctx, "(GET|POST|PUT|DELETE)", "(\/api\/[^"?]+)/, m) { print m[2] }' "$MCA_MAINTVIEW_DIR"/internal/logic/*.go
+    gawk 'match($0, /fmt\.Sprintf\("(\/api\/[^"?]+)"/, m) { print m[1] }' "$MCA_MAINTVIEW_DIR"/internal/logic/*.go | sed -E 's#%[sd]#{param}#g'
+    grep -q '"/api/matches/by-game-id/" + url.PathEscape' "$MCA_MAINTVIEW_DIR"/internal/logic/mca.go && echo "/api/matches/by-game-id/{game_id}"
+    grep -q '+ "/api/status"' "$MCA_MAINTVIEW_DIR"/internal/logic/*.go && echo "/api/status"
+  } | sort -u)"
+[[ -n "$mca_mv_urls" ]] || fail "MatchCoreArena-MaintenanceView: extracted 0 MCA URLs — refusing to pass silently"
+while IFS= read -r path; do
+  check_url "MatchCoreArena-MaintenanceView" "-" "$path" "$tmpdir/mca-paths.txt"
+done <<<"$mca_mv_urls"
+
+# --- 12. HA-Services-MaintenanceView (Go ops panel -> Deployer) ---
+ha_mv_urls="$(gawk '
+  match($0, /doRaw\(ctx, http\.Method(Get|Post|Put|Delete), "(\/api\/v1\/deploy[^"]*)"/, m) {
+    print m[2]
+  }
+' "$HA_MAINTVIEW_DIR/internal/deployer/client.go" | sort -u)"
+[[ -n "$ha_mv_urls" ]] || fail "HA-Services-MaintenanceView: extracted 0 Deployer URLs — refusing to pass silently"
+while IFS= read -r path; do
+  check_url "HA-Services-MaintenanceView" "-" "$path" "$tmpdir/deployer-paths.txt"
+done <<<"$ha_mv_urls"
+
+# --- 13. Grail CLI + mirror client (Go -> Grail node surface) ---
+grail_urls="$(
+  {
+    grep -hoE '"/v1/[^"%]*"' "$GRAIL_DIR/main.go" "$GRAIL_DIR/internal/client/client.go" | tr -d '"'
+    grep -hoE 'fmt\.Sprintf\("/v1/[^"]*"' "$GRAIL_DIR/main.go" | sed -E 's#fmt\.Sprintf\(##; s#"##g; s#%s#{param}#g' | grep -v '/$'
+    grep -hoE 'base\+"(yank|deprecate)"' "$GRAIL_DIR/main.go" | sed -E 's#^base\+"#/v1/projects/{param}/channels/{param}/versions/{param}/#; s#"$##'
+  } | sort -u)"
+[[ -n "$grail_urls" ]] || fail "Grail: extracted 0 client URLs — refusing to pass silently"
+while IFS= read -r path; do
+  check_url "Grail-client" "-" "$path" "$tmpdir/grail-paths.txt"
+done <<<"$grail_urls"
+
+# --- 14. RW-Mod-Injector (Java -> cascade-backend-v1 mod surface) ---
+rmi_urls="$(
+  {
+    grep -qE '\+ "/rooms/" \+ [^;]+ \+ "/mods"' "$RWMI_DIR/injector/src/main/java/com/corematch/rwmodinjector/Manifest.java" && echo "/rooms/{param}/mods"
+    grep -qE '\+ "/rooms/" \+ [^;]+ \+ "/mods/" \+' "$RWMI_DIR/injector/src/main/java/com/corematch/rwmodinjector/Assembler.java" && echo "/rooms/{param}/mods/{param}"
+  })"
+[[ -n "$rmi_urls" ]] || fail "RW-Mod-Injector: extracted 0 control-plane URLs — refusing to pass silently"
+while IFS= read -r path; do
+  check_url "RW-Mod-Injector" GET "$path" "$tmpdir/backend-paths.txt"
+done <<<"$rmi_urls"
+
+# --- 15/16. Cascade and Avalon plugin hubs (Go -> plugin-served endpoints) ---
+# The plugin contracts' paths are relative to the plugin base URL's /v1
+# prefix, which the hubs prepend; the comparison strips it. The event URLs
+# are /events/<name> with the event names taken from the hub's own event
+# constants, so every emitted event must have a contract path.
+grep -q '"/v1/manifest"' "$CASCADE_DIR/internal/plugin/manifest.go" || fail "Cascade: plugin manifest URL not found — refusing to pass silently"
+grep -q '"/v1/events/" + eventName' "$CASCADE_DIR/internal/plugin/hub.go" || fail "Cascade: plugin event URL not found — refusing to pass silently"
+check_url "Cascade-plugin-client" GET "/manifest" "$tmpdir/cascade-plugin-paths.txt"
+cascade_plugin_events="$(gawk 'match($0, /Event[A-Za-z]+[[:space:]]*=[[:space:]]*"([a-z]+\.[a-z]+)"/, m) { print m[1] }' "$CASCADE_DIR/internal/plugin/plugin.go" | sort -u)"
+[[ -n "$cascade_plugin_events" ]] || fail "Cascade: extracted 0 plugin event names — refusing to pass silently"
+while IFS= read -r ev; do
+  check_url "Cascade-plugin-client" POST "/events/$ev" "$tmpdir/cascade-plugin-paths.txt"
+done <<<"$cascade_plugin_events"
+grep -q '"/v1/manifest"' "$AVALON_DIR/internal/plugin/manifest.go" || fail "Avalon: plugin manifest URL not found — refusing to pass silently"
+grep -q '"/v1/events/" + eventName' "$AVALON_DIR/internal/plugin/hub.go" || fail "Avalon: plugin event URL not found — refusing to pass silently"
+check_url "Avalon-plugin-client" GET "/manifest" "$tmpdir/avalon-plugin-paths.txt"
+avalon_plugin_events="$(gawk 'match($0, /Event[A-Za-z]+[[:space:]]*=[[:space:]]*"([a-z]+\.[a-z]+)"/, m) { print m[1] }' "$AVALON_DIR/internal/plugin/event.go" "$AVALON_DIR/internal/plugin/eventv2.go" | sort -u)"
+[[ -n "$avalon_plugin_events" ]] || fail "Avalon: extracted 0 plugin event names — refusing to pass silently"
+while IFS= read -r ev; do
+  check_url "Avalon-plugin-client" POST "/events/$ev" "$tmpdir/avalon-plugin-paths.txt"
+done <<<"$avalon_plugin_events"
 
 if [[ "$DRIFT_FOUND" -eq 1 ]]; then
   echo "Consumer URL drift detected."
