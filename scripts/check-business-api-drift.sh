@@ -156,11 +156,11 @@ if [[ "${1:-}" == "--self-test" ]]; then
     exit 1
   }
 
-  echo "self-test[3/3]: dropping the contract-first /api/plugins from the contract must fail"
-  # Restore clean contracts, then rename the planned /api/plugins path so the
-  # contract no longer declares it. The planned-endpoint presence assertion
-  # must turn the check red (a contract-first commitment cannot be silently
-  # deleted).
+  echo "self-test[3/3]: dropping the implemented /api/plugins from the contract must fail"
+  # Restore clean contracts, then rename the /api/plugins path so the
+  # contract no longer declares it. The route is implemented (Cascade
+  # 4943d6f), so the impl-vs-contract direction must turn red — a served
+  # route cannot be silently deleted from the contract.
   cp "$ROOT/docs/api/openapi/"*.yaml "$FIX/docs/api/openapi/"
   sed -i 's#^  /api/plugins:#  /api/plugins-removed:#' "$FIX/docs/api/openapi/cascade-proxy.yaml"
   grep -q "api/plugins-removed" "$FIX/docs/api/openapi/cascade-proxy.yaml" || {
@@ -169,7 +169,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
   }
   if env "${REPO_ENV[@]}" bash "$FIX/scripts/$SCRIPT_NAME" >"$FIX/mutated2.log" 2>&1; then
     cat "$FIX/mutated2.log" >&2
-    echo "SELF-TEST FAILED: removing planned /api/plugins did NOT trigger drift" >&2
+    echo "SELF-TEST FAILED: removing /api/plugins did NOT trigger drift" >&2
     exit 1
   fi
   grep -q "/api/plugins" "$FIX/mutated2.log" || {
@@ -178,7 +178,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
     exit 1
   }
 
-  echo "self-test passed: clean green; ghost route and dropped planned endpoint both red."
+  echo "self-test passed: clean green; ghost route and dropped /api/plugins both red."
   exit 0
 fi
 
@@ -361,25 +361,12 @@ check_set "WinnerProxy" "$tmpdir/winnerproxy-routes.txt" "$tmpdir/winnerproxy-op
 extract_gin_routes "$CASCADE_DIR/internal/api/proxy_http.go" > "$tmpdir/cascade-routes.txt"
 extract_openapi_routes "$CASCADE_PROXY_YAML" > "$tmpdir/cascade-openapi.txt"
 
-# Contract-first (planned) endpoints: registered in the contract BEFORE the
-# route is served (Cascade knowledge/0008 gates /api/plugins on contract
-# registration). They are exempt from the contract-vs-impl comparison so the
-# check stays green while unimplemented, but the contract MUST keep declaring
-# them — dropping a planned endpoint from the contract is drift (red). When
-# the code implements one, remove it from this list.
-cat > "$tmpdir/cascade-planned.txt" <<'EOF'
-GET /api/plugins
-EOF
-while IFS= read -r planned; do
-  [[ -n "$planned" ]] || continue
-  if ! grep -qxF "$planned" "$tmpdir/cascade-openapi.txt"; then
-    echo "[Cascade-proxy] planned (contract-first) endpoint missing from contract: $planned"
-    DRIFT_FOUND=1
-  fi
-done < "$tmpdir/cascade-planned.txt"
-
+# 2026-11-12：GET /api/plugins 曾在此以 planned 清单豁免（契约先行窗口期，
+# Cascade knowledge/0008 要求先登记契约）；实现已随 Cascade 4943d6f 落在
+# main（PluginStatus json tag 同批补齐），豁免连根移除——豁免清单本质是
+# 断链校验的后门，代码落地后必须删除，双向全量比对。
 check_set "Cascade-proxy" "$tmpdir/cascade-routes.txt" "$tmpdir/cascade-openapi.txt" impl-vs-contract
-check_set "Cascade-proxy" "$tmpdir/cascade-routes.txt" "$tmpdir/cascade-openapi.txt" contract-vs-impl "$tmpdir/cascade-planned.txt"
+check_set "Cascade-proxy" "$tmpdir/cascade-routes.txt" "$tmpdir/cascade-openapi.txt" contract-vs-impl
 
 # --- HA-Services-Deployer ---
 # Route source is internal/server/router.go; the deploy group registers with

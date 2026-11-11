@@ -484,14 +484,18 @@ SDKHANDLER_YAML="$ROOT/docs/api/openapi/webui-sdkhandler.yaml"
 check_fields "SDKHandler/Revision" "$SDKHANDLER_YAML" Revision "$SDKHANDLER_DIR/internal/publish/publish.go" RevisionInfo omitempty switched
 
 # Cascade out-of-process plugin event payloads (cascade-plugin/v1). These are
-# the downstream-visible payload structs; the /api/plugins management response
-# is contract-first (PluginStatus has no json tags yet) and is therefore not
-# field-wired until the endpoint lands.
+# the downstream-visible payload structs.
 CASCADE_PLUGIN_YAML="$ROOT/docs/api/openapi/cascade-plugin-v1.yaml"
 CASCADE_EVENT_GO="$CASCADE_DIR/internal/plugin/event.go"
 check_fields "Cascade/PlayerInfo"    "$CASCADE_PLUGIN_YAML" PlayerInfo    "$CASCADE_EVENT_GO" PlayerInfo    omitempty
 check_fields "Cascade/RouteDecision" "$CASCADE_PLUGIN_YAML" RouteDecision "$CASCADE_EVENT_GO" RouteDecision omitempty
 check_fields "Cascade/ProxyInfo"     "$CASCADE_PLUGIN_YAML" ProxyInfo     "$CASCADE_EVENT_GO" ProxyInfo     omitempty
+
+# Cascade /api/plugins management response (cascade-proxy.yaml PluginStatus
+# schema <-> internal/plugin/hub.go::PluginStatus; json tags landed with the
+# endpoint in Cascade 4943d6f).
+CASCADE_PROXY_YAML="$ROOT/docs/api/openapi/cascade-proxy.yaml"
+check_fields "Cascade/PluginStatus" "$CASCADE_PROXY_YAML" PluginStatus "$CASCADE_DIR/internal/plugin/hub.go" PluginStatus omitempty
 
 # Avalon out-of-process plugin event payloads (avalon-plugin/v1). Every event
 # struct serializes verbatim to its contract event schema (allOf envelope +

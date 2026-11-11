@@ -56,17 +56,15 @@ paths:
       summary: List out-of-process plugin statuses
       description: >-
         Read-only status snapshot of every configured plugin (including
-        disabled ones), in configuration order. CONTRACT-FIRST: registered
-        here before implementation per Cascade knowledge/0008 ("adding
-        /api/plugins requires contract registration first"); the route is
-        not yet served, so the route-drift check carries it as a planned
-        endpoint. The data source is `internal/plugin/hub.go::Status`; the
-        `PluginStatus` struct currently has no json tags, so the
-        implementation MUST serialize with the camelCase field names fixed by
-        the `PluginStatus` schema below. Follows the `/api/*` management
-        convention: no per-route auth (the management surface is
-        network-gated; only `/internal/*` requires `X-Internal-Key`).
-        Idempotent read.
+        disabled ones), in configuration order. Registered contract-first per
+        Cascade knowledge/0008 and implemented in Cascade 4943d6f
+        (2026-11-12); the planned-endpoint exemption in the route-drift
+        check was removed when the route landed. The data source is
+        `internal/plugin/hub.go::Status`, serialized with the camelCase
+        field names fixed by the `PluginStatus` schema below. Follows the
+        `/api/*` management convention: no per-route auth (the management
+        surface is network-gated; only `/internal/*` requires
+        `X-Internal-Key`). Idempotent read.
       responses:
         '200':
           description: '`{"plugins": [...]}` (empty array when no plugin is configured)'
@@ -383,11 +381,25 @@ components:
       type: object
       description: >-
         Read-only status of one out-of-process plugin
-        (`internal/plugin/hub.go::PluginStatus`). CONTRACT-FIRST: the JSON
-        field names are fixed here; the Go struct has no json tags yet, so
-        the implementation must serialize exactly these camelCase keys.
-        Counters are process-local (reset on restart).
-      required: [name, baseUrl, enabled, ready, events, queued, delivered, dropped, denied, failOpen]
+        (`internal/plugin/hub.go::PluginStatus`). Every field is always
+        serialized (no omitempty in the struct), hence all are required per
+        the ecosystem serialization convention. Counters are process-local
+        (reset on restart).
+      required:
+        [
+          name,
+          baseUrl,
+          enabled,
+          ready,
+          manifestId,
+          manifestVersion,
+          events,
+          queued,
+          delivered,
+          dropped,
+          denied,
+          failOpen,
+        ]
       properties:
         name:
           type: string
