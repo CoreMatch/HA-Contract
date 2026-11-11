@@ -124,6 +124,13 @@ The following error codes are the stable registry for current HA business APIs. 
 | `mca_game_id_conflict` | MatchCoreArena: a match report reuses a `game_id` that is already recorded with a DIFFERENT payload (HTTP 409). Identical-payload duplicates are not errors — they replay the existing record with HTTP 200 (`game_id` idempotency). |
 | `mca_party_already_in_party` | MatchCoreArena: a matchmaking party roster member is already in another queued party, or a user already in a queued party tries to solo-queue (HTTP 409). |
 | `mca_party_full` | MatchCoreArena: a matchmaking party roster exceeds the mode's max team size (HTTP 409). |
+| `mca_caller_not_in_roster` | MatchCoreArena: a party join (`POST /api/matchmaking/join` with `party_members`) whose roster does not contain the caller's own UUID (HTTP 400). Consent rule since contract 1.11.0. |
+| `mca_consent_missing` | MatchCoreArena: a party join lists a member who has no accepted, unexpired, unconsumed invitation from the caller for this match_type (HTTP 409). Default deny since contract 1.11.0. |
+| `mca_invite_not_found` | MatchCoreArena: the referenced party invitation does not exist (HTTP 404). |
+| `mca_invite_exists` | MatchCoreArena: a pending invitation from the same inviter to the same invitee for the same match_type already exists (HTTP 409). |
+| `mca_invite_expired` | MatchCoreArena: the party invitation expired before it was accepted/rejected or before the party join consumed it (HTTP 409). Expiry is evaluated lazily. |
+| `mca_invite_resolved` | MatchCoreArena: the party invitation was already accepted or rejected; the state transition is terminal (HTTP 409). |
+| `mca_not_invitee` | MatchCoreArena: only the invited player may accept/reject a party invitation (HTTP 403). |
 | `mca_ranking_not_found` | MatchCoreArena: the user has no ranking entry for the requested type/season (`GET /api/rankings/me`, HTTP 404). |
 | `cascade_room_conflict` | Cascade management API: a room code is claimed by more than one backend and cannot be routed |
 | `cascade_backend_unavailable` | Cascade management API: the owning backend is unhealthy or unreachable, so the request cannot be forwarded |

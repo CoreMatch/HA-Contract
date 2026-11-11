@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MatchCoreArena Business API
-  version: 1.10.0
+  version: 1.11.0
   description: >
     Unified specification for MatchCoreArena server business interfaces.
     Authentication via HRPAuth OAuth2 Authorization Code + PKCE.
@@ -1105,6 +1105,16 @@ paths:
         (averaged) when the match is reported with the formed group's
         `matchmaking_group_id`.
 
+        Consent (1.11.0): party join is invitation-based, default deny.
+        The CALLER must be part of the submitted roster — a roster that
+        does not contain the caller answers `400 mca_caller_not_in_roster`.
+        Every OTHER roster member must hold an invitation from the caller
+        for this `match_type` that the member ACCEPTED, and that has
+        neither expired nor been consumed by a previous join — otherwise
+        the join answers `409 mca_consent_missing` naming the member.
+        A successful party join consumes the acceptances it used.
+        Invitations are managed via `/api/matchmaking/invites`.
+
         A background engine removes entries older than the configured
         timeout and forms matches within a rating window that widens with
         wait time; formed matches are recorded and queryable via
@@ -1132,6 +1142,10 @@ paths:
                   description: >
                     Optional member UUID list. Non-empty enqueues the whole
                     roster as one party unit; empty/omitted queues solo.
+                    Since 1.11.0 the list MUST contain the caller's own
+                    UUID and every other member must have accepted an
+                    invitation from the caller for this match_type (see
+                    /api/matchmaking/invites).
       responses:
         '201':
           description: Joined the queue
@@ -1154,6 +1168,166 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
         '502': { $ref: '#/components/responses/Error' }
+
+  /api/matchmaking/invites:
+    post:
+      summary: Invite members to a party queue (1.11.0)
+      description: >
+        Creates pending party invitations from the caller to the listed
+        member UUIDs for a configured match mode. Member UUIDs are resolved
+        to HRPAuth UIDs through the same ops-level service endpoint as
+        match reports — an unknown member answers `404 mca_user_not_found`,
+        an HRPAuth/service-credential outage answers
+        `502 oauth_hrpauth_down`. The list must be non-empty, must not
+        contain the caller's own UUID and must not contain duplicates or
+        empty strings (`400 mca_invalid_request`); unknown modes or a
+        disabled matchmaking system answer `400 mca_invalid_request`. A
+        (caller, member, match_type) invitation that is still pending
+        answers `409 mca_invite_exists`. Invitations expire after the
+        configured party-invite TTL; expiry is evaluated lazily at
+        read/accept/join time (no background sweeper). Inviting does NOT
+        queue anyone — queueing happens only through
+        `/api/matchmaking/join` with the consent checks.
+      tags: [Matchmaking]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [match_type, member_uuids]
+              properties:
+                match_type:
+                  type: string
+                  description: Target queue mode (a configured matchmaking mode)
+                member_uuids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  description: >
+                    UUIDs of the players to invite; the caller's own UUID
+                    must NOT be included.
+      responses:
+        '201':
+          description: Invitations created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PartyInvite'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+    get:
+      summary: List my party invitations (1.11.0)
+      description: >
+        Returns the invitations the caller is involved in (as inviter or
+        invitee), most recent first, up to 50. Statuses are effective: a
+        pending invitation whose expiry has passed is reported as
+        `expired`.
+      tags: [Matchmaking]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PartyInvite'
+        '401': { $ref: '#/components/responses/Error' }
+
+  /api/matchmaking/invites/{id}/accept:
+    post:
+      summary: Accept a party invitation (1.11.0)
+      description: >
+        Only the INVITEE may accept: any other caller answers
+        `403 mca_not_invitee`. The invitation must exist (`404
+        mca_invite_not_found`), still be pending and unexpired (`409
+        mca_invite_expired`) and not already accepted/rejected (`409
+        mca_invite_resolved`). Accepting records the consent that a later
+        party join by the inviter consumes.
+      tags: [Matchmaking]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PartyInvite'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /api/matchmaking/invites/{id}/reject:
+    post:
+      summary: Reject a party invitation (1.11.0)
+      description: >
+        Only the INVITEE may reject: any other caller answers
+        `403 mca_not_invitee`. The invitation must exist (`404
+        mca_invite_not_found`), still be pending and unexpired (`409
+        mca_invite_expired`) and not already accepted/rejected (`409
+        mca_invite_resolved`). Rejection is terminal: the inviter must
+        send a fresh invitation to queue with this member.
+      tags: [Matchmaking]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PartyInvite'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
 
   /api/matchmaking/leave:
     delete:
@@ -1974,6 +2148,47 @@ components:
         enqueued_at:
           type: string
           format: date-time
+
+    PartyInvite:
+      type: object
+      required: [id, inviter_uid, invitee_uid, match_type, status, created_at, expires_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        inviter_uid:
+          type: integer
+          format: int64
+          description: HRPAuth UID of the player who sent the invitation
+        invitee_uid:
+          type: integer
+          format: int64
+          description: HRPAuth UID of the invited player
+        match_type:
+          type: string
+          description: Queue mode the invitation is for
+        status:
+          type: string
+          enum: [pending, accepted, rejected, expired]
+          description: >
+            Effective status. `expired` is computed lazily: a pending row
+            whose `expires_at` has passed is reported and treated as
+            expired (no background sweeper).
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          description: created_at plus the configured party-invite TTL
+        resolved_at:
+          type: string
+          format: date-time
+          description: When the invitee accepted/rejected (omitted while pending/expired)
+        consumed_at:
+          type: string
+          format: date-time
+          description: When the acceptance was consumed by a party join (omitted until then)
 
     MatchmakingStatus:
       type: object
