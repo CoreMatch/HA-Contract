@@ -61,6 +61,7 @@ AVALON_DIR="$(resolve_repo "${AVALON_REPO_DIR:-}" Avalon AVALON_REPO_DIR)"
 HASKINPROXY_DIR="$(resolve_repo "${HASKINPROXY_REPO_DIR:-}" HASkinProxy HASKINPROXY_REPO_DIR)"
 DEPLOYER_DIR="$(resolve_repo "${DEPLOYER_REPO_DIR:-}" HA-Services-Deployer DEPLOYER_REPO_DIR)"
 GRAIL_DIR="$(resolve_repo "${GRAIL_REPO_DIR:-}" Grail GRAIL_REPO_DIR)"
+SDKHANDLER_DIR="$(resolve_repo "${SDKHANDLER_REPO_DIR:-}" HA-WebUI-SDKHandler SDKHANDLER_REPO_DIR)"
 
 # Cascade for the plugin payload pairs: needs a checkout that carries the
 # plugin system (internal/plugin). The flat CI checkout and the avalon
@@ -106,6 +107,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
     HASKINPROXY_REPO_DIR="$HASKINPROXY_DIR"
     DEPLOYER_REPO_DIR="$DEPLOYER_DIR"
     GRAIL_REPO_DIR="$GRAIL_DIR"
+    SDKHANDLER_REPO_DIR="$SDKHANDLER_DIR"
   )
 
   echo "self-test[1/5]: clean fixture must pass"
@@ -419,6 +421,14 @@ check_fields "Grail/VersionManifest"      "$GRAIL_YAML" VersionManifestPayload  
 check_fields "Grail/ResolveResponse"      "$GRAIL_YAML" ResolveResponse            "$GRAIL_MODEL_GO" ResolveResponse omitempty
 check_fields "Grail/GraceInfo"            "$GRAIL_YAML" "ResolveResponse/grace"    "$GRAIL_MODEL_GO" GraceInfo       omitempty
 check_fields "Grail/ServingNode"          "$GRAIL_YAML" "ResolveResponse/serving_node" "$GRAIL_MODEL_GO" ServingNode omitempty
+
+# HA-WebUI-SDKHandler revision info (GET /api/revision response). The
+# Revision schema's `switched` property belongs to the publish result shape
+# (publish.Result), not to RevisionInfo, so it is excluded here. The
+# BuildStatus response is assembled from gin.H map literals (no named
+# struct), so it cannot be field-wired.
+SDKHANDLER_YAML="$ROOT/docs/api/openapi/webui-sdkhandler.yaml"
+check_fields "SDKHandler/Revision" "$SDKHANDLER_YAML" Revision "$SDKHANDLER_DIR/internal/publish/publish.go" RevisionInfo omitempty switched
 
 # Cascade out-of-process plugin event payloads (cascade-plugin/v1). These are
 # the downstream-visible payload structs; the /api/plugins management response
