@@ -117,6 +117,9 @@ paths:
       responses:
         '200':
           description: Signed keyring envelope
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
 
   /v1/revocations:
     get:
@@ -128,7 +131,12 @@ paths:
         every sync; fetch failure is a hard sync failure. No auth.
       responses:
         '200':
-          description: Signed states envelope
+          description: >
+            Signed states envelope; the payload is a StatesPayload (yank
+            list + grace list).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
 
   /v1/projects/{project}/channels/{channel}/versions:
     get:
@@ -430,6 +438,9 @@ paths:
       responses:
         '200':
           description: Changes batch
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncChanges' }
         '401':
           description: Missing or invalid node identity
 
@@ -443,6 +454,15 @@ paths:
       responses:
         '200':
           description: Project registered (key id returned; private key stays server-side)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [project, key_id, public_key]
+                properties:
+                  project: { type: string }
+                  key_id: { type: string }
+                  public_key: { type: string }
         '401':
           description: Missing or invalid admin token
         '403':
@@ -455,9 +475,17 @@ paths:
         Generates an Ed25519 keypair for a downstream node, stores the
         public key with its channel permissions, and returns the private
         key exactly once (operator handoff). Requires the admin token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterNodeRequest' }
       responses:
         '200':
           description: Node registered (private key returned once)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegisterNodeResponse' }
         '401':
           description: Missing or invalid admin token
         '403':
@@ -468,6 +496,11 @@ paths:
       responses:
         '200':
           description: Node list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/NodeInfo' }
         '401':
           description: Missing or invalid admin token
 
@@ -622,6 +655,108 @@ components:
             stale: { type: boolean }
           required: [tier, offline, states_seq, stale]
       required: [project, channel, version, seq, yanked, grace, resolved_from, platforms, resources, provenance, signature, serving_node]
+
+    StateEntry:
+      type: object
+      description: One yanked (revoked) version.
+      properties:
+        project: { type: string }
+        channel: { type: string }
+        version: { type: string }
+        at: { type: string, description: Yank time (RFC 3339) }
+        reason: { type: string }
+      required: [project, channel, version, at]
+
+    GraceEntry:
+      type: object
+      description: One version marked for grace-period removal.
+      properties:
+        project: { type: string }
+        channel: { type: string }
+        version: { type: string }
+        at: { type: string, description: Grace mark time (RFC 3339) }
+        remove_at: { type: string, description: Removal deadline (RFC 3339) }
+      required: [project, channel, version, at, remove_at]
+
+    StatesPayload:
+      type: object
+      description: >
+        Root-signed selection-states payload distributed with sync; mirrors
+        skip/mark versions accordingly.
+      properties:
+        seq: { type: integer, description: Monotonic; reject regression. }
+        updated_at: { type: string }
+        yanked:
+          type: array
+          items: { $ref: '#/components/schemas/StateEntry' }
+        grace:
+          type: array
+          items: { $ref: '#/components/schemas/GraceEntry' }
+      required: [seq, updated_at, yanked, grace]
+
+    VersionRef:
+      type: object
+      description: Unique identifier of a version.
+      properties:
+        project: { type: string }
+        channel: { type: string }
+        version: { type: string }
+      required: [project, channel, version]
+
+    SyncChanges:
+      type: object
+      description: >
+        Mirror sync batch (pull-only). Keyring/states carry the current
+        values when changed; manifests are the publications since the
+        cursor; removed notifies physical removals.
+      properties:
+        cursor: { type: string, description: Opaque cursor for the next sync. }
+        keyring: { $ref: '#/components/schemas/Envelope' }
+        states: { $ref: '#/components/schemas/Envelope' }
+        manifests:
+          type: array
+          items: { $ref: '#/components/schemas/Envelope' }
+        removed:
+          type: array
+          items: { $ref: '#/components/schemas/VersionRef' }
+      required: [cursor, manifests]
+
+    RegisterNodeRequest:
+      type: object
+      description: Node identity registration input.
+      properties:
+        name: { type: string, description: Node name (project-name shape). }
+        channels:
+          type: array
+          items: { type: string }
+          description: Channel permissions; absent or empty means all channels.
+      required: [name]
+
+    RegisterNodeResponse:
+      type: object
+      description: >
+        Node identity registration answer; the private key appears exactly
+        once (operator handoff).
+      properties:
+        node_id: { type: string }
+        public_key: { type: string }
+        private_key: { type: string }
+        channels:
+          type: array
+          items: { type: string }
+      required: [node_id, public_key, private_key, channels]
+
+    NodeInfo:
+      type: object
+      description: Public view of a node identity (public key and channel permissions).
+      properties:
+        node_id: { type: string }
+        public_key: { type: string }
+        channels:
+          type: array
+          items: { type: string }
+        created: { type: string }
+      required: [node_id, public_key, channels, created]
 
   securitySchemes:
     bearerToken:

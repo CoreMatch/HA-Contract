@@ -465,6 +465,15 @@ check_fields "Grail/VersionManifest"      "$GRAIL_YAML" VersionManifestPayload  
 check_fields "Grail/ResolveResponse"      "$GRAIL_YAML" ResolveResponse            "$GRAIL_MODEL_GO" ResolveResponse omitempty
 check_fields "Grail/GraceInfo"            "$GRAIL_YAML" "ResolveResponse/grace"    "$GRAIL_MODEL_GO" GraceInfo       omitempty
 check_fields "Grail/ServingNode"          "$GRAIL_YAML" "ResolveResponse/serving_node" "$GRAIL_MODEL_GO" ServingNode omitempty
+# Sync/states distribution and node-identity surfaces.
+check_fields "Grail/StateEntry"           "$GRAIL_YAML" StateEntry                 "$GRAIL_MODEL_GO" StateEntry           omitempty
+check_fields "Grail/GraceEntry"           "$GRAIL_YAML" GraceEntry                 "$GRAIL_MODEL_GO" GraceEntry           omitempty
+check_fields "Grail/StatesPayload"        "$GRAIL_YAML" StatesPayload              "$GRAIL_MODEL_GO" StatesPayload        omitempty
+check_fields "Grail/VersionRef"           "$GRAIL_YAML" VersionRef                 "$GRAIL_MODEL_GO" VersionRef           omitempty
+check_fields "Grail/SyncChanges"          "$GRAIL_YAML" SyncChanges                "$GRAIL_MODEL_GO" SyncChanges          omitempty
+check_fields "Grail/RegisterNodeRequest"  "$GRAIL_YAML" RegisterNodeRequest        "$GRAIL_MODEL_GO" RegisterNodeRequest  names-only
+check_fields "Grail/RegisterNodeResponse" "$GRAIL_YAML" RegisterNodeResponse       "$GRAIL_MODEL_GO" RegisterNodeResponse omitempty
+check_fields "Grail/NodeInfo"             "$GRAIL_YAML" NodeInfo                   "$GRAIL_MODEL_GO" NodeInfo             omitempty
 
 # HA-WebUI-SDKHandler revision info (GET /api/revision response). The
 # Revision schema's `switched` property belongs to the publish result shape
