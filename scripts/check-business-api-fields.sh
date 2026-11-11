@@ -102,14 +102,14 @@ if [[ "${1:-}" == "--self-test" ]]; then
     CASCADE_REPO_DIR="$CASCADE_DIR"
   )
 
-  echo "self-test[1/3]: clean fixture must pass"
+  echo "self-test[1/4]: clean fixture must pass"
   if ! env "${REPO_ENV[@]}" bash "$FIX/scripts/$SCRIPT_NAME" >"$FIX/clean.log" 2>&1; then
     cat "$FIX/clean.log" >&2
     echo "SELF-TEST FAILED: clean fixture reported drift" >&2
     exit 1
   fi
 
-  echo "self-test[2/3]: dropping a required field from QueueStats must fail"
+  echo "self-test[2/4]: dropping a required field from QueueStats must fail"
   sed -i 's#required: \[players, parties, average_wait_seconds\]#required: [players, parties]#' \
     "$FIX/docs/api/openapi/matchcorearena-business.yaml"
   grep -q 'required: \[players, parties\]$' "$FIX/docs/api/openapi/matchcorearena-business.yaml" || {
@@ -127,7 +127,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
     exit 1
   }
 
-  echo "self-test[3/3]: dropping playerId from the Cascade plugin PlayerInfo schema must fail"
+  echo "self-test[3/4]: dropping playerId from the Cascade plugin PlayerInfo schema must fail"
   # Restore clean contracts, then drop playerId from the PlayerInfo required
   # list (the code field is non-omitempty, so the required sets diverge).
   cp -r "$ROOT/docs/api/openapi/"*.yaml "$FIX/docs/api/openapi/"
@@ -148,7 +148,30 @@ if [[ "${1:-}" == "--self-test" ]]; then
     exit 1
   }
 
-  echo "self-test passed: clean green; QueueStats and Cascade PlayerInfo mutations red."
+  echo "self-test[4/4]: downgrading Avalon plugin PlayerInfo.address to optional must fail"
+  # Restore clean contracts, then drop address from the Avalon PlayerInfo
+  # required list (the code field is non-omitempty, so the required sets
+  # diverge). Guards the new allOf/subpath extraction and the 16 Avalon
+  # plugin payload pairs.
+  cp -r "$ROOT/docs/api/openapi/"*.yaml "$FIX/docs/api/openapi/"
+  sed -i 's#\[name, uuid, team, slot, host, bot, spectator, admin, address\]#[name, uuid, team, slot, host, bot, spectator, admin]#' \
+    "$FIX/docs/api/openapi/avalon-plugin-v1.yaml"
+  grep -q '\[name, uuid, team, slot, host, bot, spectator, admin\]' "$FIX/docs/api/openapi/avalon-plugin-v1.yaml" || {
+    echo "SELF-TEST FAILED: could not inject the Avalon PlayerInfo mutation" >&2
+    exit 1
+  }
+  if env "${REPO_ENV[@]}" bash "$FIX/scripts/$SCRIPT_NAME" >"$FIX/mutated3.log" 2>&1; then
+    cat "$FIX/mutated3.log" >&2
+    echo "SELF-TEST FAILED: mutated Avalon plugin schema did NOT trigger drift" >&2
+    exit 1
+  fi
+  grep -q "address" "$FIX/mutated3.log" || {
+    cat "$FIX/mutated3.log" >&2
+    echo "SELF-TEST FAILED: drift report does not name address" >&2
+    exit 1
+  }
+
+  echo "self-test passed: clean green; QueueStats, Cascade PlayerInfo and Avalon PlayerInfo mutations red."
   exit 0
 fi
 
@@ -159,7 +182,13 @@ if ! (cd "$ROOT/scripts/structjson" && go build -o "$tmpdir/structjson" .); then
   fail "structjson build failed"
 fi
 
-# schema_fields <yaml> <schema-name> -> "name<TAB>required|optional" lines
+# schema_fields <yaml> <schema-name[/sub/path]> -> "name<TAB>required|optional"
+# The schema name may carry a slash-separated subpath (e.g.
+# "EventEnvelope/server" or "GameOverEvent/result") to reach a nested object
+# that is specified inline rather than as a named schema. allOf compositions
+# are flattened (properties and required merged across every $ref-resolved
+# branch) so event schemas built as "envelope + event block" compare as one
+# field set; oneOf/anyOf nodes resolve to their first object branch.
 schema_fields() {
   python3 - "$1" "$2" <<'PY'
 import sys
@@ -167,16 +196,62 @@ try:
     import yaml
 except ImportError:
     sys.exit("PyYAML not available")
-path, name = sys.argv[1], sys.argv[2]
+path = sys.argv[1]
+parts = sys.argv[2].split("/")
+name, subpath = parts[0], parts[1:]
 with open(path, encoding="utf-8") as f:
     doc = yaml.safe_load(f)
-schemas = ((doc or {}).get("components") or {}).get("schemas") or {}
-schema = schemas.get(name)
-if not isinstance(schema, dict):
+components = (doc or {}).get("components") or {}
+schemas = components.get("schemas") or {}
+
+def resolve(node, depth=0):
+    if depth > 12:
+        sys.exit(f"schema resolution too deep (circular reference?) in {path}")
+    if not isinstance(node, dict):
+        return {}
+    if "$ref" in node:
+        ref = node["$ref"]
+        prefix = "#/components/"
+        if not ref.startswith(prefix):
+            sys.exit(f"unsupported $ref '{ref}' in {path}")
+        target = components
+        for seg in ref[len(prefix):].split("/"):
+            target = (target or {}).get(seg)
+        if not isinstance(target, dict):
+            sys.exit(f"$ref '{ref}' does not resolve in {path}")
+        return resolve(target, depth + 1)
+    if "allOf" in node:
+        props, req = {}, set()
+        for branch in list(node["allOf"]) + [node]:
+            b = resolve({k: v for k, v in branch.items() if k != "allOf"}, depth + 1) \
+                if branch is node else resolve(branch, depth + 1)
+            for k, v in (b.get("properties") or {}).items():
+                props[k] = v
+            req |= set(b.get("required") or [])
+        out = dict(node)
+        out["properties"] = props
+        out["required"] = sorted(req)
+        return out
+    for combo in ("oneOf", "anyOf"):
+        if combo in node:
+            for branch in node[combo]:
+                b = resolve(branch, depth + 1)
+                if b.get("properties"):
+                    return b
+            return node
+    return node
+
+schema = resolve(schemas.get(name))
+if not isinstance(schema, dict) or not schema:
     sys.exit(f"schema {name} not found in {path}")
+for step in subpath:
+    props = schema.get("properties") or {}
+    if step not in props:
+        sys.exit(f"subpath step '{step}' not found under schema {name} in {path}")
+    schema = resolve(props[step])
 props = schema.get("properties") or {}
 if not props:
-    sys.exit(f"schema {name} has 0 properties — refusing to compare against nothing")
+    sys.exit(f"schema {sys.argv[2]} has 0 properties — refusing to compare against nothing")
 required = set(schema.get("required") or [])
 for pname in sorted(props):
     print(f"{pname}\t{'required' if pname in required else 'optional'}")
@@ -283,6 +358,32 @@ CASCADE_EVENT_GO="$CASCADE_DIR/internal/plugin/event.go"
 check_fields "Cascade/PlayerInfo"    "$CASCADE_PLUGIN_YAML" PlayerInfo    "$CASCADE_EVENT_GO" PlayerInfo    omitempty
 check_fields "Cascade/RouteDecision" "$CASCADE_PLUGIN_YAML" RouteDecision "$CASCADE_EVENT_GO" RouteDecision omitempty
 check_fields "Cascade/ProxyInfo"     "$CASCADE_PLUGIN_YAML" ProxyInfo     "$CASCADE_EVENT_GO" ProxyInfo     omitempty
+
+# Avalon out-of-process plugin event payloads (avalon-plugin/v1). Every event
+# struct serializes verbatim to its contract event schema (allOf envelope +
+# event block, flattened by the extractor); nested segments that have named
+# Go structs are wired through subpath extraction. Verdict/Manifest are
+# plugin-side artifacts (template implements them), not Avalon-serialized,
+# so they are not wired here.
+AVALON_PLUGIN_YAML="$ROOT/docs/api/openapi/avalon-plugin-v1.yaml"
+AVALON_EVENT_GO="$AVALON_DIR/internal/plugin/event.go"
+AVALON_EVENTV2_GO="$AVALON_DIR/internal/plugin/eventv2.go"
+check_fields "Avalon-plugin/EventServer"        "$AVALON_PLUGIN_YAML" "EventEnvelope/server" "$AVALON_EVENT_GO"   eventServer        omitempty
+check_fields "Avalon-plugin/RoomCreateEvent"    "$AVALON_PLUGIN_YAML" RoomCreateEvent        "$AVALON_EVENT_GO"   roomCreateEvent    omitempty
+check_fields "Avalon-plugin/GameOverEvent"      "$AVALON_PLUGIN_YAML" GameOverEvent          "$AVALON_EVENT_GO"   gameOverEvent      omitempty
+check_fields "Avalon-plugin/GameOverResult"     "$AVALON_PLUGIN_YAML" "GameOverEvent/result" "$AVALON_EVENT_GO"   gameOverResult     omitempty
+check_fields "Avalon-plugin/PlayerInfo"         "$AVALON_PLUGIN_YAML" PlayerInfo             "$AVALON_EVENTV2_GO" PlayerInfo         omitempty
+check_fields "Avalon-plugin/RoomRef"            "$AVALON_PLUGIN_YAML" RoomRef                "$AVALON_EVENTV2_GO" roomRef            omitempty
+check_fields "Avalon-plugin/PlayerJoinEvent"    "$AVALON_PLUGIN_YAML" PlayerJoinEvent        "$AVALON_EVENTV2_GO" playerJoinEvent    omitempty
+check_fields "Avalon-plugin/PlayerLeaveEvent"   "$AVALON_PLUGIN_YAML" PlayerLeaveEvent       "$AVALON_EVENTV2_GO" playerLeaveEvent   omitempty
+check_fields "Avalon-plugin/PlayerActionEvent"  "$AVALON_PLUGIN_YAML" PlayerActionEvent      "$AVALON_EVENTV2_GO" playerActionEvent  omitempty
+check_fields "Avalon-plugin/MatchInfo"          "$AVALON_PLUGIN_YAML" "GameStartEvent/match" "$AVALON_EVENTV2_GO" MatchInfo          omitempty
+check_fields "Avalon-plugin/GameStartEvent"     "$AVALON_PLUGIN_YAML" GameStartEvent         "$AVALON_EVENTV2_GO" gameStartEvent     omitempty
+check_fields "Avalon-plugin/PlayerChatEvent"    "$AVALON_PLUGIN_YAML" PlayerChatEvent        "$AVALON_EVENTV2_GO" playerChatEvent    omitempty
+check_fields "Avalon-plugin/UnitOperationEvent" "$AVALON_PLUGIN_YAML" UnitOperationEvent     "$AVALON_EVENTV2_GO" unitOperationEvent omitempty
+check_fields "Avalon-plugin/FactoryBuildEvent"  "$AVALON_PLUGIN_YAML" FactoryBuildEvent      "$AVALON_EVENTV2_GO" factoryBuildEvent  omitempty
+check_fields "Avalon-plugin/ConnectionNewEvent" "$AVALON_PLUGIN_YAML" ConnectionNewEvent     "$AVALON_EVENTV2_GO" connectionNewEvent omitempty
+check_fields "Avalon-plugin/PlayerKickedEvent"  "$AVALON_PLUGIN_YAML" PlayerKickedEvent      "$AVALON_EVENTV2_GO" playerKickedEvent  omitempty
 
 if [[ "$DRIFT_FOUND" -eq 1 ]]; then
   echo "Field-level API drift detected."

@@ -563,8 +563,11 @@ components:
       description: >-
         Player identity as known to Avalon. In-game statistics
         (kills/losses/economy/positions/survive state) are engine interior
-        and are deliberately not part of the contract.
-      required: [name, uuid, team]
+        and are deliberately not part of the contract. Every field is always
+        serialized (no omitempty in the emitting struct), hence all are
+        required per the ecosystem serialization convention.
+      required:
+        [name, uuid, team, slot, host, bot, spectator, admin, address]
       properties:
         name:
           type: string
