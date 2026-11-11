@@ -1696,8 +1696,13 @@ components:
             response; each entry is merged into the root response object
     RouteRule:
       type: object
-      required: [scope, paths]
+      required: [service, scope, paths, pre_url, post_url]
       properties:
+        service:
+          type: string
+          description: >
+            Name of the microservice that registered this rule (always
+            serialized; the registry is keyed per service).
         scope:
           type: string
         paths:
@@ -1723,8 +1728,13 @@ components:
             $ref: '#/components/schemas/RouteRule'
     RelayRule:
       type: object
-      required: [dest, source]
+      required: [service, dest, source]
       properties:
+        service:
+          type: string
+          description: >
+            Name of the microservice that registered this rule (always
+            serialized; the registry is keyed per service).
         dest:
           type: string
           description: Public path prefix on the main service
