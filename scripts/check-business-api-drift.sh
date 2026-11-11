@@ -58,7 +58,7 @@ resolve_repo() {
     return
   fi
   local candidate
-  for candidate in "$ROOT/../$name" "$HOME/Desktop/HA/$name" "$@"; do
+  for candidate in "$ROOT/../$name" "$HOME/Desktop/HA/$name" "$ROOT/../hrpauth/$name" "$ROOT/../matchcore/$name" "$ROOT/../rw/$name" "$ROOT/../maintanance/$name" "$@"; do
     if [[ -d "$candidate" ]]; then
       echo "$(readlink -f "$candidate")"
       return
@@ -109,19 +109,20 @@ if [[ "${1:-}" == "--self-test" ]]; then
   cp "$0" "$FIX/scripts/"
   SCRIPT_NAME="$(basename "$0")"
 
-  # Repo locations: honour caller env, fall back to siblings of this repo
-  # (the CI layout checks every implementation repo out next to HA-Contract).
+  # Repo locations: reuse the paths already resolved at the top of this run
+  # (layout-agnostic — flat CI checkouts and the nested local workspace both
+  # resolve there), so the fixture script points at the same real repos.
   REPO_ENV=(
-    HRPAUTH_REPO_DIR="${HRPAUTH_REPO_DIR:-$ROOT/../HRPAuth}"
-    HASKINLIB_REPO_DIR="${HASKINLIB_REPO_DIR:-$ROOT/../HASkinLib}"
-    YGGDRASIL_REPO_DIR="${YGGDRASIL_REPO_DIR:-$ROOT/../HRPAuth-Yggdrasil-API}"
-    MATCHCOREARENA_REPO_DIR="${MATCHCOREARENA_REPO_DIR:-$ROOT/../MatchCoreArena-Server}"
-    WINNERPROXY_REPO_DIR="${WINNERPROXY_REPO_DIR:-$ROOT/../WinnerProxy}"
-    CASCADE_REPO_DIR="${CASCADE_REPO_DIR:-$ROOT/../Cascade}"
-    DEPLOYER_REPO_DIR="${DEPLOYER_REPO_DIR:-$ROOT/../HA-Services-Deployer}"
-    HASKINPROXY_REPO_DIR="${HASKINPROXY_REPO_DIR:-$ROOT/../HASkinProxy}"
-    SDKHANDLER_REPO_DIR="${SDKHANDLER_REPO_DIR:-$ROOT/../HA-WebUI-SDKHandler}"
-    AVALON_REPO_DIR="${AVALON_REPO_DIR:-$ROOT/../Avalon}"
+    HRPAUTH_REPO_DIR="$HRPAUTH_DIR"
+    HASKINLIB_REPO_DIR="$HASKINLIB_DIR"
+    YGGDRASIL_REPO_DIR="$YGGDRASIL_DIR"
+    MATCHCOREARENA_REPO_DIR="$MATCHCOREARENA_DIR"
+    WINNERPROXY_REPO_DIR="$WINNERPROXY_DIR"
+    CASCADE_REPO_DIR="$CASCADE_DIR"
+    DEPLOYER_REPO_DIR="$DEPLOYER_DIR"
+    HASKINPROXY_REPO_DIR="$HASKINPROXY_DIR"
+    SDKHANDLER_REPO_DIR="$SDKHANDLER_DIR"
+    AVALON_REPO_DIR="$AVALON_DIR"
   )
 
   echo "self-test[1/2]: clean fixture must pass"

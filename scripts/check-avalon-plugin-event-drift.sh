@@ -47,7 +47,7 @@ resolve_avalon() {
 		echo "$env_value"
 		return
 	fi
-	for candidate in "$ROOT/../Avalon" "$HOME/Desktop/HA/Avalon"; do
+	for candidate in "$ROOT/../Avalon" "$HOME/Desktop/HA/Avalon" "$ROOT/../rw/Avalon"; do
 		if [[ -d "$candidate" ]]; then
 			echo "$(readlink -f "$candidate")"
 			return
@@ -78,7 +78,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
 	cp "$CONTRACT_YAML" "$FIX/docs/api/openapi/"
 	cp "$0" "$FIX/scripts/"
 	SCRIPT_NAME="$(basename "$0")"
-	FIX_ENV=(AVALON_REPO_DIR="${AVALON_REPO_DIR:-$ROOT/../Avalon}")
+	FIX_ENV=(AVALON_REPO_DIR="$AVALON_DIR")
 
 	echo "self-test[1/2]: clean fixture must pass"
 	if ! env "${FIX_ENV[@]}" bash "$FIX/scripts/$SCRIPT_NAME" >"$FIX/clean.log" 2>&1; then

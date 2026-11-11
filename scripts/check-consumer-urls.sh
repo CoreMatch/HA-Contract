@@ -24,9 +24,10 @@
 # concatenation is normalized to `.../{param}`.
 #
 # Discipline: extraction yielding 0 URLs for a consumer is a HARD ERROR
-# (silent false greens are forbidden). Known-broken consumer paths are
-# listed explicitly below and reported as LOUD WARNINGS on every run —
-# they are exceptions with owners, not silent skips.
+# (silent false greens are forbidden). There are NO known-broken exceptions:
+# any consumer URL that resolves to no contract path is a HARD FAILURE. A
+# previously broken link that was fixed must stay fixed — if it regresses,
+# this check turns red rather than downgrading to a warning.
 #
 # Exit codes: 0 = all consumer URLs resolve; 1 = unresolved URL(s);
 # 2 = environment/read error.
@@ -48,7 +49,7 @@ resolve_repo() {
     return
   fi
   local candidate
-  for candidate in "$ROOT/../$name" "$HOME/Desktop/HA/$name" "$@"; do
+  for candidate in "$ROOT/../$name" "$HOME/Desktop/HA/$name" "$ROOT/../hrpauth/$name" "$ROOT/../matchcore/$name" "$ROOT/../rw/$name" "$ROOT/../maintanance/$name" "$@"; do
     if [[ -d "$candidate" ]]; then
       echo "$(readlink -f "$candidate")"
       return
@@ -84,23 +85,28 @@ if [[ "${1:-}" == "--self-test" ]]; then
   SCRIPT_NAME="$(basename "$0")"
 
   REPO_ENV=(
-    MCA_CLIENT_REPO_DIR="${MCA_CLIENT_REPO_DIR:-$ROOT/../MatchCoreArena-Client}"
-    VELOCITYGATE_REPO_DIR="${VELOCITYGATE_REPO_DIR:-$ROOT/../MatchCoreArena-VelocityGate}"
-    BEDWARSREL_MCA_REPO_DIR="${BEDWARSREL_MCA_REPO_DIR:-$ROOT/../BedwarsRel-MCA}"
-    HRPAUTH_SPIGOT_REPO_DIR="${HRPAUTH_SPIGOT_REPO_DIR:-$ROOT/../HRPAuth-Spigot}"
-    SAMUELCLIENT_REPO_DIR="${SAMUELCLIENT_REPO_DIR:-$ROOT/../SamuelClient}"
-    HASKINPROXY_REPO_DIR="${HASKINPROXY_REPO_DIR:-$ROOT/../HASkinProxy}"
-    HRPAUTH_WEB_REPO_DIR="${HRPAUTH_WEB_REPO_DIR:-$ROOT/../HRPAuth-Web}"
+    MCA_CLIENT_REPO_DIR="$MATCHCOREARENA_CLIENT_DIR"
+    VELOCITYGATE_REPO_DIR="$VELOCITYGATE_DIR"
+    BEDWARSREL_MCA_REPO_DIR="$BEDWARSREL_MCA_DIR"
+    HRPAUTH_SPIGOT_REPO_DIR="$HRPAUTH_SPIGOT_DIR"
+    SAMUELCLIENT_REPO_DIR="$SAMUELCLIENT_DIR"
+    HASKINPROXY_REPO_DIR="$HASKINPROXY_DIR"
+    HRPAUTH_WEB_REPO_DIR="$HRPAUTH_WEB_DIR"
   )
 
-  echo "self-test[1/2]: clean fixture must pass"
+  echo "self-test[1/3]: clean fixture must pass"
   if ! env "${REPO_ENV[@]}" bash "$FIX/scripts/$SCRIPT_NAME" >"$FIX/clean.log" 2>&1; then
     cat "$FIX/clean.log" >&2
     echo "SELF-TEST FAILED: clean fixture reported drift" >&2
     exit 1
   fi
+  if grep -q "WARNING" "$FIX/clean.log"; then
+    cat "$FIX/clean.log" >&2
+    echo "SELF-TEST FAILED: clean fixture emitted a warning (no known-broken exceptions should remain)" >&2
+    exit 1
+  fi
 
-  echo "self-test[2/2]: renaming /api/matchmaking/leave must fail"
+  echo "self-test[2/3]: renaming /api/matchmaking/leave must fail"
   sed -i 's#^  /api/matchmaking/leave:#  /api/matchmaking/leave-renamed:#' \
     "$FIX/docs/api/openapi/matchcorearena-business.yaml"
   grep -q "leave-renamed" "$FIX/docs/api/openapi/matchcorearena-business.yaml" || {
@@ -118,7 +124,46 @@ if [[ "${1:-}" == "--self-test" ]]; then
     exit 1
   }
 
-  echo "self-test passed: clean fixture green, mutated fixture red."
+  echo "self-test[3/3]: re-breaking the two fixed texture links must fail hard (no warning backdoor)"
+  # Restore clean contracts, then drop the two texture targets that the fixed
+  # consumers now call (HASkinProxy -> DELETE /texture/delete/{uuid}/{type},
+  # HRPAuth-Web -> POST /texture/upload/{uuid}). With the known-broken
+  # exceptions removed, these unresolved URLs must be HARD failures.
+  cp "$ROOT/docs/api/openapi/"*.yaml "$FIX/docs/api/openapi/"
+  sed -i 's#^  /texture/delete/{uuid}/{type}:#  /texture/delete-removed:#' \
+    "$FIX/docs/api/openapi/hrpauth-yggdrasil-business.yaml"
+  sed -i 's#^  /texture/upload/{uuid}:#  /texture/upload-removed:#' \
+    "$FIX/docs/api/openapi/hrpauth-yggdrasil-business.yaml"
+  grep -q "texture/delete-removed" "$FIX/docs/api/openapi/hrpauth-yggdrasil-business.yaml" || {
+    echo "SELF-TEST FAILED: could not inject the texture/delete mutation" >&2
+    exit 1
+  }
+  grep -q "texture/upload-removed" "$FIX/docs/api/openapi/hrpauth-yggdrasil-business.yaml" || {
+    echo "SELF-TEST FAILED: could not inject the texture/upload mutation" >&2
+    exit 1
+  }
+  if env "${REPO_ENV[@]}" bash "$FIX/scripts/$SCRIPT_NAME" >"$FIX/mutated2.log" 2>&1; then
+    cat "$FIX/mutated2.log" >&2
+    echo "SELF-TEST FAILED: re-broken texture links did NOT trigger drift" >&2
+    exit 1
+  fi
+  grep -q "texture/delete" "$FIX/mutated2.log" || {
+    cat "$FIX/mutated2.log" >&2
+    echo "SELF-TEST FAILED: drift report does not name texture/delete" >&2
+    exit 1
+  }
+  grep -q "texture/upload" "$FIX/mutated2.log" || {
+    cat "$FIX/mutated2.log" >&2
+    echo "SELF-TEST FAILED: drift report does not name texture/upload" >&2
+    exit 1
+  }
+  if grep -q "WARNING" "$FIX/mutated2.log"; then
+    cat "$FIX/mutated2.log" >&2
+    echo "SELF-TEST FAILED: re-broken links were downgraded to WARNING (backdoor still present)" >&2
+    exit 1
+  fi
+
+  echo "self-test passed: clean green; both breakage mutations red with no warning backdoor."
   exit 0
 fi
 
@@ -169,19 +214,6 @@ cat > "$tmpdir/ygg-protocol-paths.txt" <<'EOF'
 /textures/{hash}
 EOF
 
-# Known-broken consumer paths: reported as loud warnings on every run.
-# POST /texture/delete: HASkinProxy forwards to a route the Yggdrasil-API
-#   does not register (it registers DELETE /texture/delete/{uuid}/{type}).
-# - /texture/upload: HRPAuth-Web's generated yggdrasil SDK calls
-#   POST /yggdrasil-api/texture/upload (legacy HASkinLib-style form), but
-#   Yggdrasil-API registers only POST /texture/upload/{uuid}.
-# Tracked for the owning repos; removing an entry without fixing the code
-# makes the check fail, which is intentional.
-cat > "$tmpdir/known-broken.txt" <<'EOF'
-POST /texture/delete
-- /texture/upload
-EOF
-
 # normalize_path: :param and trailing-slash-concatenation -> {param}
 normalize_path() {
   sed -E 's/:([A-Za-z_][A-Za-z0-9_]*)/{\1}/g; s#/$#/{param}#; s#\{[A-Za-z_][A-Za-z0-9_]*\}#{param}#g'
@@ -202,7 +234,6 @@ path_in() {
 }
 
 DRIFT_FOUND=0
-WARNED=0
 
 # check_url <consumer> <method|-> <path> <paths-file...>
 check_url() {
@@ -212,13 +243,7 @@ check_url() {
   if path_in "$norm" "$@"; then
     return 0
   fi
-  local key="$method $norm"
-  if grep -qxF -e "$key" "$tmpdir/known-broken.txt" 2>/dev/null || grep -qxF -e "- $norm" "$tmpdir/known-broken.txt" 2>/dev/null; then
-    echo "WARNING: [$consumer] $key is KNOWN-BROKEN (documented exception in $(basename "$0")); the upstream route is not registered"
-    WARNED=1
-    return 0
-  fi
-  echo "DRIFT: [$consumer] URL $key resolves to no contract path"
+  echo "DRIFT: [$consumer] URL $method $norm resolves to no contract path"
   DRIFT_FOUND=1
 }
 
@@ -277,11 +302,8 @@ hsp_all="$(printf '%s\n%s\n' "$hsp_core" "$hsp_token" | grep -v '^$' | sort -u)"
 [[ -n "$hsp_ygg" ]] || fail "HASkinProxy: extracted 0 yggdrasil upstream URLs — refusing to pass silently"
 [[ -n "$hsp_all" ]] || fail "HASkinProxy: extracted 0 core upstream URLs — refusing to pass silently"
 while IFS= read -r path; do
-  # /texture/delete is a POST forward; everything else here is GET-ish or
-  # method-agnostic — check path existence across method-agnostic sets.
-  method="-"
-  [[ "$path" == /texture/delete ]] && method="POST"
-  check_url "HASkinProxy" "$method" "$path" "$tmpdir/ygg-paths.txt" "$tmpdir/ygg-protocol-paths.txt"
+  # Method-agnostic: the contract path sets are compared by path only.
+  check_url "HASkinProxy" "-" "$path" "$tmpdir/ygg-paths.txt" "$tmpdir/ygg-protocol-paths.txt"
 done <<<"$hsp_ygg"
 while IFS= read -r path; do
   check_url "HASkinProxy" "-" "$path" "$tmpdir/hrpauth-paths.txt"
@@ -318,8 +340,4 @@ if [[ "$DRIFT_FOUND" -eq 1 ]]; then
   exit 1
 fi
 
-if [[ "$WARNED" -eq 1 ]]; then
-  echo "Consumer URL check passed (with documented known-broken exceptions above)."
-else
-  echo "Consumer URL check passed."
-fi
+echo "Consumer URL check passed."

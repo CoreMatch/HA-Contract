@@ -44,7 +44,7 @@ resolve_repo() {
     return
   fi
   local candidate
-  for candidate in "$ROOT/../$name" "$HOME/Desktop/HA/$name" "$@"; do
+  for candidate in "$ROOT/../$name" "$HOME/Desktop/HA/$name" "$ROOT/../hrpauth/$name" "$ROOT/../matchcore/$name" "$ROOT/../rw/$name" "$ROOT/../maintanance/$name" "$@"; do
     if [[ -d "$candidate" ]]; then
       echo "$(readlink -f "$candidate")"
       return
@@ -79,11 +79,11 @@ if [[ "${1:-}" == "--self-test" ]]; then
   SCRIPT_NAME="$(basename "$0")"
 
   REPO_ENV=(
-    HRPAUTH_REPO_DIR="${HRPAUTH_REPO_DIR:-$ROOT/../HRPAuth}"
-    HASKINLIB_REPO_DIR="${HASKINLIB_REPO_DIR:-$ROOT/../HASkinLib}"
-    YGGDRASIL_REPO_DIR="${YGGDRASIL_REPO_DIR:-$ROOT/../HRPAuth-Yggdrasil-API}"
-    MATCHCOREARENA_REPO_DIR="${MATCHCOREARENA_REPO_DIR:-$ROOT/../MatchCoreArena-Server}"
-    AVALON_REPO_DIR="${AVALON_REPO_DIR:-$ROOT/../Avalon}"
+    HRPAUTH_REPO_DIR="$HRPAUTH_DIR"
+    HASKINLIB_REPO_DIR="$HASKINLIB_DIR"
+    YGGDRASIL_REPO_DIR="$YGGDRASIL_DIR"
+    MATCHCOREARENA_REPO_DIR="$MATCHCOREARENA_DIR"
+    AVALON_REPO_DIR="$AVALON_DIR"
   )
 
   echo "self-test[1/2]: clean fixture must pass"

@@ -17,13 +17,6 @@ info:
     it anonymously). `POST /{username}/texture/delete` forwards the caller's
     `Authorization` header unchanged to the upstream; HASkinProxy itself
     performs no authentication.
-
-    Known upstream mismatch (recorded 2026-11-08): the delete forwarding
-    targets `POST /yggdrasil-api/texture/delete`, which is not a registered
-    route of HRPAuth-Yggdrasil-API (the registered route is
-    `DELETE /texture/delete/{uuid}/{type}`). Until the proxy or the upstream
-    is aligned, the forwarded request answers the upstream's 404
-    `route_not_found`, which this surface passes through verbatim.
 servers:
   - url: /
 paths:
@@ -98,36 +91,58 @@ paths:
           description: Hash unknown to the upstream (empty body)
   /{username}/texture/delete:
     post:
-      summary: Forward a texture deletion to the upstream (legacy)
+      summary: Delete a profile texture binding (CSL-facing passthrough)
       description: >
-        Reads the request body unchanged and forwards it to the upstream
-        `POST /texture/delete` together with the caller's `Authorization`
-        header; HASkinProxy does not authenticate the call itself. The
-        upstream status code and response body are passed through verbatim
-        (Content-Type forced to `application/json`). On a 2xx upstream
+        Accepts the legacy CSL delete body and maps it onto the upstream
+        route `DELETE /texture/delete/{uuid}/{type}` registered by
+        HRPAuth-Yggdrasil-API: `profile_id` becomes the `{uuid}` path
+        segment and `texture_type` the `{type}` segment. The caller's
+        `Authorization` header is forwarded unchanged; HASkinProxy does not
+        authenticate the call itself (the upstream validates the Bearer
+        token and profile ownership). The upstream status code and response
+        body are passed through verbatim (Content-Type forced to
+        `application/json`); non-2xx upstream answers (the upstream's own
+        `401` / `403` / `500`) are forwarded the same way. On a 2xx upstream
         answer the local profile cache entry for `username` and the cached
-        texture entries referenced by it are evicted; the `username` path
+        texture entries it references are evicted; the `username` path
         segment is used ONLY for this cache eviction.
 
-        Transport failure toward the upstream answers
-        `502 {"error": "<reason>"}`; an unreadable request body answers
-        `400 {"error": "cannot read body"}`.
-
-        Known upstream mismatch: see the info description — the upstream
-        route this forwards to is not currently registered, so the passed-
-        through answer is the upstream's 404 `route_not_found` until the
-        surfaces are aligned.
+        Local validation failures (before any upstream call) answer
+        `400 {"error": ...}`: `username required`, `cannot read body`,
+        `invalid JSON body`, or `profile_id and texture_type are required`.
+        A transport failure toward the upstream answers
+        `502 {"error": "<reason>"}`.
       parameters:
         - in: path
           name: username
           required: true
           schema: { type: string }
           description: Used only to evict local cache entries on success
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [profile_id, texture_type]
+              properties:
+                profile_id:
+                  type: string
+                  description: Profile UUID; mapped to the upstream `{uuid}` path segment
+                texture_type:
+                  type: string
+                  description: >
+                    Texture slot forwarded as the upstream `{type}` path
+                    segment (`skin` or `cape`); any other legacy body fields
+                    are ignored.
       responses:
         '200':
           description: Upstream 2xx answer passed through verbatim
         '400':
-          description: '`{"error": "cannot read body"}` (unreadable request body)'
+          description: >
+            Local validation failure: `{"error": "username required"}`,
+            `{"error": "cannot read body"}`, `{"error": "invalid JSON body"}`,
+            or `{"error": "profile_id and texture_type are required"}`
         '502':
           description: '`{"error": "<reason>"}` (upstream transport failure)'
 components:
