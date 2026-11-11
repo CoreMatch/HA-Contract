@@ -358,6 +358,24 @@ check_fields "MCA/GroupMember"       "$MCA_YAML" GroupMember       "$MCA_MM" Gro
 check_fields "MCA/MatchmakingStatus" "$MCA_YAML" MatchmakingStatus "$MCA_MM" MatchmakingStatus omitempty
 check_fields "MCA/QueueStats"        "$MCA_YAML" QueueStats        "$MCA_MM" QueueStats        omitempty
 
+# MatchCoreArena user/friend/team/ranking/match models (internal/service).
+# Response/registry shapes follow the omitempty convention; the match report
+# request structs (zero values meaningful, validity checked in the service
+# layer) are names-only. SelfSummary implements the MatchSelfSummary schema.
+check_fields "MCA/User"              "$MCA_YAML" User              "$MATCHCOREARENA_DIR/internal/service/user.go"     User              omitempty
+check_fields "MCA/Friend"            "$MCA_YAML" Friend            "$MATCHCOREARENA_DIR/internal/service/friend.go"   Friend            omitempty
+check_fields "MCA/Team"              "$MCA_YAML" Team              "$MATCHCOREARENA_DIR/internal/service/team.go"     Team              omitempty
+check_fields "MCA/TeamMember"        "$MCA_YAML" TeamMember        "$MATCHCOREARENA_DIR/internal/service/team.go"     TeamMember        omitempty
+check_fields "MCA/Ranking"           "$MCA_YAML" Ranking           "$MATCHCOREARENA_DIR/internal/service/ranking.go"  Ranking           omitempty
+check_fields "MCA/RankingTopResult"  "$MCA_YAML" RankingTopResult  "$MATCHCOREARENA_DIR/internal/service/ranking.go"  RankingTopResult  omitempty
+check_fields "MCA/RankTier"          "$MCA_YAML" RankTier          "$MATCHCOREARENA_DIR/config/config.go"             RankTier          omitempty
+check_fields "MCA/Match"             "$MCA_YAML" Match             "$MATCHCOREARENA_DIR/internal/service/match.go"    Match             omitempty
+check_fields "MCA/MatchSelfSummary"  "$MCA_YAML" MatchSelfSummary  "$MATCHCOREARENA_DIR/internal/service/match.go"    SelfSummary       omitempty
+check_fields "MCA/ParticipantDetail" "$MCA_YAML" ParticipantDetail "$MATCHCOREARENA_DIR/internal/service/match.go"    ParticipantDetail omitempty
+check_fields "MCA/TeamReportInput"   "$MCA_YAML" TeamReportInput   "$MATCHCOREARENA_DIR/internal/service/match.go"    TeamReportInput   names-only
+check_fields "MCA/TeamReportInfo"    "$MCA_YAML" TeamReportInfo    "$MATCHCOREARENA_DIR/internal/service/match.go"    TeamInfo          names-only
+check_fields "MCA/ParticipantReport" "$MCA_YAML" ParticipantReport "$MATCHCOREARENA_DIR/internal/service/match.go"    ParticipantReport names-only
+
 # Avalon cascade backend control plane. RoomSummary.Members is excluded:
 # the contract models it on RoomDetail (allOf), not on RoomSummary.
 check_fields "Avalon/RoomSummary"     "$AVALON_BACKEND_YAML" RoomSummary     "$AVALON_DIR/internal/net/gateway/rooms.go"      RoomSummary      omitempty members
