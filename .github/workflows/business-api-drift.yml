@@ -37,6 +37,7 @@ jobs:
       - { name: Checkout HASkinProxy, uses: actions/checkout@v7, with: { repository: CoreMatch/HASkinProxy, path: HASkinProxy } }
       - { name: Checkout HA-WebUI-SDKHandler, uses: actions/checkout@v7, with: { repository: CoreMatch/HA-WebUI-SDKHandler, path: HA-WebUI-SDKHandler } }
       - { name: Checkout Avalon, uses: actions/checkout@v7, with: { repository: CoreMatch/Avalon, path: Avalon } }
+      - { name: Checkout Grail, uses: actions/checkout@v7, with: { repository: CoreMatch/Grail, path: Grail } }
       # --- consumer repositories (caller side) ---
       - { name: Checkout MatchCoreArena-Client, uses: actions/checkout@v7, with: { repository: CoreMatch/MatchCoreArena-Client, path: MatchCoreArena-Client } }
       - { name: Checkout MatchCoreArena-VelocityGate, uses: actions/checkout@v7, with: { repository: CoreMatch/MatchCoreArena-VelocityGate, path: MatchCoreArena-VelocityGate } }

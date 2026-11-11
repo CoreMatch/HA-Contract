@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HA-Services-Deployer API
-  version: 1.3.0
+  version: 1.4.0
   description: >
     Contract for the HA-Services-Deployer HTTP surface. The service has three
     roles: (1) a read-only delivery service for the version manifest and
@@ -43,6 +43,19 @@ info:
     ordering, idempotent re-runs as resume, failure isolation, one-click
     rollback, `manager != tinyvisor` projects treated foreign/read-only) are
     normative in HA-Services-Deployer `knowledge/0007-bare-metal-orchestration-scope.md`.
+
+    Bare-metal artifact sources (deploy-manifest.yaml
+    `baremetal.artifact.source`): `local_path` (same-machine file + `.sha256`
+    sidecar), `ci_release` (GitHub Release double asset), and since contract
+    1.4.0 `grail` — fetch from a Grail upstream declared per manifest as
+    `grail: {base_url, project, channel, version, platform}`. The Grail
+    source resolves the signed version manifest, verifies the origin
+    signature chain against a locally pinned Grail root public key (held in
+    the Deployer credentials file, never in the manifest), then streams the
+    bytes from the canonical URL under digest verification. The Grail
+    surface itself is contracted in `openapi/grail.yaml`. This HTTP surface
+    (routes) is unchanged by the new source; the version bump records the
+    manifest schema extension.
 servers:
   - url: /
 
