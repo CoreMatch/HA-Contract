@@ -132,6 +132,7 @@ The following error codes are the stable registry for current HA business APIs. 
 | `mca_invite_resolved` | MatchCoreArena: the party invitation was already accepted or rejected; the state transition is terminal (HTTP 409). |
 | `mca_not_invitee` | MatchCoreArena: only the invited player may accept/reject a party invitation (HTTP 403). |
 | `mca_ranking_not_found` | MatchCoreArena: the user has no ranking entry for the requested type/season (`GET /api/rankings/me`, HTTP 404). |
+| `mca_season_exists` | MatchCoreArena: a manual season rollover (`POST /api/seasons/roll`, contract 1.12.0) targeted a season that already exists (target <= current). Safe retry semantics: re-sending a succeeded rollover answers this instead of advancing again (HTTP 409). |
 | `cascade_room_conflict` | Cascade management API: a room code is claimed by more than one backend and cannot be routed |
 | `cascade_backend_unavailable` | Cascade management API: the owning backend is unhealthy or unreachable, so the request cannot be forwarded |
 | `cascade_invalid_internal_key` | Cascade management API: the `X-Internal-Key` header is missing or does not match the key issued by HRPAuth Core |

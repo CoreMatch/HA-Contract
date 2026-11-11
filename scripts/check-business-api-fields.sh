@@ -358,6 +358,7 @@ check_fields "MCA/GroupMember"       "$MCA_YAML" GroupMember       "$MCA_MM" Gro
 check_fields "MCA/MatchmakingStatus" "$MCA_YAML" MatchmakingStatus "$MCA_MM" MatchmakingStatus omitempty
 check_fields "MCA/QueueStats"        "$MCA_YAML" QueueStats        "$MCA_MM" QueueStats        omitempty
 check_fields "MCA/PartyInvite"       "$MCA_YAML" PartyInvite       "$MCA_MM" PartyInvite       omitempty
+check_fields "MCA/SeasonRecord"      "$MCA_YAML" SeasonRecord      "$MATCHCOREARENA_DIR/internal/service/season.go" SeasonRecord omitempty
 
 # MatchCoreArena user/friend/team/ranking/match models (internal/service).
 # Response/registry shapes follow the omitempty convention; the match report

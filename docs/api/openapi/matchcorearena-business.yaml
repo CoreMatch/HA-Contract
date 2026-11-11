@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MatchCoreArena Business API
-  version: 1.11.0
+  version: 1.12.0
   description: >
     Unified specification for MatchCoreArena server business interfaces.
     Authentication via HRPAuth OAuth2 Authorization Code + PKCE.
@@ -1491,6 +1491,106 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
 
+  # ─── Seasons ───────────────────────────────────────────────────────────
+  /api/seasons:
+    get:
+      summary: List season history (current season first)
+      description: >
+        Returns every recorded season, most recent first (1.12.0). The
+        first element is the CURRENT season — the one new settlements write
+        ranking entries for and the one ranking queries resolve when no
+        explicit `season` is given. Seasons only ever change through the
+        manual OPS rollover (`POST /api/seasons/roll`); there is no
+        time-based automatic rollover.
+      tags: [Seasons]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SeasonRecord'
+        '401': { $ref: '#/components/responses/Error' }
+
+  /api/seasons/roll:
+    post:
+      summary: Roll the season manually (OPS only, 1.12.0)
+      description: >
+        Author decision 2026-11-12: season rollover is an explicit MANUAL
+        ops action — there is deliberately NO time-based automatic
+        rollover. Requires an OPS-level credential (maintenance or service
+        token); player tokens answer `403 oauth_insufficient_scope`.
+
+        `target_season` must be exactly the current season + 1 — season
+        numbers advance one at a time, skipping is rejected with
+        `400 mca_invalid_request`. Repeating a rollover whose target
+        already exists answers `409 mca_season_exists` (safe retry
+        semantics: a retried request after success reports the existing
+        season instead of advancing again). Every rollover is recorded
+        (who, when, reset flag, optional note) and queryable via
+        `GET /api/seasons`.
+
+        `reset_scores` is an EXPLICIT caller choice (default false) — the
+        server never decides on the caller's behalf. When true, ALL
+        non-deleted `users.rank_score` values are reset to 0 in the same
+        transaction as the season insert; `wins_count` and match history
+        are untouched (the K-factor phase and streaks continue across the
+        rollover). From the rollover on, settlements write ranking entries
+        for the new season; earlier seasons' leaderboards stay queryable
+        via the ranking endpoints' `season` parameter.
+      tags: [Seasons]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_season]
+              properties:
+                target_season:
+                  type: integer
+                  description: >
+                    The season number to open; must be exactly the current
+                    season + 1.
+                reset_scores:
+                  type: boolean
+                  default: false
+                  description: >
+                    Explicit operator choice: reset all users' rank_score
+                    to 0 as part of the rollover (default false — scores
+                    carry over).
+                note:
+                  type: string
+                  maxLength: 200
+                  description: Optional operator note recorded with the rollover.
+      responses:
+        '201':
+          description: Season rolled
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/SeasonRecord'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
   # ─── Rankings ──────────────────────────────────────────────────────────
   /api/rankings/{type}:
     get:
@@ -1520,8 +1620,9 @@ paths:
           name: season
           schema:
             type: integer
-            default: 1
-          description: Season number
+          description: >
+            Season number. Omitted or <= 0 resolves to the CURRENT season
+            (1.12.0; before that the server behaved as season 1).
       responses:
         '200':
           description: Success
@@ -1558,8 +1659,9 @@ paths:
           name: season
           schema:
             type: integer
-            default: 1
-          description: Season number
+          description: >
+            Season number. Omitted or <= 0 resolves to the CURRENT season
+            (1.12.0; before that the server behaved as season 1).
       responses:
         '200':
           description: Success
@@ -2148,6 +2250,30 @@ components:
         enqueued_at:
           type: string
           format: date-time
+
+    SeasonRecord:
+      type: object
+      required: [season, reset_scores, opened_at, opened_by]
+      properties:
+        season:
+          type: integer
+          description: Season number (1-based, advances by exactly 1 per rollover)
+        reset_scores:
+          type: boolean
+          description: >
+            Whether this rollover reset all users' rank_score to 0
+            (explicit operator choice; default false)
+        opened_at:
+          type: string
+          format: date-time
+        opened_by:
+          type: string
+          description: >
+            Identifier of the OPS credential that performed the rollover
+            (`ops-uid:<uid>`; traceability, not an HRPAuth user)
+        note:
+          type: string
+          description: Optional operator note (omitted when not provided)
 
     PartyInvite:
       type: object
