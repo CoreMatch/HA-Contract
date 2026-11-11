@@ -58,6 +58,7 @@ HASKINLIB_DIR="$(resolve_repo "${HASKINLIB_REPO_DIR:-}" HASkinLib HASKINLIB_REPO
 YGGDRASIL_DIR="$(resolve_repo "${YGGDRASIL_REPO_DIR:-}" HRPAuth-Yggdrasil-API YGGDRASIL_REPO_DIR)"
 MATCHCOREARENA_DIR="$(resolve_repo "${MATCHCOREARENA_REPO_DIR:-}" MatchCoreArena-Server MATCHCOREARENA_REPO_DIR)"
 AVALON_DIR="$(resolve_repo "${AVALON_REPO_DIR:-}" Avalon AVALON_REPO_DIR)"
+HASKINPROXY_DIR="$(resolve_repo "${HASKINPROXY_REPO_DIR:-}" HASkinProxy HASKINPROXY_REPO_DIR)"
 
 # Cascade for the plugin payload pairs: needs a checkout that carries the
 # plugin system (internal/plugin). The flat CI checkout and the avalon
@@ -100,6 +101,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
     MATCHCOREARENA_REPO_DIR="$MATCHCOREARENA_DIR"
     AVALON_REPO_DIR="$AVALON_DIR"
     CASCADE_REPO_DIR="$CASCADE_DIR"
+    HASKINPROXY_REPO_DIR="$HASKINPROXY_DIR"
   )
 
   echo "self-test[1/4]: clean fixture must pass"
@@ -348,6 +350,13 @@ check_fields "HRPAuth/PresenceRequest" "$HRPAUTH_YAML" PresenceRequest "$HRPAUTH
 SKINLIB_YAML="$ROOT/docs/api/openapi/haskinlib-business.yaml"
 check_fields "HASkinLib/TextureRecord(listpreview)" "$SKINLIB_YAML" TextureRecord "$HASKINLIB_DIR/controllers/list_preview_controller.go" listPreviewItem    omitempty
 check_fields "HASkinLib/TextureRecord(profile)"     "$SKINLIB_YAML" TextureRecord "$HASKINLIB_DIR/controllers/profile_controller.go"      profileTextureItem omitempty
+
+# HASkinProxy CSL profile (GET /{username}.json response). The legacy flat
+# skin/cape/elytra fields are part of the CSL surface modeled by the struct
+# but are never filled by the current handler (always omitted); the contract
+# documents them as optional accordingly.
+HASKINPROXY_YAML="$ROOT/docs/api/openapi/haskinproxy-business.yaml"
+check_fields "HASkinProxy/CSLProfile" "$HASKINPROXY_YAML" CSLProfile "$HASKINPROXY_DIR/internal/model/csl.go" CSLProfile omitempty
 
 # Cascade out-of-process plugin event payloads (cascade-plugin/v1). These are
 # the downstream-visible payload structs; the /api/plugins management response
