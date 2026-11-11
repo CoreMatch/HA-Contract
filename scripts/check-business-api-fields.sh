@@ -60,6 +60,7 @@ MATCHCOREARENA_DIR="$(resolve_repo "${MATCHCOREARENA_REPO_DIR:-}" MatchCoreArena
 AVALON_DIR="$(resolve_repo "${AVALON_REPO_DIR:-}" Avalon AVALON_REPO_DIR)"
 HASKINPROXY_DIR="$(resolve_repo "${HASKINPROXY_REPO_DIR:-}" HASkinProxy HASKINPROXY_REPO_DIR)"
 DEPLOYER_DIR="$(resolve_repo "${DEPLOYER_REPO_DIR:-}" HA-Services-Deployer DEPLOYER_REPO_DIR)"
+GRAIL_DIR="$(resolve_repo "${GRAIL_REPO_DIR:-}" Grail GRAIL_REPO_DIR)"
 
 # Cascade for the plugin payload pairs: needs a checkout that carries the
 # plugin system (internal/plugin). The flat CI checkout and the avalon
@@ -104,6 +105,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
     CASCADE_REPO_DIR="$CASCADE_DIR"
     HASKINPROXY_REPO_DIR="$HASKINPROXY_DIR"
     DEPLOYER_REPO_DIR="$DEPLOYER_DIR"
+    GRAIL_REPO_DIR="$GRAIL_DIR"
   )
 
   echo "self-test[1/5]: clean fixture must pass"
@@ -399,6 +401,24 @@ check_fields "Deployer/BootstrapInternalURLs" "$DEPLOYER_YAML" "BootstrapInputs/
 check_fields "Deployer/BootstrapSMTP"         "$DEPLOYER_YAML" "BootstrapInputs/smtp"                "$DEPLOYER_TYPES_GO" SMTP        names-only
 check_fields "Deployer/BootstrapClientIDs"    "$DEPLOYER_YAML" "BootstrapInputs/client_ids"          "$DEPLOYER_TYPES_GO" ClientIDs   names-only
 check_fields "Deployer/BootstrapPaths"        "$DEPLOYER_YAML" "BootstrapInputs/paths"               "$DEPLOYER_TYPES_GO" Paths       names-only
+
+# Grail artifact-distribution wire structures (internal/model/model.go).
+# Every signed payload and response shape is a named struct serialized with
+# encoding/json; nested inline objects (derived_from, grace, serving_node)
+# are wired through subpath extraction.
+GRAIL_YAML="$ROOT/docs/api/openapi/grail.yaml"
+GRAIL_MODEL_GO="$GRAIL_DIR/internal/model/model.go"
+check_fields "Grail/Signature"            "$GRAIL_YAML" Signature                  "$GRAIL_MODEL_GO" Signature       omitempty
+check_fields "Grail/Envelope"             "$GRAIL_YAML" Envelope                   "$GRAIL_MODEL_GO" Envelope        omitempty
+check_fields "Grail/KeyEntry"             "$GRAIL_YAML" KeyEntry                   "$GRAIL_MODEL_GO" KeyEntry        omitempty
+check_fields "Grail/KeyringPayload"       "$GRAIL_YAML" KeyringPayload             "$GRAIL_MODEL_GO" KeyringPayload  omitempty
+check_fields "Grail/Resource"             "$GRAIL_YAML" Resource                   "$GRAIL_MODEL_GO" Resource        omitempty
+check_fields "Grail/Provenance"           "$GRAIL_YAML" Provenance                 "$GRAIL_MODEL_GO" Provenance      omitempty
+check_fields "Grail/DerivedFrom"          "$GRAIL_YAML" "Provenance/derived_from"  "$GRAIL_MODEL_GO" DerivedFrom     omitempty
+check_fields "Grail/VersionManifest"      "$GRAIL_YAML" VersionManifestPayload     "$GRAIL_MODEL_GO" VersionManifest omitempty
+check_fields "Grail/ResolveResponse"      "$GRAIL_YAML" ResolveResponse            "$GRAIL_MODEL_GO" ResolveResponse omitempty
+check_fields "Grail/GraceInfo"            "$GRAIL_YAML" "ResolveResponse/grace"    "$GRAIL_MODEL_GO" GraceInfo       omitempty
+check_fields "Grail/ServingNode"          "$GRAIL_YAML" "ResolveResponse/serving_node" "$GRAIL_MODEL_GO" ServingNode omitempty
 
 # Cascade out-of-process plugin event payloads (cascade-plugin/v1). These are
 # the downstream-visible payload structs; the /api/plugins management response
