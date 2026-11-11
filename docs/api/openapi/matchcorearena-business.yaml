@@ -1630,12 +1630,15 @@ components:
     # ─── Users ─────────────────────────────────────────────────────────────
     User:
       type: object
-      required: [uuid, level, experience, rank_score, created_at, updated_at]
+      required: [uid, level, experience, rank_score, wins_count, created_at, updated_at]
       properties:
-        uuid:
-          type: string
-          format: uuid
-          description: User UUID (Mojang UUID)
+        uid:
+          type: integer
+          format: int64
+          description: >
+            Authoritative numeric user id (the server's identity basis; the
+            stale uuid-string shape was retired together with the client
+            models, see MatchCoreArena-Client CHANGELOG uid unification).
         level:
           type: integer
           description: User level
@@ -1646,6 +1649,9 @@ components:
         rank_score:
           type: integer
           description: Current rank score
+        wins_count:
+          type: integer
+          description: Total wins counter
         created_at:
           type: string
           format: date-time
@@ -1656,20 +1662,20 @@ components:
     # ─── Friends ───────────────────────────────────────────────────────────
     Friend:
       type: object
-      required: [id, user_uuid, friend_uuid, status, created_at]
+      required: [id, user_uid, friend_uid, status, created_at]
       properties:
         id:
           type: integer
           format: int64
           description: Friend relationship ID
-        user_uuid:
-          type: string
-          format: uuid
-          description: Requester UUID
-        friend_uuid:
-          type: string
-          format: uuid
-          description: Target UUID
+        user_uid:
+          type: integer
+          format: int64
+          description: Requester uid (authoritative numeric user id)
+        friend_uid:
+          type: integer
+          format: int64
+          description: Target uid (authoritative numeric user id)
         status:
           type: integer
           enum: [0, 1, 2]
@@ -1681,7 +1687,7 @@ components:
     # ─── Teams ─────────────────────────────────────────────────────────────
     Team:
       type: object
-      required: [id, name, leader_uuid, created_at]
+      required: [id, name, description, leader_uid, created_at]
       properties:
         id:
           type: integer
@@ -1693,17 +1699,17 @@ components:
         description:
           type: string
           description: Team description
-        leader_uuid:
-          type: string
-          format: uuid
-          description: Leader's UUID
+        leader_uid:
+          type: integer
+          format: int64
+          description: Leader's uid (authoritative numeric user id)
         created_at:
           type: string
           format: date-time
 
     TeamMember:
       type: object
-      required: [id, team_id, user_uuid, role, joined_at]
+      required: [id, team_id, user_uid, role, joined_at]
       properties:
         id:
           type: integer
@@ -1712,9 +1718,10 @@ components:
         team_id:
           type: integer
           format: int64
-        user_uuid:
-          type: string
-          format: uuid
+        user_uid:
+          type: integer
+          format: int64
+          description: Member uid (authoritative numeric user id)
         role:
           type: integer
           enum: [0, 1, 2]
