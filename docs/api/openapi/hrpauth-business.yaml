@@ -1,9 +1,14 @@
 openapi: 3.1.0
 info:
   title: HRPAuth Business API
-  version: 1.0.0
+  version: 1.1.0
   description: >
-    Unified specification for HA business interfaces. Yggdrasil compatible interfaces are outside the scope of this file.
+    Unified specification for HA business interfaces. Yggdrasil compatible
+    interfaces are outside the scope of this file.
+
+    1.1.0 (2026-11-12): added `POST /internal/user-exists` (ops-level,
+    service-to-service) so satellite services can gate outbound mail on real
+    accounts — consumed by the HASkinProxy password-reset flow.
 servers:
   - url: /
 paths:
@@ -1315,6 +1320,46 @@ paths:
             `UUID`, `Email`, `Username`, `Password` (bcrypt hash).
         '401':
           description: 'Credentials invalid; body is `{"error": "invalid credentials"}`'
+  /internal/user-exists:
+    post:
+      summary: Check whether a core user exists by email (internal, service-to-service)
+      description: >
+        Requires ops (level 2) auth. Lets a satellite service gate outbound
+        mail on real accounts (e.g. the HASkinProxy password-reset flow)
+        without exposing an email-enumeration surface to end users. The
+        public forgot-password endpoint always answers success instead.
+        Idempotent read.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  message: { type: string }
+                  data:
+                    type: object
+                    required: [exists]
+                    properties:
+                      exists: { type: boolean }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
   /internal/verify-token:
     post:
       summary: Resolve an OAuth2 access token (internal, service-to-service)
