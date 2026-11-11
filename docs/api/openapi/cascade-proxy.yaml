@@ -1,13 +1,16 @@
 openapi: 3.1.0
 info:
   title: Cascade Proxy Management API
-  version: 1.1.0
+  version: 1.2.0
   description: >
     HTTP management surface of the Cascade edge proxy itself (the backend
     control plane it forwards to is specified separately in
     `cascade-backend-v1.yaml`). Room endpoints are a facade: they forward to
     the room's backend and pass the backend's raw JSON response through, so
-    success bodies are backend-defined. Since v1.1 every error response on
+    success bodies are backend-defined. v1.2 (2026-11-12): registers the
+    contract-first `GET /api/plugins` out-of-process plugin status endpoint
+    (additive only; no existing endpoint, field, or response semantics
+    changed). Since v1.1 every error response on
     this surface uses the unified envelope
     `{"success": false, "code": ..., "message": ..., "meta": {"request_id": ...}}`
     (see `components.schemas.ErrorEnvelope`). Facade-level `code` values are
@@ -48,6 +51,35 @@ paths:
       responses:
         '200':
           description: '`{"backends": [...]}` with each backend''s status object'
+  /api/plugins:
+    get:
+      summary: List out-of-process plugin statuses
+      description: >-
+        Read-only status snapshot of every configured plugin (including
+        disabled ones), in configuration order. CONTRACT-FIRST: registered
+        here before implementation per Cascade knowledge/0008 ("adding
+        /api/plugins requires contract registration first"); the route is
+        not yet served, so the route-drift check carries it as a planned
+        endpoint. The data source is `internal/plugin/hub.go::Status`; the
+        `PluginStatus` struct currently has no json tags, so the
+        implementation MUST serialize with the camelCase field names fixed by
+        the `PluginStatus` schema below. Follows the `/api/*` management
+        convention: no per-route auth (the management surface is
+        network-gated; only `/internal/*` requires `X-Internal-Key`).
+        Idempotent read.
+      responses:
+        '200':
+          description: '`{"plugins": [...]}` (empty array when no plugin is configured)'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [plugins]
+                properties:
+                  plugins:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PluginStatus'
   /api/rooms:
     get:
       summary: List rooms known to the proxy
@@ -347,3 +379,55 @@ components:
             request_id:
               type: string
               description: Random 32-character hex identifier for log correlation
+    PluginStatus:
+      type: object
+      description: >-
+        Read-only status of one out-of-process plugin
+        (`internal/plugin/hub.go::PluginStatus`). CONTRACT-FIRST: the JSON
+        field names are fixed here; the Go struct has no json tags yet, so
+        the implementation must serialize exactly these camelCase keys.
+        Counters are process-local (reset on restart).
+      required: [name, baseUrl, enabled, ready, events, queued, delivered, dropped, denied, failOpen]
+      properties:
+        name:
+          type: string
+          description: Plugin entry name (unique, from Plugins.json)
+        baseUrl:
+          type: string
+          description: Plugin HTTP base URL
+        enabled:
+          type: boolean
+          description: False when the entry is explicitly disabled
+        ready:
+          type: boolean
+          description: True once manifest negotiation succeeded
+        manifestId:
+          type: string
+          description: Negotiated manifest id (empty until ready)
+        manifestVersion:
+          type: string
+          description: Negotiated manifest version (empty until ready)
+        events:
+          type: array
+          items:
+            type: string
+          description: Event names negotiated with this plugin
+        queued:
+          type: integer
+          description: Current observe-queue depth
+        delivered:
+          type: integer
+          format: int64
+          description: Events delivered successfully
+        dropped:
+          type: integer
+          format: int64
+          description: Observe events dropped on failure/overflow
+        denied:
+          type: integer
+          format: int64
+          description: Veto denies issued by this plugin
+        failOpen:
+          type: integer
+          format: int64
+          description: Veto consultations that failed open

@@ -59,6 +59,21 @@ YGGDRASIL_DIR="$(resolve_repo "${YGGDRASIL_REPO_DIR:-}" HRPAuth-Yggdrasil-API YG
 MATCHCOREARENA_DIR="$(resolve_repo "${MATCHCOREARENA_REPO_DIR:-}" MatchCoreArena-Server MATCHCOREARENA_REPO_DIR)"
 AVALON_DIR="$(resolve_repo "${AVALON_REPO_DIR:-}" Avalon AVALON_REPO_DIR)"
 
+# Cascade for the plugin payload pairs: needs a checkout that carries the
+# plugin system (internal/plugin). The flat CI checkout and the avalon
+# workspace do; a lagging grouping-dir checkout may not, so fall back to a
+# checkout that has internal/plugin/event.go.
+CASCADE_DIR="$(resolve_repo "${CASCADE_REPO_DIR:-}" Cascade CASCADE_REPO_DIR "$HOME/Cascade")"
+if [[ ! -f "$CASCADE_DIR/internal/plugin/event.go" ]]; then
+  for _cand in "$HOME/Desktop/avalon/Cascade" "$ROOT/../avalon/Cascade"; do
+    if [[ -f "$_cand/internal/plugin/event.go" ]]; then
+      CASCADE_DIR="$(readlink -f "$_cand")"
+      break
+    fi
+  done
+fi
+[[ -f "$CASCADE_DIR/internal/plugin/event.go" ]] || fail "Cascade plugin code not found (internal/plugin/event.go); set CASCADE_REPO_DIR to a checkout with the plugin system"
+
 command -v go >/dev/null 2>&1 || fail "go toolchain required (structjson build)"
 command -v python3 >/dev/null 2>&1 || fail "python3 required (openapi parse)"
 python3 -c 'import yaml' 2>/dev/null || fail "PyYAML required (python3 -c 'import yaml' failed)"
@@ -84,16 +99,17 @@ if [[ "${1:-}" == "--self-test" ]]; then
     YGGDRASIL_REPO_DIR="$YGGDRASIL_DIR"
     MATCHCOREARENA_REPO_DIR="$MATCHCOREARENA_DIR"
     AVALON_REPO_DIR="$AVALON_DIR"
+    CASCADE_REPO_DIR="$CASCADE_DIR"
   )
 
-  echo "self-test[1/2]: clean fixture must pass"
+  echo "self-test[1/3]: clean fixture must pass"
   if ! env "${REPO_ENV[@]}" bash "$FIX/scripts/$SCRIPT_NAME" >"$FIX/clean.log" 2>&1; then
     cat "$FIX/clean.log" >&2
     echo "SELF-TEST FAILED: clean fixture reported drift" >&2
     exit 1
   fi
 
-  echo "self-test[2/2]: dropping a required field from QueueStats must fail"
+  echo "self-test[2/3]: dropping a required field from QueueStats must fail"
   sed -i 's#required: \[players, parties, average_wait_seconds\]#required: [players, parties]#' \
     "$FIX/docs/api/openapi/matchcorearena-business.yaml"
   grep -q 'required: \[players, parties\]$' "$FIX/docs/api/openapi/matchcorearena-business.yaml" || {
@@ -111,7 +127,28 @@ if [[ "${1:-}" == "--self-test" ]]; then
     exit 1
   }
 
-  echo "self-test passed: clean fixture green, mutated fixture red."
+  echo "self-test[3/3]: dropping playerId from the Cascade plugin PlayerInfo schema must fail"
+  # Restore clean contracts, then drop playerId from the PlayerInfo required
+  # list (the code field is non-omitempty, so the required sets diverge).
+  cp -r "$ROOT/docs/api/openapi/"*.yaml "$FIX/docs/api/openapi/"
+  sed -i 's#required: \[playerId, name, authenticated\]#required: [name, authenticated]#' \
+    "$FIX/docs/api/openapi/cascade-plugin-v1.yaml"
+  grep -q 'required: \[name, authenticated\]' "$FIX/docs/api/openapi/cascade-plugin-v1.yaml" || {
+    echo "SELF-TEST FAILED: could not inject the PlayerInfo mutation" >&2
+    exit 1
+  }
+  if env "${REPO_ENV[@]}" bash "$FIX/scripts/$SCRIPT_NAME" >"$FIX/mutated2.log" 2>&1; then
+    cat "$FIX/mutated2.log" >&2
+    echo "SELF-TEST FAILED: mutated Cascade plugin schema did NOT trigger drift" >&2
+    exit 1
+  fi
+  grep -q "playerId" "$FIX/mutated2.log" || {
+    cat "$FIX/mutated2.log" >&2
+    echo "SELF-TEST FAILED: drift report does not name playerId" >&2
+    exit 1
+  }
+
+  echo "self-test passed: clean green; QueueStats and Cascade PlayerInfo mutations red."
   exit 0
 fi
 
@@ -236,6 +273,16 @@ check_fields "HRPAuth/PresenceRequest" "$HRPAUTH_YAML" PresenceRequest "$HRPAUTH
 SKINLIB_YAML="$ROOT/docs/api/openapi/haskinlib-business.yaml"
 check_fields "HASkinLib/TextureRecord(listpreview)" "$SKINLIB_YAML" TextureRecord "$HASKINLIB_DIR/controllers/list_preview_controller.go" listPreviewItem    omitempty
 check_fields "HASkinLib/TextureRecord(profile)"     "$SKINLIB_YAML" TextureRecord "$HASKINLIB_DIR/controllers/profile_controller.go"      profileTextureItem omitempty
+
+# Cascade out-of-process plugin event payloads (cascade-plugin/v1). These are
+# the downstream-visible payload structs; the /api/plugins management response
+# is contract-first (PluginStatus has no json tags yet) and is therefore not
+# field-wired until the endpoint lands.
+CASCADE_PLUGIN_YAML="$ROOT/docs/api/openapi/cascade-plugin-v1.yaml"
+CASCADE_EVENT_GO="$CASCADE_DIR/internal/plugin/event.go"
+check_fields "Cascade/PlayerInfo"    "$CASCADE_PLUGIN_YAML" PlayerInfo    "$CASCADE_EVENT_GO" PlayerInfo    omitempty
+check_fields "Cascade/RouteDecision" "$CASCADE_PLUGIN_YAML" RouteDecision "$CASCADE_EVENT_GO" RouteDecision omitempty
+check_fields "Cascade/ProxyInfo"     "$CASCADE_PLUGIN_YAML" ProxyInfo     "$CASCADE_EVENT_GO" ProxyInfo     omitempty
 
 if [[ "$DRIFT_FOUND" -eq 1 ]]; then
   echo "Field-level API drift detected."

@@ -1,0 +1,386 @@
+openapi: 3.1.0
+info:
+  title: Cascade Plugin Contract
+  version: 1.0.0
+  description: >-
+    Versioned contract between the Cascade edge proxy (caller) and
+    out-of-process plugins (HTTP servers). Mechanically isomorphic to the
+    Avalon plugin contract (`avalon-plugin-v1.yaml`); the two differ only in
+    the protocol namespace (`cascade-plugin/v1`) and signature header names
+    (`X-Cascade-*`). v1.0.0 (2026-11-12): initial registration — manifest
+    negotiation, the three-event catalog (player.registered, player.route,
+    player.routed), the bidirectional HMAC signature scheme, delivery tiers,
+    and failure policy.
+
+    Direction is fixed: Cascade is the client of every endpoint below; a
+    plugin is an independent HTTP server at an operator-declared base URL.
+    The host never executes plugin code and plugins never link Cascade. v1
+    has no plugin->Cascade calls.
+
+    Scope relative to Avalon v1 (cuts, not model divergence): there is no
+    `deliver` (WAL at-least-once) tier — Cascade has no asynchronous event
+    that must survive plugin downtime — and no tight in-gameplay veto timeout
+    (Cascade is not on a match-command path).
+
+    The authoritative design record is Cascade knowledge entry 0008; this
+    file is the schema/endpoint registration. The management status endpoint
+    that would expose plugin state (`GET /api/plugins`) is registered
+    separately in `cascade-proxy.yaml` (contract-first until implemented).
+servers:
+  - url: http://127.0.0.1:9801/v1
+    description: >-
+      Example plugin-provided base. Each plugin serves its own base URL,
+      declared by the operator in Cascade's `Plugins.json`. Cascade is the
+      client of every endpoint below.
+
+security:
+  - cascadeSignature: []
+
+paths:
+  /manifest:
+    get:
+      operationId: getManifest
+      summary: Plugin self-description and version negotiation
+      description: >-
+        Fetched by Cascade at boot (per-plugin negotiation bounded by the
+        admission timeout) and re-fetched after connection-level delivery
+        failures (backoff 5s..5min). The response MUST be signed with the
+        plugin's shared secret (see the cascadeSignature security scheme);
+        Cascade signs the request and verifies the response. A missing,
+        unsigned, unparseable, or protocol-incompatible manifest marks the
+        plugin not ready: veto consultation skips it (fail-open) and queued
+        observe events are held until negotiation succeeds. `schema` and
+        `protocol` must match `cascade-plugin/manifest` and
+        `cascade-plugin/v1` exactly — the Avalon dialect is rejected and
+        vice versa.
+      responses:
+        "200":
+          description: Manifest accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Manifest"
+        default:
+          description: >-
+            Any non-2xx or unsigned answer is a negotiation failure; Cascade
+            retries with backoff and keeps the plugin not ready.
+
+  /events/player.registered:
+    post:
+      operationId: eventPlayerRegistered
+      summary: Player identity bound (observe tier)
+      description: >-
+        Emitted after a player registers and the backend session identity is
+        bound. Observe tier: best-effort delivery from the in-memory queue,
+        dropped on failure, never retried. The plugin answers a signed 2xx
+        ack; the body is not interpreted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerRegisteredEvent"
+      responses:
+        "200":
+          description: Signed ack; delivery recorded.
+        default:
+          description: >-
+            Any failure (non-2xx, unsigned, timeout, unreachable) drops the
+            event and increments the plugin's dropped counter. Observe events
+            are never retried.
+
+  /events/player.route:
+    post:
+      operationId: eventPlayerRoute
+      summary: Assignment routing about to execute (dual mode, vetoable)
+      description: >-
+        Emitted after an MCA assignment decision exists and before the 178
+        jump packet is written. Dual mode: plugins that BOTH hold the
+        operator veto grant (`Plugins.json` `vetoEvents`) AND declare
+        `veto: true` for this event in their manifest participate in a
+        parallel veto consultation; every other subscriber receives the same
+        payload in observe mode. Veto semantics: any valid deny wins (the
+        player stays in the lobby with a localized, sanitized reason —
+        control characters stripped, truncated to 200 runes, prefixed with
+        the plugin name); timeout, unreachable, malformed verdict, and
+        deny-without-reason all FAIL OPEN (the route proceeds) and are
+        counted. Consultation is at-most-once, never retried. When allowed,
+        all subscribers (including the consulted ones) receive an observe
+        copy carrying the same `eventId`; when denied, the jump does not
+        happen and no observe copy is sent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerRouteEvent"
+      responses:
+        "200":
+          description: >-
+            For a consulted (granted + declared) plugin, the verdict; for an
+            observe-mode subscriber, a signed ack.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Verdict"
+        default:
+          description: >-
+            For a consulted plugin, any non-2xx / unsigned / malformed /
+            late answer FAILS OPEN (route proceeds) and increments the
+            fail-open counter. For an observe subscriber, the event is
+            dropped and counted.
+
+  /events/player.routed:
+    post:
+      operationId: eventPlayerRouted
+      summary: Jump packet written (observe tier)
+      description: >-
+        Emitted after the 178 jump packet has been written to the client
+        connection (the player is being sent to the target backend). Observe
+        tier semantics identical to player.registered. `target` is the
+        proxy's own `publicHost:jumpPort`, not the backend's real address.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerRoutedEvent"
+      responses:
+        "200":
+          description: Signed ack; delivery recorded.
+        default:
+          description: >-
+            Any failure drops the event and increments the dropped counter;
+            never retried.
+
+components:
+  securitySchemes:
+    cascadeSignature:
+      type: apiKey
+      in: header
+      name: X-Cascade-Signature
+      description: >-
+        Bidirectional HMAC-SHA256 scheme. Every Cascade request carries
+        X-Cascade-Timestamp (unix seconds) and X-Cascade-Signature with
+        v1=hex(HMAC-SHA256("<unix seconds>" + "." + raw_body, secret)); for
+        GET /manifest the body is the empty string. Every response Cascade
+        accepts (manifest, verdict, ack) MUST carry the same two headers
+        computed over the response body; Cascade verifies against the
+        plugin's secret list. The list supports rotation overlap — Cascade
+        signs with the first (primary) secret and verifies with any. A
+        timestamp off by more than 300 seconds is rejected. Secrets are hex
+        and at least 16 bytes (32 hex chars).
+
+  parameters:
+    CascadeTimestamp:
+      name: X-Cascade-Timestamp
+      in: header
+      required: true
+      schema:
+        type: integer
+      description: Unix seconds at request time; 300s skew tolerance.
+    CascadeSignature:
+      name: X-Cascade-Signature
+      in: header
+      required: true
+      schema:
+        type: string
+      description: >-
+        v1=hex(HMAC-SHA256("<unix seconds>" + "." + raw_body, secret)) over
+        the raw request body.
+
+  schemas:
+    Manifest:
+      type: object
+      required: [schema, protocol, id, version, events]
+      properties:
+        schema:
+          type: string
+          const: cascade-plugin/manifest
+        protocol:
+          type: string
+          const: cascade-plugin/v1
+          description: Exact match required (the v1 protocol id covers v1.x).
+        id:
+          type: string
+          description: Plugin self-identifier.
+        version:
+          type: string
+          description: Plugin version, free form.
+        events:
+          type: object
+          description: >-
+            Event name -> capability. Cascade emits only version 1 in v1; an
+            event with no version intersection is not delivered to this
+            plugin. Declaring veto=true requests veto mode for the dual-mode
+            event (player.route); it only takes effect when the operator's
+            Plugins.json also grants that event to this plugin (default-deny).
+            Without both, the event is delivered in observe mode.
+          additionalProperties:
+            type: object
+            required: [versions]
+            properties:
+              versions:
+                type: array
+                items:
+                  type: integer
+                minItems: 1
+              veto:
+                type: boolean
+                default: false
+        timeoutMs:
+          type: integer
+          description: >-
+            Self-declared processing budget; Cascade caps it with its own
+            admission/delivery timeout. Absent or non-positive means the
+            Cascade cap.
+        maxConcurrency:
+          type: integer
+          description: >-
+            Declared but reserved in v1: Cascade runs one delivery worker per
+            plugin (ordering guarantee); values above 1 are treated as 1.
+
+    EventEnvelope:
+      type: object
+      description: Fields shared by every event.
+      required: [eventId, event, eventVersion, occurredAt, proxy, player]
+      properties:
+        eventId:
+          type: string
+          description: >-
+            evt_ + 26-char Crockford ULID. Generated once at emit time;
+            stable across retries/replays; plugins deduplicate on it.
+          pattern: "^evt_[0-9A-HJKMNP-TV-Z]{26}$"
+        event:
+          type: string
+        eventVersion:
+          type: integer
+          description: Always 1 in v1.
+        occurredAt:
+          type: string
+          format: date-time
+          description: RFC 3339 (Nano) UTC emit time.
+        proxy:
+          $ref: "#/components/schemas/ProxyInfo"
+        player:
+          $ref: "#/components/schemas/PlayerInfo"
+
+    ProxyInfo:
+      type: object
+      description: Host block of the envelope.
+      required: [proxyId, hostVersion]
+      properties:
+        proxyId:
+          type: string
+          description: Config `proxy_issuer` (operator-recognizable instance id).
+        publicHost:
+          type: string
+          description: >-
+            178 jump target host (`public_game_host`); omitted when the jump
+            is not enabled.
+        hostVersion:
+          type: string
+          description: Plugin-protocol host version (observability only).
+
+    PlayerInfo:
+      type: object
+      description: >-
+        Player block of the envelope. Plugins are operator-configured,
+        key-authenticated trusted infrastructure — the same trust level as
+        Avalon plugin events carrying player profiles.
+      required: [playerId, name, authenticated]
+      properties:
+        playerId:
+          type: string
+          description: Game-side player id.
+        name:
+          type: string
+        authenticated:
+          type: boolean
+          description: Whether the player is bound to an HRPAuth account.
+        haUserUuid:
+          type: string
+          description: >-
+            HRPAuth account UUID when bound; omitted for guests.
+
+    BackendRef:
+      type: object
+      required: [backendId]
+      properties:
+        backendId:
+          type: string
+          description: The backend the player is on (registered/route) or being sent to (routed).
+
+    RouteDecision:
+      type: object
+      description: The assignment decision carried by player.route.
+      required: [source, backendId]
+      properties:
+        source:
+          type: string
+          description: Decision source; currently always `mca`.
+        backendId:
+          type: string
+          description: Backend the decision routes the player to.
+        joinTarget:
+          type: string
+          description: MCA-formed sub-server `host:port` (mapping-table key); omitted when absent.
+        groupId:
+          type: integer
+          format: int64
+          description: Formed-group id (logging/observability); omitted when absent.
+        matchType:
+          type: string
+          description: Match type (logging/observability); omitted when absent.
+        teamId:
+          type: string
+          description: Team label (logging/observability); omitted when absent.
+
+    Verdict:
+      type: object
+      description: Decision returned by a consulted (veto) plugin for player.route.
+      required: [allowed]
+      properties:
+        allowed:
+          type: boolean
+        reason:
+          type: string
+          description: >-
+            Mandatory when allowed=false. Human-readable; Cascade strips
+            control characters, truncates to 200 runes, and prefixes the
+            plugin name before display. A deny without a reason is a
+            malformed verdict and fails open.
+
+    PlayerRegisteredEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          required: [backend]
+          properties:
+            backend:
+              $ref: "#/components/schemas/BackendRef"
+
+    PlayerRouteEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          required: [backend, decision]
+          properties:
+            backend:
+              $ref: "#/components/schemas/BackendRef"
+            decision:
+              $ref: "#/components/schemas/RouteDecision"
+
+    PlayerRoutedEvent:
+      allOf:
+        - $ref: "#/components/schemas/EventEnvelope"
+        - type: object
+          required: [backend, target]
+          properties:
+            backend:
+              $ref: "#/components/schemas/BackendRef"
+            target:
+              type: string
+              description: >-
+                178 jump target — the proxy's own `publicHost:jumpPort`, not
+                the backend's real address.

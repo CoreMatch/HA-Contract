@@ -71,6 +71,7 @@ During the transition period, some success fields will be mirrored at the top le
 - `openapi/ha-services-deployer.yaml`: HA-Services-Deployer delivery + orchestration surface
 - `openapi/webui-sdkhandler.yaml`: HA-WebUI-SDKHandler build/maintenance surface
 - `openapi/avalon-plugin-v1.yaml`: Avalon out-of-process plugin contract (manifest + events)
+- `openapi/cascade-plugin-v1.yaml`: Cascade out-of-process plugin contract (manifest + events; isomorphic to the Avalon one, `cascade-plugin/v1` namespace, `X-Cascade-*` signature headers)
 - `error-codes.md`: Unified error code registry
 
 ## Anti-Drift
@@ -83,6 +84,7 @@ Run before submission:
 ./scripts/check-business-api-fields.sh     # schema fields <-> Go struct json tags (go/ast)
 ./scripts/check-consumer-urls.sh           # every consumer-called URL resolves to a contract path
 ./scripts/check-avalon-plugin-event-drift.sh  # hub code <-> openapi <-> EVENT-CATALOG <-> template subscriptions
+./scripts/check-cascade-plugin-event-drift.sh # Cascade hub code <-> openapi <-> template subscriptions
 ```
 
 Each script also supports `--self-test`, which re-runs the checker against a
@@ -92,7 +94,11 @@ The CI workflow `.github/workflows/business-api-drift.yml` runs every check
 in self-test + real mode against all CoreMatch repositories.
 
 Discipline: an unreadable source or an empty extraction is a hard error in
-every checker — never "unreadable, therefore skipped". Known-broken consumer
-paths (e.g. HASkinProxy's legacy `POST /texture/delete` forward) are listed
-explicitly inside `check-consumer-urls.sh` and reported as loud warnings on
-every run until the owning repo fixes them.
+every checker — never "unreadable, therefore skipped". There are NO
+known-broken consumer exceptions: any consumer URL that resolves to no
+contract path is a hard failure (the two former texture exceptions were fixed
+consumer-side on 2026-11-11 and the bypass removed). Contract-first endpoints
+registered before implementation (e.g. Cascade `GET /api/plugins`) are listed
+as "planned" in `check-business-api-drift.sh`: they are exempt from the
+contract-vs-impl comparison but the contract MUST keep declaring them —
+removing one turns the check red.

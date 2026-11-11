@@ -185,7 +185,8 @@ MCA_YAML="$ROOT/docs/api/openapi/matchcorearena-business.yaml"
 HRPAUTH_YAML="$ROOT/docs/api/openapi/hrpauth-business.yaml"
 YGG_YAML="$ROOT/docs/api/openapi/hrpauth-yggdrasil-business.yaml"
 SKINLIB_YAML="$ROOT/docs/api/openapi/haskinlib-business.yaml"
-for f in "$MCA_YAML" "$HRPAUTH_YAML" "$YGG_YAML" "$SKINLIB_YAML"; do
+CASCADE_PROXY_YAML="$ROOT/docs/api/openapi/cascade-proxy.yaml"
+for f in "$MCA_YAML" "$HRPAUTH_YAML" "$YGG_YAML" "$SKINLIB_YAML" "$CASCADE_PROXY_YAML"; do
   [[ -f "$f" ]] || fail "contract file missing: $f"
 done
 
@@ -193,6 +194,9 @@ openapi_paths "$MCA_YAML" > "$tmpdir/mca-paths.txt"
 openapi_paths "$HRPAUTH_YAML" > "$tmpdir/hrpauth-paths.txt"
 openapi_paths "$YGG_YAML" > "$tmpdir/ygg-paths.txt"
 openapi_paths "$SKINLIB_YAML" > "$tmpdir/skinlib-paths.txt"
+# Cascade management surface (cascade-proxy.yaml) is a valid contract target
+# too — e.g. the contract-first GET /api/plugins plugin-status endpoint.
+openapi_paths "$CASCADE_PROXY_YAML" > "$tmpdir/cascade-paths.txt"
 
 # Yggdrasil protocol surface (knowledge/0010; same list as the route drift
 # script's exclusion set).
@@ -256,14 +260,14 @@ mca_client_urls="$(gawk '
 [[ -n "$mca_client_urls" ]] || fail "MatchCoreArena-Client: extracted 0 API URLs — refusing to pass silently"
 while read -r method path; do
   method="$(echo "$method" | tr '[:lower:]' '[:upper:]')"
-  check_url "MatchCoreArena-Client" "$method" "$path" "$tmpdir/mca-paths.txt"
+  check_url "MatchCoreArena-Client" "$method" "$path" "$tmpdir/mca-paths.txt" "$tmpdir/cascade-paths.txt"
 done <<<"$mca_client_urls"
 
 # --- 2. MatchCoreArena-VelocityGate (Java; GET assignment) ---
 vg_urls="$(grep -rhoE '"/api/[^"]*"' "$VELOCITYGATE_DIR/src/main/java" | tr -d '"' | sort -u)"
 [[ -n "$vg_urls" ]] || fail "VelocityGate: extracted 0 API URLs — refusing to pass silently"
 while IFS= read -r path; do
-  check_url "VelocityGate" GET "$path" "$tmpdir/mca-paths.txt"
+  check_url "VelocityGate" GET "$path" "$tmpdir/mca-paths.txt" "$tmpdir/cascade-paths.txt"
 done <<<"$vg_urls"
 
 # --- 3. BedwarsRel-MCA (Java constants + config.yml) ---
@@ -272,7 +276,7 @@ bwr_cfg="$(grep -rhoE 'https?://[^ "]*/api/[a-z/]+' "$BEDWARSREL_MCA_DIR" --incl
 bwr_all="$(printf '%s\n%s\n' "$bwr_urls" "$bwr_cfg" | grep -v '^$' | sort -u || true)"
 [[ -n "$bwr_all" ]] || fail "BedwarsRel-MCA: extracted 0 API URLs — refusing to pass silently"
 while IFS= read -r path; do
-  check_url "BedwarsRel-MCA" POST "$path" "$tmpdir/mca-paths.txt"
+  check_url "BedwarsRel-MCA" POST "$path" "$tmpdir/mca-paths.txt" "$tmpdir/cascade-paths.txt"
 done <<<"$bwr_all"
 
 # --- 4. HRPAuth-Spigot (Java; core + relayed yggdrasil business) ---
@@ -280,9 +284,9 @@ spigot_urls="$(grep -rhoE '"(/[a-z][^"]*)"' "$HRPAUTH_SPIGOT_DIR/src/main/java" 
 [[ -n "$spigot_urls" ]] || fail "HRPAuth-Spigot: extracted 0 API URLs — refusing to pass silently"
 while IFS= read -r path; do
   if [[ "$path" == /yggdrasil-api/* ]]; then
-    check_url "HRPAuth-Spigot" POST "${path#/yggdrasil-api}" "$tmpdir/ygg-paths.txt" "$tmpdir/ygg-protocol-paths.txt"
+    check_url "HRPAuth-Spigot" POST "${path#/yggdrasil-api}" "$tmpdir/ygg-paths.txt" "$tmpdir/ygg-protocol-paths.txt" "$tmpdir/cascade-paths.txt"
   else
-    check_url "HRPAuth-Spigot" POST "$path" "$tmpdir/hrpauth-paths.txt"
+    check_url "HRPAuth-Spigot" POST "$path" "$tmpdir/hrpauth-paths.txt" "$tmpdir/cascade-paths.txt"
   fi
 done <<<"$spigot_urls"
 
@@ -290,7 +294,7 @@ done <<<"$spigot_urls"
 samuel_urls="$(grep -rhoE '"/authserver/[a-z]+"' "$SAMUELCLIENT_DIR" --include='*.go' | tr -d '"' | sort -u)"
 [[ -n "$samuel_urls" ]] || fail "SamuelClient: extracted 0 authserver URLs — refusing to pass silently"
 while IFS= read -r path; do
-  check_url "SamuelClient" POST "$path" "$tmpdir/ygg-protocol-paths.txt" "$tmpdir/ygg-paths.txt"
+  check_url "SamuelClient" POST "$path" "$tmpdir/ygg-protocol-paths.txt" "$tmpdir/ygg-paths.txt" "$tmpdir/cascade-paths.txt"
 done <<<"$samuel_urls"
 
 # --- 6. HASkinProxy upstream client (Go) ---
@@ -303,10 +307,10 @@ hsp_all="$(printf '%s\n%s\n' "$hsp_core" "$hsp_token" | grep -v '^$' | sort -u)"
 [[ -n "$hsp_all" ]] || fail "HASkinProxy: extracted 0 core upstream URLs — refusing to pass silently"
 while IFS= read -r path; do
   # Method-agnostic: the contract path sets are compared by path only.
-  check_url "HASkinProxy" "-" "$path" "$tmpdir/ygg-paths.txt" "$tmpdir/ygg-protocol-paths.txt"
+  check_url "HASkinProxy" "-" "$path" "$tmpdir/ygg-paths.txt" "$tmpdir/ygg-protocol-paths.txt" "$tmpdir/cascade-paths.txt"
 done <<<"$hsp_ygg"
 while IFS= read -r path; do
-  check_url "HASkinProxy" "-" "$path" "$tmpdir/hrpauth-paths.txt"
+  check_url "HASkinProxy" "-" "$path" "$tmpdir/hrpauth-paths.txt" "$tmpdir/cascade-paths.txt"
 done <<<"$hsp_all"
 
 # --- 7. HRPAuth-Web (TS frontend) ---
@@ -327,11 +331,11 @@ web_urls="$(printf '%s\n' "$web_urls" | grep -v '^$' | sed -E 's#\$\{[a-zA-Z_][a
 [[ -n "$web_urls" ]] || fail "HRPAuth-Web: extracted 0 backend URLs — refusing to pass silently"
 while IFS= read -r path; do
   if [[ "$path" == /yggdrasil-api/* ]]; then
-    check_url "HRPAuth-Web" "-" "${path#/yggdrasil-api}" "$tmpdir/ygg-paths.txt" "$tmpdir/ygg-protocol-paths.txt"
+    check_url "HRPAuth-Web" "-" "${path#/yggdrasil-api}" "$tmpdir/ygg-paths.txt" "$tmpdir/ygg-protocol-paths.txt" "$tmpdir/cascade-paths.txt"
   elif [[ "$path" == /skinlib-api/* ]]; then
-    check_url "HRPAuth-Web" "-" "${path#/skinlib-api}" "$tmpdir/skinlib-paths.txt"
+    check_url "HRPAuth-Web" "-" "${path#/skinlib-api}" "$tmpdir/skinlib-paths.txt" "$tmpdir/cascade-paths.txt"
   else
-    check_url "HRPAuth-Web" "-" "$path" "$tmpdir/hrpauth-paths.txt" "$tmpdir/ygg-paths.txt"
+    check_url "HRPAuth-Web" "-" "$path" "$tmpdir/hrpauth-paths.txt" "$tmpdir/ygg-paths.txt" "$tmpdir/cascade-paths.txt"
   fi
 done <<<"$web_urls"
 

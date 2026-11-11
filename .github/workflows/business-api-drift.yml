@@ -85,3 +85,8 @@ jobs:
         run: |
           bash scripts/check-avalon-plugin-event-drift.sh --self-test
           bash scripts/check-avalon-plugin-event-drift.sh
+
+      - name: Cascade plugin event drift (self-test + check)
+        run: |
+          bash scripts/check-cascade-plugin-event-drift.sh --self-test
+          bash scripts/check-cascade-plugin-event-drift.sh
