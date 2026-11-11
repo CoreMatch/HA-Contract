@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HASkinProxy Business API
-  version: 1.0.0
+  version: 1.1.0
   description: >
     Unified specification for the HASkinProxy HTTP surface. HASkinProxy is a
     protocol-translation edge service that bridges the HA skin backend
@@ -17,6 +17,11 @@ info:
     it anonymously). `POST /{username}/texture/delete` forwards the caller's
     `Authorization` header unchanged to the upstream; HASkinProxy itself
     performs no authentication.
+
+    1.1.0 (2026-11-12): revived the password-reset (`/auth/*`) surface from
+    the retired pre-10426 mainline (author decision). The flow gates outbound
+    mail on the core's `POST /internal/user-exists` and follows the same bare
+    JSON shape as the rest of this surface.
 servers:
   - url: /
 paths:
@@ -29,6 +34,73 @@ paths:
       responses:
         '200':
           description: Service is alive
+  /auth/captcha:
+    get:
+      summary: Get a graphic captcha (password reset)
+      description: >
+        Returns a 4-character alphanumeric graphic captcha as a base64 PNG.
+        Unauthenticated. Bare JSON shape (no unified envelope).
+      responses:
+        '200':
+          description: Captcha generated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [captcha_id, captcha_image]
+                properties:
+                  captcha_id: { type: string }
+                  captcha_image: { type: string, description: base64 PNG }
+        '500':
+          description: '`{"error": "<reason>"}`'
+  /auth/send-reset-code:
+    post:
+      summary: Send a password-reset code by email
+      description: >
+        Verifies the captcha, then — only if the email belongs to an existing
+        core user (checked via the core's `POST /internal/user-exists`) —
+        stores a 4-digit code and emails it. To prevent email enumeration the
+        response is `200` whether or not the email is registered. Rate
+        limited per email (1/minute, 10/hour). Unauthenticated. Bare JSON.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, captcha_id, captcha_answer]
+              properties:
+                email: { type: string, format: email }
+                captcha_id: { type: string }
+                captcha_answer: { type: string, description: 4 alphanumeric chars }
+      responses:
+        '200':
+          description: 'Always `{"message": "verification code sent if the email is registered"}`'
+        '400':
+          description: '`{"error": "<reason>"}` (bad body, captcha format, or wrong captcha)'
+        '429':
+          description: '`{"error": "<reason>"}` (rate limited)'
+  /auth/verify-reset-code:
+    post:
+      summary: Verify a password-reset code
+      description: >
+        Checks the supplied 4-digit code against the one stored for the email.
+        Unauthenticated. Bare JSON.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, code]
+              properties:
+                email: { type: string, format: email }
+                code: { type: string, description: 4 digits }
+      responses:
+        '200':
+          description: 'Code valid: `{"message": "verification successful"}`'
+        '400':
+          description: '`{"error": "<reason>"}` (bad body, code format, or invalid/expired code)'
   /{username}:
     get:
       summary: CSL profile lookup (CustomSkinLoader)
