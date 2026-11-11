@@ -565,6 +565,7 @@ components:
             version: { type: string }
             digest: { type: string }
             note: { type: string, description: Feedback/correction summary }
+          required: [channel, version]
       required: [same_content]
 
     VersionManifestPayload:
@@ -602,6 +603,7 @@ components:
           nullable: true
           properties:
             remove_at: { type: string }
+          required: [remove_at]
         resolved_from: { type: string, description: '`latest` or `pinned`' }
         platforms:
           type: array
@@ -618,7 +620,8 @@ components:
             offline: { type: boolean }
             states_seq: { type: integer }
             stale: { type: boolean }
-      required: [project, channel, version, seq, yanked, resolved_from, platforms, resources, provenance, signature, serving_node]
+          required: [tier, offline, states_seq, stale]
+      required: [project, channel, version, seq, yanked, grace, resolved_from, platforms, resources, provenance, signature, serving_node]
 
   securitySchemes:
     bearerToken:
