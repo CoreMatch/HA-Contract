@@ -59,6 +59,7 @@ YGGDRASIL_DIR="$(resolve_repo "${YGGDRASIL_REPO_DIR:-}" HRPAuth-Yggdrasil-API YG
 MATCHCOREARENA_DIR="$(resolve_repo "${MATCHCOREARENA_REPO_DIR:-}" MatchCoreArena-Server MATCHCOREARENA_REPO_DIR)"
 AVALON_DIR="$(resolve_repo "${AVALON_REPO_DIR:-}" Avalon AVALON_REPO_DIR)"
 HASKINPROXY_DIR="$(resolve_repo "${HASKINPROXY_REPO_DIR:-}" HASkinProxy HASKINPROXY_REPO_DIR)"
+DEPLOYER_DIR="$(resolve_repo "${DEPLOYER_REPO_DIR:-}" HA-Services-Deployer DEPLOYER_REPO_DIR)"
 
 # Cascade for the plugin payload pairs: needs a checkout that carries the
 # plugin system (internal/plugin). The flat CI checkout and the avalon
@@ -102,16 +103,17 @@ if [[ "${1:-}" == "--self-test" ]]; then
     AVALON_REPO_DIR="$AVALON_DIR"
     CASCADE_REPO_DIR="$CASCADE_DIR"
     HASKINPROXY_REPO_DIR="$HASKINPROXY_DIR"
+    DEPLOYER_REPO_DIR="$DEPLOYER_DIR"
   )
 
-  echo "self-test[1/4]: clean fixture must pass"
+  echo "self-test[1/5]: clean fixture must pass"
   if ! env "${REPO_ENV[@]}" bash "$FIX/scripts/$SCRIPT_NAME" >"$FIX/clean.log" 2>&1; then
     cat "$FIX/clean.log" >&2
     echo "SELF-TEST FAILED: clean fixture reported drift" >&2
     exit 1
   fi
 
-  echo "self-test[2/4]: dropping a required field from QueueStats must fail"
+  echo "self-test[2/5]: dropping a required field from QueueStats must fail"
   sed -i 's#required: \[players, parties, average_wait_seconds\]#required: [players, parties]#' \
     "$FIX/docs/api/openapi/matchcorearena-business.yaml"
   grep -q 'required: \[players, parties\]$' "$FIX/docs/api/openapi/matchcorearena-business.yaml" || {
@@ -129,7 +131,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
     exit 1
   }
 
-  echo "self-test[3/4]: dropping playerId from the Cascade plugin PlayerInfo schema must fail"
+  echo "self-test[3/5]: dropping playerId from the Cascade plugin PlayerInfo schema must fail"
   # Restore clean contracts, then drop playerId from the PlayerInfo required
   # list (the code field is non-omitempty, so the required sets diverge).
   cp -r "$ROOT/docs/api/openapi/"*.yaml "$FIX/docs/api/openapi/"
@@ -150,7 +152,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
     exit 1
   }
 
-  echo "self-test[4/4]: downgrading Avalon plugin PlayerInfo.address to optional must fail"
+  echo "self-test[4/5]: downgrading Avalon plugin PlayerInfo.address to optional must fail"
   # Restore clean contracts, then drop address from the Avalon PlayerInfo
   # required list (the code field is non-omitempty, so the required sets
   # diverge). Guards the new allOf/subpath extraction and the 16 Avalon
@@ -173,7 +175,29 @@ if [[ "${1:-}" == "--self-test" ]]; then
     exit 1
   }
 
-  echo "self-test passed: clean green; QueueStats, Cascade PlayerInfo and Avalon PlayerInfo mutations red."
+  echo "self-test[5/5]: renaming a nested Deployer bootstrap field must fail"
+  # Restore clean contracts, then rename database.admin_host in the bootstrap
+  # inputs (two-level subpath extraction). The code field keeps its name, so
+  # the name sets diverge.
+  cp -r "$ROOT/docs/api/openapi/"*.yaml "$FIX/docs/api/openapi/"
+  sed -i 's#admin_host: { type: string }#admin_host_renamed: { type: string }#' \
+    "$FIX/docs/api/openapi/ha-services-deployer.yaml"
+  grep -q "admin_host_renamed" "$FIX/docs/api/openapi/ha-services-deployer.yaml" || {
+    echo "SELF-TEST FAILED: could not inject the Deployer bootstrap mutation" >&2
+    exit 1
+  }
+  if env "${REPO_ENV[@]}" bash "$FIX/scripts/$SCRIPT_NAME" >"$FIX/mutated4.log" 2>&1; then
+    cat "$FIX/mutated4.log" >&2
+    echo "SELF-TEST FAILED: mutated Deployer bootstrap schema did NOT trigger drift" >&2
+    exit 1
+  fi
+  grep -q "admin_host" "$FIX/mutated4.log" || {
+    cat "$FIX/mutated4.log" >&2
+    echo "SELF-TEST FAILED: drift report does not name admin_host" >&2
+    exit 1
+  }
+
+  echo "self-test passed: clean green; QueueStats, Cascade PlayerInfo, Avalon PlayerInfo and Deployer bootstrap mutations red."
   exit 0
 fi
 
@@ -357,6 +381,24 @@ check_fields "HASkinLib/TextureRecord(profile)"     "$SKINLIB_YAML" TextureRecor
 # documents them as optional accordingly.
 HASKINPROXY_YAML="$ROOT/docs/api/openapi/haskinproxy-business.yaml"
 check_fields "HASkinProxy/CSLProfile" "$HASKINPROXY_YAML" CSLProfile "$HASKINPROXY_DIR/internal/model/csl.go" CSLProfile omitempty
+
+# HA-Services-Deployer bootstrap inputs (internal/bootstrap/types.go::Inputs,
+# the /api/v1/deploy/bootstrap/run request body). Request struct whose zero
+# values are meaningful inputs (defaults are filled server-side), so only the
+# field name sets are compared, top level and every nested block via subpath.
+DEPLOYER_YAML="$ROOT/docs/api/openapi/ha-services-deployer.yaml"
+DEPLOYER_TYPES_GO="$DEPLOYER_DIR/internal/bootstrap/types.go"
+check_fields "Deployer/BootstrapInputs"       "$DEPLOYER_YAML" BootstrapInputs                      "$DEPLOYER_TYPES_GO" Inputs      names-only
+check_fields "Deployer/BootstrapTargets"      "$DEPLOYER_YAML" "BootstrapInputs/targets"             "$DEPLOYER_TYPES_GO" Targets     names-only
+check_fields "Deployer/BootstrapInfra"        "$DEPLOYER_YAML" "BootstrapInputs/infra"               "$DEPLOYER_TYPES_GO" Infra       names-only
+check_fields "Deployer/BootstrapDatabase"     "$DEPLOYER_YAML" "BootstrapInputs/database"            "$DEPLOYER_TYPES_GO" Database    names-only
+check_fields "Deployer/BootstrapDBNames"      "$DEPLOYER_YAML" "BootstrapInputs/database/names"      "$DEPLOYER_TYPES_GO" DBNames     names-only
+check_fields "Deployer/BootstrapRedis"        "$DEPLOYER_YAML" "BootstrapInputs/redis"               "$DEPLOYER_TYPES_GO" Redis       names-only
+check_fields "Deployer/BootstrapPublicURLs"   "$DEPLOYER_YAML" "BootstrapInputs/public_urls"         "$DEPLOYER_TYPES_GO" PublicURLs  names-only
+check_fields "Deployer/BootstrapInternalURLs" "$DEPLOYER_YAML" "BootstrapInputs/internal_urls"       "$DEPLOYER_TYPES_GO" InternalURLs names-only
+check_fields "Deployer/BootstrapSMTP"         "$DEPLOYER_YAML" "BootstrapInputs/smtp"                "$DEPLOYER_TYPES_GO" SMTP        names-only
+check_fields "Deployer/BootstrapClientIDs"    "$DEPLOYER_YAML" "BootstrapInputs/client_ids"          "$DEPLOYER_TYPES_GO" ClientIDs   names-only
+check_fields "Deployer/BootstrapPaths"        "$DEPLOYER_YAML" "BootstrapInputs/paths"               "$DEPLOYER_TYPES_GO" Paths       names-only
 
 # Cascade out-of-process plugin event payloads (cascade-plugin/v1). These are
 # the downstream-visible payload structs; the /api/plugins management response
