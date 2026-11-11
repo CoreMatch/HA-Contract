@@ -443,11 +443,17 @@ while IFS= read -r path; do
 done <<<"$mca_mv_urls"
 
 # --- 12. HA-Services-MaintenanceView (Go ops panel -> Deployer) ---
+# Client package renamed deployer -> cupbearer by the product rename; the
+# called surface is unchanged (/api/v1/deploy/*) plus the delivery face
+# (/api/v1/healthz, /api/v1/manifest, /api/v1/projects).
 ha_mv_urls="$(gawk '
   match($0, /doRaw\(ctx, http\.Method(Get|Post|Put|Delete), "(\/api\/v1\/deploy[^"]*)"/, m) {
     print m[2]
   }
-' "$HA_MAINTVIEW_DIR/internal/deployer/client.go" | sort -u)"
+  match($0, /(getEnvelope|getData)\(ctx, "(\/api\/v1\/[^"]+)"/, m) {
+    print m[2]
+  }
+' "$HA_MAINTVIEW_DIR/internal/cupbearer/client.go" | sort -u)"
 [[ -n "$ha_mv_urls" ]] || fail "HA-Services-MaintenanceView: extracted 0 Deployer URLs — refusing to pass silently"
 while IFS= read -r path; do
   check_url "HA-Services-MaintenanceView" "-" "$path" "$tmpdir/deployer-paths.txt"
