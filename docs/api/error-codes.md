@@ -23,7 +23,11 @@ The following error codes are the stable registry for current HA business APIs. 
 | `email_already_registered` | Email is already registered |
 | `invalid_mojang_uuid` | Invalid Mojang UUID format |
 | `mojang_uuid_required_for_existing_user` | `mojang_uuid` missing for existing user |
-| `mojang_uuid_already_bound` | Force-bind target account is already bound to a different `mojang_uuid` |
+| `mojang_uuid_already_bound` | The account is already bound to a different `mojang_uuid`: returned by `/admin/force-bind` for the target account, and by `/player/microsoft-bind` for the caller's account (unbind first) |
+| `mojang_uuid_bound_to_another_account` | `/player/microsoft-bind`: the verified `mojang_uuid` is already bound to a different HA account (operator force-bind territory) |
+| `minecraft_verification_failed` | `/player/microsoft-bind`: Minecraft Services rejected the supplied access token (re-verification failed) |
+| `minecraft_profile_missing` | Microsoft-login mapping: the account owns a Minecraft license but has no game profile yet (profile endpoint answered 404 while entitlements show ownership) |
+| `minecraft_license_not_found` | Microsoft-login mapping: no Minecraft ownership and no game profile (profile endpoint answered 404 without entitlements) |
 | `username_already_bound` | Username is already bound and cannot be claimed or taken: returned by the core's `/internal/claim-user` when the username belongs to another user (passed through by `/admin/claim-user`), and by `/internal/proxy-register` when the username collides with an account that is not in an open mbe bind window |
 | `captcha_disabled` | Graphical captcha is disabled |
 | `captcha_invalid` | Graphical captcha is invalid or expired |

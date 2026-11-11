@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: HRPAuth Yggdrasil Business API
-  version: 1.1.0
-  description: Unified specification for HRPAuth-Yggdrasil-API business interfaces (textures, game accounts, Mojang proxy).
+  version: 1.2.0
+  description: Unified specification for HRPAuth-Yggdrasil-API business interfaces (textures, game accounts, Mojang proxy, Microsoft-login mapping).
 servers:
   - url: /
 paths:
@@ -332,6 +332,146 @@ paths:
       responses:
         '200':
           description: Success; `data` is the updated player summary (`uid`, `account_id`, `mbe`, `mojang_uuid`, `cbh`, `skin_sync`)
+        '401': { $ref: '#/components/responses/Error' }
+  /authserver/microsoft:
+    post:
+      summary: Exchange a Minecraft Services access token for a Yggdrasil session
+      description: >
+        Maps a genuine Microsoft/Mojang identity onto an HA account. Auth
+        level: none — the Minecraft Services access token is the credential.
+        Rate-limited with the same Redis counter as `/authserver/authenticate`.
+
+        Server-side re-verification: the server calls the Minecraft Services
+        profile endpoint (`GET {minecraft_services_base}/minecraft/profile`,
+        base configurable, defaulting to the official host in production and a
+        mock in test) with the supplied bearer token and never trusts
+        client-supplied uuid/name claims. Non-200 answers map to the typed
+        errors below; on 200 the profile `id` becomes the `mojang_uuid`
+        binding key.
+
+        Decision tree on the resolved `mojang_uuid` (play first, bind later is
+        the default; being unbound is NOT an error):
+          1. Already linked to an account: issue a session for that account
+             (idempotent by uuid).
+          2. Not linked: absorb the identity with the existing
+             `POST /internal/proxy-register` decision tree — the SAME semantics
+             WinnerProxy's hasJoined stage 3 uses (new cbh=0 pending-claim
+             account / mbe-window completion when the name collides with an
+             opted-in HA account / 409 collisions). The unique
+             `accounts.mojang_uuid` index is the single source of truth, so
+             absorption here and server-side hasJoined absorption cannot
+             produce two accounts. Issue a session for the resulting account.
+        The client never participates in UUID generation: the in-game UUID is
+        whatever the HA side generated at account registration; the exchange
+        only attaches `mojang_uuid`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mcAccessToken]
+              properties:
+                mcAccessToken:
+                  type: string
+                  description: >
+                    Minecraft Services access token obtained from
+                    `{minecraft_services_base}/authentication/login_with_xbox`.
+                    Never stored, never returned, never logged.
+                clientToken:
+                  type: string
+                  description: Optional Yggdrasil client token; echoed or generated.
+      responses:
+        '200':
+          description: >
+            Standard Yggdrasil authenticate response (`accessToken`,
+            `clientToken`, `availableProfiles`, `selectedProfile`) extended
+            with `claimRequired`. Returned for bound and freshly absorbed
+            identities alike — an unbound identity is absorbed by default and
+            answered with a playable session, never with an error. `data` /
+            top-level `claimRequired` is true while the session's account is a
+            cbh=0 pending-claim proxy account.
+        '403':
+          description: >
+            Yggdrasil error envelope for verification failures only:
+            `error=ForbiddenOperationException` with `errorMessage`
+            `minecraft_profile_missing` / `minecraft_license_not_found` for the
+            profile-404 sub-cases (license checked via entitlements only when
+            the profile 404s); an invalid or rejected MC token likewise maps
+            here.
+        '409':
+          description: >
+            Yggdrasil error envelope: `errorMessage` `username_already_bound` —
+            the genuine name collides with an HA account that has not opened
+            binding (mbe=0), or with an account bound to a different
+            `mojang_uuid`; automatic absorption is refused.
+        '429':
+          description: Rate limited (same bucket as `/authserver/authenticate`).
+        '502':
+          description: Minecraft Services upstream unavailable during re-verification.
+  /player/microsoft-bind:
+    post:
+      summary: Bind the caller's HA account to a verified genuine identity (optional on-the-spot bind)
+      description: >
+        Auth level: BearerAuth, self-service only — the caller's own account,
+        resolved through a Yggdrasil or core OAuth2 token exactly like
+        `/player/mojang-bind-enable`. Optional path, never a precondition for
+        playing: the default for an unbound genuine player is absorption via
+        `/authserver/microsoft` plus in-game claiming. This endpoint serves
+        players who voluntarily bind on the spot and existing HA users linking
+        their genuine identity. The MC access token is re-verified against the
+        Minecraft Services profile endpoint before anything is written. The
+        user simultaneously holds HA credentials and the genuine session, so
+        no opt-in window is needed here; the mbe mechanism stays for
+        server-side absorption collisions.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mcAccessToken]
+              properties:
+                mcAccessToken:
+                  type: string
+      responses:
+        '200':
+          description: >
+            Success; `data` is the player summary (`uid`, `account_id`, `mbe`,
+            `mojang_uuid`, `cbh`, `skin_sync`) with `mojang_uuid` now set.
+            Idempotent when the same uuid is already bound to the caller.
+        '400':
+          description: >
+            `invalid_request` / `minecraft_verification_failed` /
+            `minecraft_profile_missing` / `minecraft_license_not_found`
+        '401': { $ref: '#/components/responses/Error' }
+        '409':
+          description: >
+            `mojang_uuid_already_bound` (the caller's account is bound to a
+            different uuid — unbind first) /
+            `mojang_uuid_bound_to_another_account` (the uuid belongs to another
+            account — operator force-bind territory)
+        '502':
+          description: Minecraft Services upstream unavailable during re-verification.
+  /player/microsoft-unbind:
+    post:
+      summary: Clear the caller's mojang_uuid binding
+      description: >
+        Auth level: BearerAuth, self-service only (same resolution as
+        microsoft-bind). Clears `accounts.mojang_uuid` of the caller's account.
+        Idempotent: unbinding an unbound account succeeds. Never deletes the
+        account or profile. Documented consequence surfaced by clients: after
+        unbinding, the next genuine login (client exchange) or server join
+        (WinnerProxy hasJoined) absorbs the player again as a fresh cbh=0
+        pending-claim account — same idempotent semantics, never two accounts
+        for the same uuid at the same time.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Success; `data` is the player summary with `mojang_uuid` null.
         '401': { $ref: '#/components/responses/Error' }
   /register:
     post:
