@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MatchCoreArena Business API
-  version: 1.12.0
+  version: 1.13.0
   description: >
     Unified specification for MatchCoreArena server business interfaces.
     Authentication via HRPAuth OAuth2 Authorization Code + PKCE.
@@ -2038,8 +2038,14 @@ components:
           type: integer
           default: 0
           description: >
-            Match duration in seconds. When positive it must equal
-            finished_at - started_at (otherwise 400 mca_report_inconsistent).
+            Match duration in seconds. Zero/omitted skips the comparison;
+            negative is rejected. When positive it must agree with
+            finished_at - started_at within the server's configured
+            tolerance (1.13.0: `report.duration_tolerance_seconds`,
+            default ±2 seconds — strict equality before 1.13.0); a
+            difference beyond the tolerance answers 400
+            mca_report_inconsistent. The field stays part of the payload
+            hash, so game_id idempotency/conflict detection is unaffected.
         map_name:
           type: string
           description: Optional map identifier
