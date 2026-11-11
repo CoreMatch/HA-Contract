@@ -10,6 +10,12 @@ This project is the core contract and service collection of the [CoreMatch](http
 - [WinnerProxy](https://github.com/CoreMatch/WinnerProxy): Proxy service
 - [HASkinProxy](https://github.com/CoreMatch/HASkinProxy): Yggdrasil-to-CSL compatibility proxy
 - [Cascade](https://github.com/CoreMatch/Cascade): Rusted Warfare edge proxy (backend contract lives in this repository)
+- [Avalon](https://github.com/CoreMatch/Avalon): Rusted Warfare game engine / governance server (implements the Cascade backend control plane and the Avalon plugin host)
+- [MatchCoreArena-Server](https://github.com/CoreMatch/MatchCoreArena-Server): Matchmaking/settlement arena service
+- [HA-Services-Deployer](https://github.com/CoreMatch/HA-Services-Deployer): Delivery surface plus opt-in bare-metal orchestration
+- [HA-Services-MaintenanceView](https://github.com/CoreMatch/HA-Services-MaintenanceView): Operations panel (maintenance window + Deployer front end)
+- [HA-WebUI-SDKHandler](https://github.com/CoreMatch/HA-WebUI-SDKHandler): WebUI SDK build/maintenance service
+- [Grail](https://github.com/CoreMatch/Grail): Artifact distribution (origin + tiered pull-only mirrors)
 - [HRPAuth-WebUI](https://github.com/CoreMatch/HRPAuth-WebUI): Frontend interface for the authentication service
 
 ## Documentation Center (Single Source of Truth)
@@ -29,6 +35,9 @@ To prevent documentation drift from the actual project, this project adopts a un
 - [Cascade Proxy API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/cascade-proxy.yaml): management surface of the Cascade proxy
 - [Cascade Backend API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/cascade-backend-v1.yaml): control-plane contract between the Cascade proxy and a Rusted Warfare backend
 - [Avalon Plugin API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/avalon-plugin-v1.yaml): contract between the Avalon governance server and out-of-process plugins
+- [Cascade Plugin API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/cascade-plugin-v1.yaml): contract between the Cascade proxy and out-of-process plugins (isomorphic to the Avalon one)
+- [HASkinProxy Business API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/haskinproxy-business.yaml): HASkinProxy (CSL protocol translation) surface
+- [HA-WebUI-SDKHandler API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/webui-sdkhandler.yaml): WebUI SDK build/maintenance surface
 - [HA-Services-Deployer API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/ha-services-deployer.yaml): delivery surface plus opt-in bare-metal orchestration endpoints
 - [Grail API](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/openapi/grail.yaml): artifact distribution upstream (origin + tiered pull-only mirrors; canonical fetch URL, signed manifests, sync)
 
@@ -63,6 +72,10 @@ at the **METHOD + path** level, in **both directions**:
 | WinnerProxy | `internal/router/router.go` | `docs/api/openapi/winnerproxy-business.yaml` |
 | Cascade (proxy) | `internal/api/proxy_http.go` | `docs/api/openapi/cascade-proxy.yaml` |
 | HA-Services-Deployer | `internal/server/router.go` | `docs/api/openapi/ha-services-deployer.yaml` |
+| HASkinProxy | `internal/router/router.go` | `docs/api/openapi/haskinproxy-business.yaml` |
+| HA-WebUI-SDKHandler | `main.go` | `docs/api/openapi/webui-sdkhandler.yaml` |
+| Avalon (cascade backend) | `internal/net/gateway/control.go` | `docs/api/openapi/cascade-backend-v1.yaml` |
+| Grail | `internal/server/router.go` | `docs/api/openapi/grail.yaml` |
 
 Run it from a checkout of this repository:
 
@@ -74,7 +87,8 @@ It prints `Business API drift check passed.` and exits 0 when every pair
 agrees. Implementation repositories are resolved through the environment
 variables `HRPAUTH_REPO_DIR`, `HASKINLIB_REPO_DIR`, `YGGDRASIL_REPO_DIR`,
 `MATCHCOREARENA_REPO_DIR`, `WINNERPROXY_REPO_DIR`, `CASCADE_REPO_DIR`,
-`DEPLOYER_REPO_DIR`,
+`DEPLOYER_REPO_DIR`, `HASKINPROXY_REPO_DIR`, `SDKHANDLER_REPO_DIR`,
+`AVALON_REPO_DIR`, `GRAIL_REPO_DIR`,
 falling back to sibling directories of this repository and then to
 `~/Desktop/HA` (`~/Cascade` for Cascade). A missing repository or contract
 file is a hard error (exit 2), never a silent pass.
