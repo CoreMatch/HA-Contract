@@ -381,34 +381,11 @@ check_set "Cascade-proxy" "$tmpdir/cascade-routes.txt" "$tmpdir/cascade-openapi.
 extract_gin_routes "$DEPLOYER_DIR/internal/server/router.go" > "$tmpdir/deployer-routes.txt"
 extract_openapi_routes "$DEPLOYER_YAML" > "$tmpdir/deployer-openapi.txt"
 
-# Contract-first (planned) endpoints for the Deployer bootstrap surface
-# (registered in ha-services-deployer.yaml v1.3.0 by the Deployer track,
-# commit accfd31, before the routes land on CoreMatch/HA-Services-Deployer
-# main). Same semantics as the Cascade planned list: exempt from the
-# contract-vs-impl comparison while unimplemented, but the contract MUST keep
-# declaring them — dropping one is drift (red). Remove an entry here once the
-# Deployer code serving it is on main.
-cat > "$tmpdir/deployer-planned.txt" <<'EOF'
-GET /api/v1/deploy/bootstrap/infra
-GET /api/v1/deploy/bootstrap/runs
-GET /api/v1/deploy/bootstrap/runs/{id}
-GET /api/v1/deploy/bootstrap/status
-GET /api/v1/deploy/maintenance-view
-POST /api/v1/deploy/bootstrap/infra/mysql
-POST /api/v1/deploy/bootstrap/infra/redis
-POST /api/v1/deploy/bootstrap/plan
-POST /api/v1/deploy/bootstrap/run
-EOF
-while IFS= read -r planned; do
-  [[ -n "$planned" ]] || continue
-  if ! grep -qxF "$planned" "$tmpdir/deployer-openapi.txt"; then
-    echo "[HA-Services-Deployer] planned (contract-first) endpoint missing from contract: $planned"
-    DRIFT_FOUND=1
-  fi
-done < "$tmpdir/deployer-planned.txt"
-
+# 2026-11-12：bootstrap 端点曾在此以 planned 清单豁免（契约先行窗口期）；
+# 实现已随 HA-Services-Deployer 0df8152 落在 main，豁免连根移除——
+# 豁免清单本质是断链校验的后门，代码落地后必须删除，双向全量比对。
 check_set "HA-Services-Deployer" "$tmpdir/deployer-routes.txt" "$tmpdir/deployer-openapi.txt" impl-vs-contract
-check_set "HA-Services-Deployer" "$tmpdir/deployer-routes.txt" "$tmpdir/deployer-openapi.txt" contract-vs-impl "$tmpdir/deployer-planned.txt"
+check_set "HA-Services-Deployer" "$tmpdir/deployer-routes.txt" "$tmpdir/deployer-openapi.txt" contract-vs-impl
 
 # --- HASkinProxy ---
 # Route source is internal/router/router.go (CSL surface).
