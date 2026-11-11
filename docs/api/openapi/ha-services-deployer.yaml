@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HA-Services-Deployer API
-  version: 1.4.0
+  version: 1.4.1
   description: >
     Contract for the HA-Services-Deployer HTTP surface. The service has three
     roles: (1) a read-only delivery service for the version manifest and
@@ -367,15 +367,15 @@ paths:
 
   /api/v1/deploy/bootstrap/infra:
     get:
-      summary: Shared MySQL/Redis infrastructure status
+      summary: MySQL/Redis infrastructure status
       description: >
-        Read-only probe of the shared MySQL/Redis instances that BOTH deploy
-        paths (bare-metal and container compose) use. For each instance
-        reports the mode (`container` managed by this layer, `external`
-        adopted/reused, or `absent`), health, image, data volume, and the two
-        derived connection forms — bare-metal (host address + published port)
-        and compose (service name + container port). Never starts anything.
-        No auth.
+        Read-only probe of the MySQL/Redis instances managed by this layer.
+        Infrastructure stands per selected deployment path: bare-metal
+        orchestration connects via host address + published port; container
+        orchestration connects via service name + container port. For each
+        instance reports the mode (`container` managed by this layer,
+        `external` adopted/reused, or `absent`), health, image, data volume,
+        and both connection forms. Never starts anything. No auth.
       responses:
         '200':
           description: Infrastructure status for mysql and redis
@@ -384,7 +384,7 @@ paths:
     post:
       summary: One-click ensure MySQL is available
       description: >
-        Detects, adopts, or launches the shared MySQL so it is genuinely
+        Detects, adopts, or launches the MySQL so it is genuinely
         usable before returning. Reuses an already-healthy managed container
         or an existing reachable instance (never starts a duplicate); when
         nothing is available it launches the managed container (named volume
@@ -424,7 +424,7 @@ paths:
       summary: One-click ensure Redis is available
       description: >
         Same semantics as the MySQL endpoint but for Redis: detect/adopt or
-        launch the shared managed container (named volume, generated password
+        launch the managed container (named volume, generated password
         fingerprint-only) and wait until PING succeeds. Idempotent.
         Auth: X-Deploy-Token (fail-closed).
       security:
@@ -583,7 +583,7 @@ components:
         infra:
           type: object
           description: >
-            Shared MySQL/Redis handling. When the admin password is omitted
+            MySQL/Redis handling. When the admin password is omitted
             and launch is allowed, the run launches the managed containers and
             generates the credentials itself; existing reachable instances are
             adopted instead (never duplicated).
