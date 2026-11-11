@@ -99,7 +99,9 @@ every checker — never "unreadable, therefore skipped". There are NO
 known-broken consumer exceptions: any consumer URL that resolves to no
 contract path is a hard failure (the two former texture exceptions were fixed
 consumer-side on 2026-11-11 and the bypass removed). Contract-first endpoints
-registered before implementation (e.g. Cascade `GET /api/plugins`) are listed
-as "planned" in `check-business-api-drift.sh`: they are exempt from the
-contract-vs-impl comparison but the contract MUST keep declaring them —
-removing one turns the check red.
+registered before implementation may be carried as "planned" in
+`check-business-api-drift.sh` (exempt from contract-vs-impl while
+unimplemented, but the contract MUST keep declaring them — removing one turns
+the check red). The list is currently EMPTY: the last planned endpoint
+(Cascade `GET /api/plugins`) was implemented in Cascade 4943d6f and its
+exemption removed on 2026-11-12.
