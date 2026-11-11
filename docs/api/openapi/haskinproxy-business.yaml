@@ -149,7 +149,7 @@ components:
   schemas:
     CSLProfile:
       type: object
-      required: [username, textures]
+      required: [username]
       properties:
         username:
           type: string
@@ -161,5 +161,20 @@ components:
           description: >
             Texture map keyed by slot/model: `default` or `slim` (skin),
             `cape`, `elytra`; values are texture hashes resolvable via
-            `GET /textures/{hash}`. Empty object when the profile carries
-            no decodable textures.
+            `GET /textures/{hash}`. The key is always present in the
+            serialized profile but the map itself is omitted when the
+            profile carries no decodable textures (Go `omitempty` on the
+            map), so consumers must treat it as optional.
+        skin:
+          type: string
+          description: >
+            Legacy CustomSkinAPI flat texture field (texture hash). Part of
+            the CSL surface modeled by the response struct
+            (`internal/model/csl.go::CSLProfile`); the current handler fills
+            only the `textures` map, so this field is omitted in practice.
+        cape:
+          type: string
+          description: Legacy CustomSkinAPI flat cape field; omitted in practice (see `skin`).
+        elytra:
+          type: string
+          description: Legacy CustomSkinAPI flat elytra field; omitted in practice (see `skin`).
