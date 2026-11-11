@@ -27,6 +27,9 @@
 #     (Go 1.22 ServeMux patterns in internal/net/gateway/control.go; the
 #      contract paths are relative to the /v1 server URL, so the /v1 prefix
 #      is stripped before comparison)
+#   - Grail                   vs docs/api/openapi/grail.yaml
+#     (gin routes in internal/server/router.go, including the root-level
+#      canonical artifact URL /{project}/{channel}/{version}/{platform})
 #
 # Both directions are checked: METHOD+path present in code but missing from
 # the contract, and contract METHOD+path with no registered route.
@@ -37,7 +40,7 @@
 #   HRPAUTH_REPO_DIR, HASKINLIB_REPO_DIR, YGGDRASIL_REPO_DIR,
 #   MATCHCOREARENA_REPO_DIR, WINNERPROXY_REPO_DIR, CASCADE_REPO_DIR,
 #   DEPLOYER_REPO_DIR, HASKINPROXY_REPO_DIR, SDKHANDLER_REPO_DIR,
-#   AVALON_REPO_DIR
+#   AVALON_REPO_DIR, GRAIL_REPO_DIR
 #
 # Missing repositories or contract files are hard errors (no silent pass).
 
@@ -77,6 +80,7 @@ DEPLOYER_DIR="$(resolve_repo "${DEPLOYER_REPO_DIR:-}" HA-Services-Deployer DEPLO
 HASKINPROXY_DIR="$(resolve_repo "${HASKINPROXY_REPO_DIR:-}" HASkinProxy HASKINPROXY_REPO_DIR)"
 SDKHANDLER_DIR="$(resolve_repo "${SDKHANDLER_REPO_DIR:-}" HA-WebUI-SDKHandler SDKHANDLER_REPO_DIR)"
 AVALON_DIR="$(resolve_repo "${AVALON_REPO_DIR:-}" Avalon AVALON_REPO_DIR)"
+GRAIL_DIR="$(resolve_repo "${GRAIL_REPO_DIR:-}" Grail GRAIL_REPO_DIR)"
 
 HRPAUTH_YAML="$ROOT/docs/api/openapi/hrpauth-business.yaml"
 HASKINLIB_YAML="$ROOT/docs/api/openapi/haskinlib-business.yaml"
@@ -88,8 +92,9 @@ DEPLOYER_YAML="$ROOT/docs/api/openapi/ha-services-deployer.yaml"
 HASKINPROXY_YAML="$ROOT/docs/api/openapi/haskinproxy-business.yaml"
 SDKHANDLER_YAML="$ROOT/docs/api/openapi/webui-sdkhandler.yaml"
 CASCADE_BACKEND_YAML="$ROOT/docs/api/openapi/cascade-backend-v1.yaml"
+GRAIL_YAML="$ROOT/docs/api/openapi/grail.yaml"
 
-for f in "$HRPAUTH_YAML" "$HASKINLIB_YAML" "$YGGDRASIL_YAML" "$MATCHCOREARENA_YAML" "$WINNERPROXY_YAML" "$CASCADE_PROXY_YAML" "$DEPLOYER_YAML" "$HASKINPROXY_YAML" "$SDKHANDLER_YAML" "$CASCADE_BACKEND_YAML"; do
+for f in "$HRPAUTH_YAML" "$HASKINLIB_YAML" "$YGGDRASIL_YAML" "$MATCHCOREARENA_YAML" "$WINNERPROXY_YAML" "$CASCADE_PROXY_YAML" "$DEPLOYER_YAML" "$HASKINPROXY_YAML" "$SDKHANDLER_YAML" "$CASCADE_BACKEND_YAML" "$GRAIL_YAML"; do
   [[ -f "$f" ]] || fail "contract file missing: $f"
 done
 
@@ -123,6 +128,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
     HASKINPROXY_REPO_DIR="$HASKINPROXY_DIR"
     SDKHANDLER_REPO_DIR="$SDKHANDLER_DIR"
     AVALON_REPO_DIR="$AVALON_DIR"
+    GRAIL_REPO_DIR="$GRAIL_DIR"
   )
 
   echo "self-test[1/3]: clean fixture must pass"
@@ -416,6 +422,20 @@ extract_openapi_routes "$CASCADE_BACKEND_YAML" > "$tmpdir/avalon-backend-openapi
 
 check_set "Avalon-cascade-backend" "$tmpdir/avalon-backend-routes.txt" "$tmpdir/avalon-backend-openapi.txt" impl-vs-contract
 check_set "Avalon-cascade-backend" "$tmpdir/avalon-backend-routes.txt" "$tmpdir/avalon-backend-openapi.txt" contract-vs-impl
+
+# --- Grail ---
+# Route source is internal/server/router.go (gin). The canonical artifact
+# URL is a root-level wildcard (/{project}/{channel}/{version}/{platform});
+# metadata, publish, maintenance and sync surfaces live under /v1. HEAD
+# registrations (canonical URL, blobs) are invisible to the extractor by
+# design (it captures GET/POST/PUT/DELETE only).
+[[ -f "$GRAIL_DIR/internal/server/router.go" ]] || fail "Grail route file missing: $GRAIL_DIR/internal/server/router.go"
+extract_gin_routes "$GRAIL_DIR/internal/server/router.go" > "$tmpdir/grail-routes.txt"
+[[ -s "$tmpdir/grail-routes.txt" ]] || fail "Grail extraction yielded 0 routes — refusing to compare against nothing"
+extract_openapi_routes "$GRAIL_YAML" > "$tmpdir/grail-openapi.txt"
+
+check_set "Grail" "$tmpdir/grail-routes.txt" "$tmpdir/grail-openapi.txt" impl-vs-contract
+check_set "Grail" "$tmpdir/grail-routes.txt" "$tmpdir/grail-openapi.txt" contract-vs-impl
 
 if [[ "$DRIFT_FOUND" -eq 1 ]]; then
   echo "Business API drift detected."

@@ -1,0 +1,638 @@
+openapi: 3.1.0
+info:
+  title: Grail API
+  version: 0.1.0
+  description: >
+    Contract for Grail, the HA ecosystem's artifact distribution upstream:
+    an origin plus tiered pull-only mirrors, publishing signed artifacts
+    across three channels (`ci`, `candidate`, `release`).
+
+    This is NOT an HA business API: raw-byte and metadata endpoints do not
+    follow the unified `{success, message, data}` envelope (same standing as
+    `cascade-backend-v1.yaml`).
+
+    Normative semantics live in the design document
+    (`GRAIL-DESIGN-20261112.md`, R2) and are summarized here:
+
+    - Single fetch URL (D10): the only consumer-facing fetch entry is
+      `GET /{project}/{channel}/{version}/{platform}`. The node either serves
+      the bytes itself (200) or redirects (302) — to the external location
+      for externally hosted artifacts, or to the upstream node's canonical
+      URL on a mirror that does not hold the bytes. Consumers never learn
+      who actually supplies the bytes.
+
+    - Signing (D2, D9): every version manifest is signed by a per-project
+      Ed25519 key; the keyring mapping projects to public keys is signed by
+      the root key and carries a monotonic sequence number. Mirrors never
+      re-sign anything; downstream verifies only origin signatures.
+
+    - Versions (D6, D7): version strings are opaque identifiers (author's
+      existing numeric habits preserved, no SemVer); resolution and channel
+      semantics MUST NOT depend on version-string content. A version string
+      is unique per (project, channel) and permanently consumed — no
+      republish after yank.
+
+    - Selection state (D15): version lifecycle is
+      `active -> deprecating(grace) -> removed`; `yanked` is an orthogonal
+      flag. `latest` skips yanked and grace versions; explicit pins can
+      still fetch them (marked).
+
+    - Mirrors (D4, D11): downstream nodes poll `GET /v1/sync/changes`
+      (never pushed). Syncing a version means fetching the bytes behind its
+      canonical URL and storing them; falling back to pointer-only is only
+      allowed on fetch failure or limit breach, and must be reported.
+
+    - Auth layering (D12): reading `release` is anonymous on public nodes;
+      `ci`/`candidate` require read credentials. Mirror sync requires a
+      registered node identity (Ed25519 keypair registered with the upper
+      tier; requests signed). "Who may read" and "who may mirror" are two
+      disjoint identity sets.
+
+    - Fallback limits (D10): fetching nodes enforce signature/digest
+      verification, size caps, refuse redirects to internal addresses
+      (SSRF), never proxy external credentials.
+servers:
+  - url: /
+
+security: []
+
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe
+      description: Returns 200 with node identity and current time. No auth.
+      responses:
+        '200':
+          description: Node is alive
+
+  /{project}/{channel}/{version}/{platform}:
+    get:
+      summary: Canonical artifact URL (the single consumer-facing fetch entry)
+      description: >
+        Serves the bytes of one resource. The node holds the blob -> 200
+        with `application/octet-stream` bytes; it does not -> 302 (external
+        location on the origin, upstream canonical URL on a mirror). Yanked
+        or grace-marked versions are still served on explicit pin (response
+        carries `X-Grail-Yanked` / `X-Grail-Grace` markers). Unknown or
+        removed versions -> 404. `HEAD` behaves identically without a body.
+        Auth: `release` anonymous on public nodes; `ci`/`candidate` require
+        a read token or a node identity.
+      parameters:
+        - name: project
+          in: path
+          required: true
+          schema: { type: string }
+        - name: channel
+          in: path
+          required: true
+          description: One of `ci`, `candidate`, `release`.
+          schema: { type: string }
+        - name: version
+          in: path
+          required: true
+          description: Opaque version string (URL-safe charset).
+          schema: { type: string }
+        - name: platform
+          in: path
+          required: true
+          description: Platform token (`linux-amd64`, `linux-arm64`, ... or `any`).
+          schema: { type: string }
+      responses:
+        '200':
+          description: Artifact bytes
+        '302':
+          description: Redirect to the actual supplier (external or upstream)
+        '401':
+          description: Channel requires read credentials
+        '404':
+          description: Unknown project/channel/version/platform, or removed
+
+  /v1/keyring:
+    get:
+      summary: Current keyring (root-signed)
+      description: >
+        Returns the signed keyring envelope: monotonic `seq`, the root
+        public key, and the `project -> public key` map. Verifiers must
+        reject sequence regression. No auth.
+      responses:
+        '200':
+          description: Signed keyring envelope
+
+  /v1/revocations:
+    get:
+      summary: Current yank/grace states document (root-signed)
+      description: >
+        Returns the signed states envelope with the monotonic `seq`, the
+        yanked version list and the grace-marked version list (with
+        `remove_at` deadlines). Mirrors must fetch this before content on
+        every sync; fetch failure is a hard sync failure. No auth.
+      responses:
+        '200':
+          description: Signed states envelope
+
+  /v1/projects/{project}/channels/{channel}/versions:
+    get:
+      summary: List versions in a channel
+      description: >
+        Lists versions ordered by publication sequence (descending).
+        Yanked and grace-marked versions are excluded unless requested.
+        Auth follows the channel read rules.
+      parameters:
+        - name: project
+          in: path
+          required: true
+          schema: { type: string }
+        - name: channel
+          in: path
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+        - name: include_unselectable
+          in: query
+          required: false
+          description: Include yanked and grace-marked versions (default false).
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Version list
+        '401':
+          description: Channel requires read credentials
+        '404':
+          description: Unknown project or channel
+
+  /v1/projects/{project}/channels/{channel}/resolve:
+    get:
+      summary: Resolve a version (default latest) to its signed manifest
+      description: >
+        `version=latest` resolves to the highest-sequence selectable
+        version (not yanked, not in grace); a pinned string resolves
+        exactly. The response carries the signed version manifest
+        (signature by the project key), selection markers, and the serving
+        node block. When nothing is selectable, `latest` fails with 404 —
+        never a silent fallback to a yanked/grace version. Auth follows
+        the channel read rules.
+      parameters:
+        - name: project
+          in: path
+          required: true
+          schema: { type: string }
+        - name: channel
+          in: path
+          required: true
+          schema: { type: string }
+        - name: version
+          in: query
+          required: false
+          description: "`latest` (default) or an exact version string."
+          schema: { type: string }
+        - name: platform
+          in: query
+          required: false
+          description: Filter resources to this platform (plus `any`).
+          schema: { type: string }
+      responses:
+        '200':
+          description: Resolved signed manifest
+        '401':
+          description: Channel requires read credentials
+        '404':
+          description: No selectable version / unknown project or channel
+
+  /v1/projects/{project}/channels/{channel}/versions/{version}:
+    get:
+      summary: Fetch one signed version manifest
+      description: >
+        Returns the signed manifest for an exact version regardless of
+        selection state (markers included). Auth follows the channel read
+        rules.
+      parameters:
+        - name: project
+          in: path
+          required: true
+          schema: { type: string }
+        - name: channel
+          in: path
+          required: true
+          schema: { type: string }
+        - name: version
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Signed manifest
+        '401':
+          description: Channel requires read credentials
+        '404':
+          description: Unknown version
+
+  /v1/blobs/{digest}:
+    get:
+      summary: Content-addressed blob access (sync/internal)
+      description: >
+        Serves a stored blob by `sha256:<hex>` digest. Mirrors use this to
+        fetch bytes during sync; the consumer-facing entry is the canonical
+        URL instead. Requires a node identity. `HEAD` supported.
+      parameters:
+        - name: digest
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Blob bytes
+        '401':
+          description: Missing or invalid node identity
+        '404':
+          description: Blob not stored on this node
+
+  /v1/blobs:
+    post:
+      summary: Upload a blob for publication
+      description: >
+        Streams bytes to the content-addressed store. The request must
+        declare `X-Grail-Digest` (`sha256:<hex>`); the upload is committed
+        only after the streamed hash matches (temp-file + verify + atomic
+        rename). Size caps enforced mid-stream. Duplicate digests are
+        idempotent successes. Requires a publish token.
+      responses:
+        '200':
+          description: Blob stored (or already present)
+        '400':
+          description: Digest mismatch or malformed request
+        '401':
+          description: Missing or invalid publish token
+        '413':
+          description: Size cap exceeded
+
+  /v1/projects/{project}/channels/{channel}/versions:
+    post:
+      summary: Publish a version
+      description: >
+        Registers a new version: validates the version string is not
+        consumed (D7), every declared digest is present (or an
+        `external_url` is given, which the origin attempts to ingest under
+        the fallback limits — SSRF checks included), assigns the
+        publication sequence, signs the manifest with the project key and
+        makes the pointer visible. Publishing to `ci` requires a
+        CI-identity publish token; `candidate`/`release` require human
+        publish tokens. Mirrors never serve this endpoint.
+      parameters:
+        - name: project
+          in: path
+          required: true
+          schema: { type: string }
+        - name: channel
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Version published (signed manifest returned)
+        '400':
+          description: Validation failure (consumed version, missing blob, bad URL)
+        '401':
+          description: Missing or invalid publish token for this channel
+        '403':
+          description: Role not allowed for this channel (e.g. CI token to release)
+        '404':
+          description: Unknown project (register it first)
+
+  /v1/projects/{project}/channels/{channel}/versions/{version}/yank:
+    post:
+      summary: Yank a version (immediately unselectable, bytes kept)
+      description: >
+        Marks the version yanked in the root-signed states document.
+        `latest` skips it at once; explicit pins still fetch it with a
+        marker. Reversible via DELETE. Requires the admin token.
+      parameters:
+        - name: project
+          in: path
+          required: true
+          schema: { type: string }
+        - name: channel
+          in: path
+          required: true
+          schema: { type: string }
+        - name: version
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Yanked
+        '401':
+          description: Missing or invalid admin token
+        '404':
+          description: Unknown version
+    delete:
+      summary: Unyank a version
+      description: Reverts a yank (audited). Requires the admin token.
+      parameters:
+        - name: project
+          in: path
+          required: true
+          schema: { type: string }
+        - name: channel
+          in: path
+          required: true
+          schema: { type: string }
+        - name: version
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Unyanked
+        '401':
+          description: Missing or invalid admin token
+        '404':
+          description: Unknown version
+
+  /v1/projects/{project}/channels/{channel}/versions/{version}/deprecate:
+    post:
+      summary: Put a version into the grace period (scheduled removal)
+      description: >
+        Starts the grace countdown (`active -> deprecating`): the version
+        stays readable/downloadable with a marker, selection skips it by
+        default, explicit pins keep working until `remove_at`. Refused
+        (409, with the reference list) when the version is referenced
+        (lineage or, later, deploy leases). Requires the admin token.
+      parameters:
+        - name: project
+          in: path
+          required: true
+          schema: { type: string }
+        - name: channel
+          in: path
+          required: true
+          schema: { type: string }
+        - name: version
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Grace period started (`remove_at` returned)
+        '401':
+          description: Missing or invalid admin token
+        '404':
+          description: Unknown version
+        '409':
+          description: Version is referenced; cleanup refused
+    delete:
+      summary: Cancel a grace period before its deadline
+      description: Returns the version to `active` (audited). Requires the admin token.
+      parameters:
+        - name: project
+          in: path
+          required: true
+          schema: { type: string }
+        - name: channel
+          in: path
+          required: true
+          schema: { type: string }
+        - name: version
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Grace cancelled
+        '401':
+          description: Missing or invalid admin token
+        '404':
+          description: Unknown version or not in grace
+
+  /v1/sync/changes:
+    get:
+      summary: Mirror sync (pull-only)
+      description: >
+        Returns everything a downstream node needs to catch up: the current
+        keyring and states envelopes (when changed) plus version-manifest
+        envelopes published since `cursor`, and removals. The mirror
+        verifies every envelope (root anchor -> keyring -> project keys),
+        then fetches the bytes for manifests its channel policy covers.
+        Requires a node identity (registered keypair; signed request).
+      parameters:
+        - name: since
+          in: query
+          required: false
+          description: Opaque cursor from the previous sync (empty = full).
+          schema: { type: string }
+      responses:
+        '200':
+          description: Changes batch
+        '401':
+          description: Missing or invalid node identity
+
+  /v1/admin/projects:
+    post:
+      summary: Register a project (origin only)
+      description: >
+        Generates the project's Ed25519 keypair, adds it to the keyring
+        (seq advances, root re-signs). Idempotent per project name.
+        Requires the admin token.
+      responses:
+        '200':
+          description: Project registered (key id returned; private key stays server-side)
+        '401':
+          description: Missing or invalid admin token
+        '403':
+          description: Not the origin (mirrors never serve admin)
+
+  /v1/admin/nodes:
+    post:
+      summary: Register a downstream node identity (origin/upper tier only)
+      description: >
+        Generates an Ed25519 keypair for a downstream node, stores the
+        public key with its channel permissions, and returns the private
+        key exactly once (operator handoff). Requires the admin token.
+      responses:
+        '200':
+          description: Node registered (private key returned once)
+        '401':
+          description: Missing or invalid admin token
+        '403':
+          description: Not the origin
+    get:
+      summary: List registered downstream nodes
+      description: Public keys and channel permissions only. Requires the admin token.
+      responses:
+        '200':
+          description: Node list
+        '401':
+          description: Missing or invalid admin token
+
+  /v1/admin/nodes/{node}:
+    delete:
+      summary: Revoke one downstream node identity (targeted revocation)
+      description: >
+        Deletes exactly one node's sync credentials without affecting other
+        nodes. Requires the admin token.
+      parameters:
+        - name: node
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Node revoked
+        '401':
+          description: Missing or invalid admin token
+        '404':
+          description: Unknown node
+
+components:
+  schemas:
+    Signature:
+      type: object
+      description: Ed25519 signature over the canonical JSON of a payload.
+      properties:
+        key_id: { type: string }
+        alg: { type: string, description: Always `ed25519` in this revision. }
+        value: { type: string, description: base64 signature bytes }
+      required: [key_id, alg, value]
+
+    Envelope:
+      type: object
+      description: >
+        A signed document: `payload` is the canonical JSON bytes that were
+        signed; verifiers hash those exact bytes.
+      properties:
+        payload: {}
+        signature: { $ref: '#/components/schemas/Signature' }
+      required: [payload, signature]
+
+    KeyEntry:
+      type: object
+      properties:
+        key_id: { type: string }
+        alg: { type: string }
+        public_key: { type: string, description: base64 raw Ed25519 public key }
+        created: { type: string }
+      required: [key_id, alg, public_key, created]
+
+    KeyringPayload:
+      type: object
+      description: Root-signed keyring payload.
+      properties:
+        seq: { type: integer, description: Monotonic; reject regression. }
+        updated_at: { type: string }
+        root: { $ref: '#/components/schemas/KeyEntry' }
+        projects:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/KeyEntry' }
+      required: [seq, updated_at, root, projects]
+
+    Resource:
+      type: object
+      description: >
+        One deliverable file. Consumers see exactly one URL (the canonical
+        URL); where the bytes physically live is the node's internal
+        business.
+      properties:
+        name: { type: string }
+        platform: { type: string }
+        digest: { type: string, description: 'sha256:<hex>' }
+        size: { type: integer }
+        url: { type: string, description: Canonical URL path on this node }
+      required: [name, platform, digest, size, url]
+
+    Provenance:
+      type: object
+      description: Lineage record, signed with the manifest.
+      properties:
+        builder: { type: string }
+        commit: { type: string }
+        built_at: { type: string }
+        same_content:
+          type: boolean
+          description: >
+            Explicit declaration (default false) that this release carries
+            the identical bytes of its candidate ancestor (D8 edge case).
+        derived_from:
+          type: object
+          properties:
+            channel: { type: string }
+            version: { type: string }
+            digest: { type: string }
+            note: { type: string, description: Feedback/correction summary }
+      required: [same_content]
+
+    VersionManifestPayload:
+      type: object
+      description: Project-key-signed payload of a published version.
+      properties:
+        project: { type: string }
+        channel: { type: string }
+        version: { type: string, description: Opaque identifier }
+        seq: { type: integer, description: Publication sequence within the channel }
+        platforms:
+          type: array
+          items: { type: string }
+        resources:
+          type: array
+          items: { $ref: '#/components/schemas/Resource' }
+        provenance: { $ref: '#/components/schemas/Provenance' }
+        published_at: { type: string }
+      required: [project, channel, version, seq, platforms, resources, provenance, published_at]
+
+    ResolveResponse:
+      type: object
+      description: >
+        Resolution result: the signed manifest fields plus selection
+        markers and a non-signed serving-node block (diagnostics only,
+        never a trust input).
+      properties:
+        project: { type: string }
+        channel: { type: string }
+        version: { type: string }
+        seq: { type: integer }
+        yanked: { type: boolean }
+        grace:
+          type: object
+          nullable: true
+          properties:
+            remove_at: { type: string }
+        resolved_from: { type: string, description: '`latest` or `pinned`' }
+        platforms:
+          type: array
+          items: { type: string }
+        resources:
+          type: array
+          items: { $ref: '#/components/schemas/Resource' }
+        provenance: { $ref: '#/components/schemas/Provenance' }
+        signature: { $ref: '#/components/schemas/Signature' }
+        serving_node:
+          type: object
+          properties:
+            tier: { type: integer }
+            offline: { type: boolean }
+            states_seq: { type: integer }
+            stale: { type: boolean }
+      required: [project, channel, version, seq, yanked, resolved_from, platforms, resources, provenance, signature, serving_node]
+
+  securitySchemes:
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: >
+        Shared-secret roles: admin token, publish tokens (channel-scoped),
+        read tokens. Tokens live in the node's local credentials file,
+        never in any repository.
+    nodeSignature:
+      type: apiKey
+      in: header
+      name: X-Grail-Signature
+      description: >
+        Registered node identity: `X-Grail-Node-Id` + `X-Grail-Timestamp`
+        + `X-Grail-Signature` (Ed25519 over `node-id|timestamp|method|path`,
+        +/-300s window). Used by mirror sync and blob access.
