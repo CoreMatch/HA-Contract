@@ -373,6 +373,32 @@ check_fields "Yggdrasil/PlayerSummary" "$YGG_YAML" PlayerSummary "$YGGDRASIL_DIR
 check_fields "HRPAuth/SdkPackageMeta" "$HRPAUTH_YAML" SdkPackageMeta "$HRPAUTH_DIR/controllers/sdk_package_store.go"    SdkPackageMeta  omitempty
 check_fields "HRPAuth/PresenceRequest" "$HRPAUTH_YAML" PresenceRequest "$HRPAUTH_DIR/controllers/presence_controller.go" PresenceRequest names-only
 
+# HRPAuth route/relay registry rules and requests (microservice
+# self-registration surface). Rule structs are response/registry shapes
+# (omitempty convention); request structs whose zero values are meaningful
+# inputs are names-only.
+check_fields "HRPAuth/RouteRule"         "$HRPAUTH_YAML" RouteRule         "$HRPAUTH_DIR/controllers/route_controller.go"      RouteRule         omitempty
+check_fields "HRPAuth/RouteRequest"      "$HRPAUTH_YAML" RouteRequest      "$HRPAUTH_DIR/controllers/route_controller.go"      RouteRequest      names-only
+check_fields "HRPAuth/RelayRule"         "$HRPAUTH_YAML" RelayRule         "$HRPAUTH_DIR/controllers/relay_controller.go"      RelayRule         omitempty
+check_fields "HRPAuth/RelayRequest"      "$HRPAUTH_YAML" RelayRequest      "$HRPAUTH_DIR/controllers/relay_controller.go"      RelayRequest      names-only
+check_fields "HRPAuth/RelayDeleteRequest" "$HRPAUTH_YAML" RelayDeleteRequest "$HRPAUTH_DIR/controllers/relay_controller.go"    RelayDeleteRequest names-only
+check_fields "HRPAuth/RecoveryKeyRequest" "$HRPAUTH_YAML" RecoveryKeyRequest "$HRPAUTH_DIR/controllers/user_security_controller.go" RecoveryKeyRequest names-only
+
+# SDK package manifest meta shapes (.meta.json, also served in package
+# listings). title is the only omitempty field.
+check_fields "HRPAuth/SdkRouteMeta"              "$HRPAUTH_YAML" SdkRouteMeta              "$HRPAUTH_DIR/controllers/sdk_package_store.go" SdkRouteMeta              omitempty
+check_fields "HRPAuth/SdkMenuMeta"               "$HRPAUTH_YAML" SdkMenuMeta               "$HRPAUTH_DIR/controllers/sdk_package_store.go" SdkMenuMeta               omitempty
+check_fields "HRPAuth/SdkDashboardMeta"          "$HRPAUTH_YAML" SdkDashboardMeta          "$HRPAUTH_DIR/controllers/sdk_package_store.go" SdkDashboardMeta          omitempty
+check_fields "HRPAuth/SdkCriticalOperationMeta"  "$HRPAUTH_YAML" SdkCriticalOperationMeta  "$HRPAUTH_DIR/controllers/sdk_package_store.go" SdkCriticalOperationMeta  omitempty
+
+# WebAuthn request structs (names-only: which credential/flow fields are
+# present depends on the flow step, zero values are meaningful inputs).
+check_fields "HRPAuth/WebAuthnRegistrationBeginRequest"   "$HRPAUTH_YAML" WebAuthnRegistrationBeginRequest   "$HRPAUTH_DIR/controllers/webauthn_controller.go" WebAuthnRegistrationBeginRequest   names-only
+check_fields "HRPAuth/WebAuthnLoginBeginRequest"          "$HRPAUTH_YAML" WebAuthnLoginBeginRequest          "$HRPAUTH_DIR/controllers/webauthn_controller.go" WebAuthnLoginBeginRequest          names-only
+check_fields "HRPAuth/WebAuthnFinishRequest"              "$HRPAUTH_YAML" WebAuthnFinishRequest              "$HRPAUTH_DIR/controllers/webauthn_controller.go" WebAuthnFinishRequest              names-only
+check_fields "HRPAuth/WebAuthnSecondFactorBeginRequest"   "$HRPAUTH_YAML" WebAuthnSecondFactorBeginRequest   "$HRPAUTH_DIR/controllers/webauthn_controller.go" WebAuthnSecondFactorBeginRequest   names-only
+check_fields "HRPAuth/WebAuthnToggle2FARequest"           "$HRPAUTH_YAML" WebAuthnToggle2FARequest           "$HRPAUTH_DIR/controllers/webauthn_controller.go" WebAuthnToggle2FARequest           names-only
+
 # HASkinLib texture record (two controllers share the shape; both are
 # checked against the single TextureRecord schema).
 SKINLIB_YAML="$ROOT/docs/api/openapi/haskinlib-business.yaml"
