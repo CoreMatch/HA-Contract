@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HA-Cupbearer API
-  version: 1.5.0
+  version: 1.6.0
   description: >
     Contract for the HA-Cupbearer HTTP surface. The service has three
     roles: (1) a read-only delivery service for the version manifest and
@@ -63,6 +63,23 @@ info:
     without parsing manifest files. The field is additive (empty string for
     external-kind projects or undeclared sources); routes, authentication
     and all pre-existing fields are unchanged.
+
+    Since contract 1.6.0 the bootstrap databases step probes before it acts
+    and resolves conflicts explicitly. Plan and run inputs accept
+    `database.policy` — `takeover` (alter the pre-existing app account's
+    password to this run's credential), `reuse` (keep the account's password
+    and continue with the operator-provided `database.existing_password`,
+    adopted into state), or `skip` (leave the databases step untouched,
+    complete the remaining steps) — plus `database.existing_password`
+    (required by `reuse`, never echoed; masked discipline applies). The
+    policy only takes effect when the app account already exists and the
+    run's candidate credential does not verify against it: without a policy
+    such a conflict fails the run loud (400-style step failure / plan
+    blocker), never half-applied. Matching credentials stay a no-op
+    (idempotent re-run), and when no conflict exists the policy is ignored
+    (creation proceeds as before). Plans report the probe outcome (database
+    and account existence, credential match) as items, so a wizard can show
+    "what already exists, what was chosen, what happened".
 servers:
   - url: /
 
