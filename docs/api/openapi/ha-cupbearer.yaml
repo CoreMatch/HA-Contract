@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HA-Cupbearer API
-  version: 1.6.0
+  version: 1.7.0
   description: >
     Contract for the HA-Cupbearer HTTP surface. The service has three
     roles: (1) a read-only delivery service for the version manifest and
@@ -80,6 +80,22 @@ info:
     (creation proceeds as before). Plans report the probe outcome (database
     and account existence, credential match) as items, so a wizard can show
     "what already exists, what was chosen, what happened".
+
+    Since contract 1.7.0 the bootstrap surface adds a read-only credential
+    prefill hints endpoint (`POST /api/v1/deploy/bootstrap/credential-hints`,
+    deploy-token gated, fail-closed): when adopting or reusing a pre-existing
+    MySQL/Redis/app-account, the wizard may prefill the password fields with
+    values this tool itself generated and can still trace. Three source
+    classes are consulted in order — managed container env, this instance's
+    bootstrap state and the `.env` it wrote, and historical on-machine
+    artifacts of earlier instances of this tool (bounded scan roots, never a
+    filesystem walk). Every candidate is verified against the target account
+    before its plaintext is echoed; untraceable (external) passwords are
+    never prefilled and never echoed, and every plaintext echo is audit-logged
+    server-side (caller, target, source, provenance, fingerprint, time — no
+    plaintext in the audit record). `database.existing_password` keeps its
+    `policy: reuse` semantics unchanged; the hints are additive read-only
+    fields carrying a `source` enum and a `provenance` description.
 servers:
   - url: /
 
@@ -480,6 +496,79 @@ paths:
         '503':
           description: Deploy token not configured
 
+  /api/v1/deploy/bootstrap/credential-hints:
+    post:
+      summary: Credential prefill hints for adopting pre-existing instances
+      description: >
+        Read-only credential discovery for the "adopt/reuse a pre-existing
+        instance" wizard branches (contract 1.7.0). For each of the three
+        credential targets — the MySQL admin account (`mysql_admin`), the app
+        DB account (`app_user`), and Redis (`redis`) — the layer collects
+        candidate values from traceable source classes only, verifies every
+        candidate against the target account/instance named by the inputs,
+        and echoes plaintext ONLY for the first candidate that verifies.
+        Source classes (enum `source`, consulted in this order):
+        `managed_container_env` (env of the managed infra containers
+        `ha-infra-mysql-1` / `ha-infra-redis-1`, and of compose-managed
+        platform service containers declaring the matching account),
+        `bootstrap_state` (this instance's bootstrap state), `env_file` (the
+        `.env` this instance writes; only keys demonstrably appended by this
+        tool qualify — pre-existing keys are treated external), `historical`
+        (other on-machine artifacts produced by this tool — `.env` files and
+        bootstrap state copies under a bounded root set: an explicit
+        scan-root list plus compose working directories of running
+        containers; never a filesystem walk; the provenance names the
+        directory and, for state copies, the initialization time), and
+        `none` (nothing traceable found). Security boundary: passwords this
+        tool did not generate and cannot trace are never prefilled and never
+        echoed; candidates failing verification are discarded (counted in
+        `candidates_checked`, never returned). Every plaintext echo is
+        audit-logged server-side (caller address, target, source,
+        provenance, value fingerprint, timestamp; the audit record carries
+        no plaintext). Writes nothing. `database.existing_password`
+        semantics are unchanged (operator-provided input for
+        `policy: reuse`); this surface is additive.
+      security:
+        - deployToken: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: >
+                Partial bootstrap inputs naming the verification targets;
+                missing fields fall back to the bootstrap defaults
+                (127.0.0.1:3306 root / app user `hrpa`, 127.0.0.1:6379).
+              properties:
+                database:
+                  type: object
+                  properties:
+                    admin_host: { type: string }
+                    admin_port: { type: integer }
+                    admin_user: { type: string }
+                    app_user: { type: string }
+                redis:
+                  type: object
+                  properties:
+                    host: { type: string }
+                    port: { type: integer }
+      responses:
+        '200':
+          description: >
+            Credential hints report. Data: `generated_at`, `hints` — one
+            entry per target with `target`, `account`, `address`, `found`,
+            `source`, `value` (present only when found, i.e. traceable and
+            verified), `provenance` (which container / file / directory /
+            initialization the value came from), `candidates_checked`, and
+            `detail` (human-readable situation, including the contextual
+            guidance for the managed-but-unreadable and external-instance
+            cases when nothing traceable was found).
+        '401':
+          description: Invalid or missing X-Deploy-Token
+        '503':
+          description: Deploy token not configured or bootstrap layer absent
+
   /api/v1/deploy/bootstrap/plan:
     post:
       summary: Bootstrap dry-run (preview)
@@ -593,6 +682,62 @@ paths:
 
 components:
   schemas:
+    CredentialHint:
+      type: object
+      description: >
+        One credential prefill hint (read-only, additive; contract 1.7.0).
+        `value` appears only when a traceable candidate verified against the
+        target account; `source` names the source class and `provenance` the
+        concrete container/file/directory (and initialization time for
+        historical state copies). Plaintext echoes are audit-logged
+        server-side; the audit record carries no plaintext.
+      required: [target, found, source]
+      properties:
+        target:
+          type: string
+          enum: [mysql_admin, app_user, redis]
+        account:
+          type: string
+          description: The account the credential belongs to (root / hrpa / empty for Redis).
+        address:
+          type: string
+          description: The verification target address (host:port).
+        found:
+          type: boolean
+        source:
+          type: string
+          enum: [managed_container_env, bootstrap_state, env_file, historical, none]
+        value:
+          type: string
+          description: >
+            Plaintext credential. Present ONLY when `found` — i.e. generated
+            or adopted by this tool, traceable, and verified against the
+            target account. Never present for external/unverifiable values.
+        provenance:
+          type: string
+          description: >
+            Where the value came from, in human terms (container name and
+            env key, state file path, `.env` path, or historical directory
+            plus initialization time).
+        candidates_checked:
+          type: integer
+          description: How many traceable candidates were tried (verified or not).
+        detail:
+          type: string
+          description: >
+            Human-readable situation, including the contextual guidance shown
+            when nothing traceable was found (managed-but-unreadable vs
+            external-instance).
+    CredentialHintsReport:
+      type: object
+      description: Credential prefill hints report (contract 1.7.0).
+      properties:
+        generated_at:
+          type: string
+        hints:
+          type: array
+          items:
+            $ref: '#/components/schemas/CredentialHint'
     BootstrapInputs:
       type: object
       description: >
