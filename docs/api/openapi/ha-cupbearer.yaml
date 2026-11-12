@@ -638,6 +638,27 @@ components:
               description: >
                 Create the app user and grant it (default true). Set false
                 when an existing app user only needs database creation.
+            policy:
+              type: string
+              enum: [takeover, reuse, skip]
+              description: >
+                Disposition for a pre-existing app account whose password
+                does not verify against this run's candidate credential:
+                `takeover` alters the account's password to this run's
+                credential and continues; `reuse` keeps the account's
+                password and continues with `existing_password` (adopted
+                into state); `skip` leaves the entire databases step
+                untouched and completes the remaining steps. Only takes
+                effect when the probe actually detects that conflict —
+                matching credentials stay a no-op and creation proceeds as
+                before when nothing pre-exists. Without a policy a detected
+                conflict fails the run loud (never half-applied).
+            existing_password:
+              type: string
+              description: >
+                The pre-existing app account's current password; required
+                with `policy: reuse`, never echoed (masked discipline
+                applies).
             names:
               type: object
               description: >
