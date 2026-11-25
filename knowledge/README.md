@@ -10,7 +10,7 @@ scripts, and the anchor-convention entry below.
 
 | Repository | Knowledge directory |
 |---|---|
-| HRPAuth | `HRPAuth/knowledge/` (incl. `archive/` historical docs) |
+| Armorial | `hrpauth/Armorial/knowledge/` (incl. `archive/` historical docs) |
 | HRPAuth-Yggdrasil-API | `HRPAuth-Yggdrasil-API/knowledge/` |
 | HASkinLib | `HASkinLib/knowledge/` (incl. `archive/`) |
 | HASkinProxy | `HASkinProxy/knowledge/` |

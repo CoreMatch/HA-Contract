@@ -14,7 +14,7 @@ info:
 
     Authentication model: HASkinLib has no local credential store. Endpoints
     marked with BearerAuth validate the OAuth2 access token by calling the
-    HRPAuth core service (`POST /internal/verify-token`, then
+    Armorial core service (`POST /internal/verify-token`, then
     `GET /services/users/{uuid}`) and act on the resulting user identity.
 servers:
   - url: /
@@ -209,7 +209,7 @@ components:
       type: http
       scheme: bearer
       description: >
-        OAuth2 access token issued by HRPAuth core; validated server-side via
+        OAuth2 access token issued by Armorial core; validated server-side via
         the core's internal endpoints, not against a local database.
   responses:
     Error:

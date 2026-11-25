@@ -1,6 +1,6 @@
-# HA Business API Standard
+# Armorial Business API Standard
 
-This is the single source of truth for the HA Business API, and it also records the internal implementation logic of this project for external protocols.
+This is the single source of truth for the Armorial Business API, and it also records the internal implementation logic of this project for external protocols.
 
 ## Documentation Positioning
 
@@ -15,7 +15,7 @@ This project implements the following external standards. For detailed protocol 
 2. **CustomSkinAPI**: Implementation of the skin library standard interface.
 3. **HASkinProxy (Protocol Translation)**: A dedicated service that bridges Yggdrasil API to CustomSkinAPI for CSL-compatible clients.
 
-> Note: the Yggdrasil surface is intentionally **not** part of the core OpenAPI `hrpauth-business.yaml` file — that file covers only HRPAuth Core business endpoints. `HRPAuth-Yggdrasil-API` business wrappers live in `openapi/hrpauth-yggdrasil-business.yaml`, while the protocol surface remains documented separately in `HRPAuth-Yggdrasil-API/knowledge/0010-yggdrasil-api-surface.md` (repatriated 2026-11-07).
+> Note: the Yggdrasil surface is intentionally **not** part of the core OpenAPI `hrpauth-business.yaml` file — that file covers only Armorial Core business endpoints. `HRPAuth-Yggdrasil-API` business wrappers live in `openapi/hrpauth-yggdrasil-business.yaml`, while the protocol surface remains documented separately in `HRPAuth-Yggdrasil-API/knowledge/0010-yggdrasil-api-surface.md` (repatriated 2026-11-07).
 
 ## Unified Constraints
 
@@ -60,16 +60,16 @@ During the transition period, some success fields will be mirrored at the top le
 
 ## File Descriptions
 
-- `openapi/hrpauth-business.yaml`: HRPAuth Core Business API specification
+- `openapi/hrpauth-business.yaml`: Armorial Core Business API specification
 - `openapi/hrpauth-yggdrasil-business.yaml`: HRPAuth-Yggdrasil-API business wrapper specification
 - `openapi/haskinlib-business.yaml`: HASkinLib (texture library) specification
 - `openapi/haskinproxy-business.yaml`: HASkinProxy (CSL protocol translation) specification
 - `openapi/matchcorearena-business.yaml`: MatchCoreArena (matchmaking/settlement) specification
 - `openapi/winnerproxy-business.yaml`: WinnerProxy (Yggdrasil edge proxy) specification
 - `openapi/cascade-proxy.yaml`: Cascade proxy management API
-- `openapi/cascade-backend-v1.yaml`: Cascade proxy↔backend control-plane contract (`/v1`, mutual TLS). Not an HA business API: it does not follow the unified business response format. Implemented by the Avalon gateway (`internal/net/gateway/control.go`) and covered by the anti-drift checks since 2026-11-08
+- `openapi/cascade-backend-v1.yaml`: Cascade proxy↔backend control-plane contract (`/v1`, mutual TLS). Not an Armorial business API: it does not follow the unified business response format. Implemented by the Avalon gateway (`internal/net/gateway/control.go`) and covered by the anti-drift checks since 2026-11-08
 - `openapi/ha-cupbearer.yaml`: HA-Cupbearer delivery + orchestration surface
-- `openapi/grail.yaml`: Grail artifact distribution upstream (origin + tiered pull-only mirrors). Not an HA business API: raw-byte and metadata endpoints do not follow the unified business response format
+- `openapi/grail.yaml`: Grail artifact distribution upstream (origin + tiered pull-only mirrors). Not an Armorial business API: raw-byte and metadata endpoints do not follow the unified business response format
 - `openapi/webui-sdkhandler.yaml`: HA-WebUI-SDKHandler build/maintenance surface
 - `openapi/avalon-plugin-v1.yaml`: Avalon out-of-process plugin contract (manifest + events)
 - `openapi/cascade-plugin-v1.yaml`: Cascade out-of-process plugin contract (manifest + events; isomorphic to the Avalon one, `cascade-plugin/v1` namespace, `X-Cascade-*` signature headers)

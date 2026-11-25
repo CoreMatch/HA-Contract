@@ -27,7 +27,7 @@ jobs:
           path: HA-Contract
 
       # --- implementation repositories (server side) ---
-      - { name: Checkout HRPAuth, uses: actions/checkout@v7, with: { repository: CoreMatch/HRPAuth, path: HRPAuth } }
+      - { name: Checkout Armorial, uses: actions/checkout@v7, with: { repository: CoreMatch/Armorial, path: Armorial } }
       - { name: Checkout HASkinLib, uses: actions/checkout@v7, with: { repository: CoreMatch/HASkinLib, path: HASkinLib } }
       - { name: Checkout HRPAuth-Yggdrasil-API, uses: actions/checkout@v7, with: { repository: CoreMatch/HRPAuth-Yggdrasil-API, path: HRPAuth-Yggdrasil-API } }
       - { name: Checkout MatchCoreArena-Server, uses: actions/checkout@v7, with: { repository: CoreMatch/MatchCoreArena-Server, path: MatchCoreArena-Server } }

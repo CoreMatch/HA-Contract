@@ -157,7 +157,7 @@ paths:
       summary: SDK package inventory (maintenance port)
       description: >
         Lists the SDK package metadata currently known to the broker (the
-        same metadata shape the HRPAuth core serves for SDK packages).
+        same metadata shape the Armorial core serves for SDK packages).
         Auth: `Authorization: Bearer <OPS credential>`. Idempotent read.
       security:
         - opsBearer: []

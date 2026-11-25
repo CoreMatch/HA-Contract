@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
-  title: HRPAuth Business API
+  title: Armorial Business API
   version: 1.1.0
   description: >
-    Unified specification for HA business interfaces. Yggdrasil compatible
+    Unified specification for Armorial business interfaces. Yggdrasil compatible
     interfaces are outside the scope of this file.
 
     1.1.0 (2026-11-12): added `POST /internal/user-exists` (ops-level,
@@ -388,7 +388,7 @@ paths:
       summary: Declare email for a user (removed; deprecation confirmed)
       deprecated: true
       description: >
-        Removed from the HRPAuth core in commit 9ab4e64 (2026-10-06); calls
+        Removed from the Armorial core in commit 9ab4e64 (2026-10-06); calls
         receive the standard 404 `route_not_found` response. Deprecation was
         confirmed by author decision on 2026-11-05: this endpoint will NOT
         return in any form, and there is no service-to-service successor for

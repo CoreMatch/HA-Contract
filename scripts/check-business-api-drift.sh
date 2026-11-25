@@ -5,7 +5,7 @@
 # METHOD + path level, in both directions.
 #
 # Checks performed:
-#   - HRPAuth core            vs docs/api/openapi/hrpauth-business.yaml
+#   - Armorial core            vs docs/api/openapi/hrpauth-business.yaml
 #   - HASkinLib               vs docs/api/openapi/haskinlib-business.yaml
 #   - HRPAuth-Yggdrasil-API   vs docs/api/openapi/hrpauth-yggdrasil-business.yaml
 #     (protocol routes documented in docs/dev/HRPAuth/yggdrasil-api.md are
@@ -36,11 +36,12 @@
 #
 # Implementation repositories are located via environment variables, falling
 # back to sibling directories of this repository, then to ~/Desktop/HA
-# (~/Cascade for the Cascade proxy):
-#   HRPAUTH_REPO_DIR, HASKINLIB_REPO_DIR, YGGDRASIL_REPO_DIR,
-#   MATCHCOREARENA_REPO_DIR, WINNERPROXY_REPO_DIR, CASCADE_REPO_DIR,
-#   CUPBEARER_REPO_DIR, HASKINPROXY_REPO_DIR, SDKHANDLER_REPO_DIR,
-#   AVALON_REPO_DIR, GRAIL_REPO_DIR
+# (~/Cascade for the Cascade proxy). Armorial is discovered under its current
+# name first, with HRPAuth retained as a legacy directory fallback:
+#   ARMORIAL_REPO_DIR (legacy: HRPAUTH_REPO_DIR), HASKINLIB_REPO_DIR,
+#   YGGDRASIL_REPO_DIR, MATCHCOREARENA_REPO_DIR, WINNERPROXY_REPO_DIR,
+#   CASCADE_REPO_DIR, CUPBEARER_REPO_DIR, HASKINPROXY_REPO_DIR,
+#   SDKHANDLER_REPO_DIR, AVALON_REPO_DIR, GRAIL_REPO_DIR
 #
 # Missing repositories or contract files are hard errors (no silent pass).
 
@@ -70,7 +71,32 @@ resolve_repo() {
   fail "$name repository not found (set $env_name or place it next to HA-Contract)"
 }
 
-HRPAUTH_DIR="$(resolve_repo "${HRPAUTH_REPO_DIR:-}" HRPAuth HRPAUTH_REPO_DIR)"
+resolve_armorial_repo() {
+  local candidate repo_name
+
+  if [[ -n "${ARMORIAL_REPO_DIR:-}" ]]; then
+    [[ -d "$ARMORIAL_REPO_DIR" ]] || fail "Armorial repository not found at \$ARMORIAL_REPO_DIR='$ARMORIAL_REPO_DIR'"
+    readlink -f "$ARMORIAL_REPO_DIR"
+    return
+  fi
+  if [[ -n "${HRPAUTH_REPO_DIR:-}" ]]; then
+    [[ -d "$HRPAUTH_REPO_DIR" ]] || fail "Armorial repository not found at legacy \$HRPAUTH_REPO_DIR='$HRPAUTH_REPO_DIR'"
+    readlink -f "$HRPAUTH_REPO_DIR"
+    return
+  fi
+
+  for repo_name in Armorial HRPAuth; do
+    for candidate in "$ROOT/../$repo_name" "$HOME/Desktop/HA/$repo_name" "$ROOT/../hrpauth/$repo_name" "$ROOT/../matchcore/$repo_name" "$ROOT/../rw/$repo_name" "$ROOT/../maintanance/$repo_name"; do
+      if [[ -d "$candidate" ]]; then
+        readlink -f "$candidate"
+        return
+      fi
+    done
+  done
+  fail "Armorial repository not found (set ARMORIAL_REPO_DIR or legacy HRPAUTH_REPO_DIR; HRPAuth directory fallback is also supported)"
+}
+
+ARMORIAL_DIR="$(resolve_armorial_repo)"
 HASKINLIB_DIR="$(resolve_repo "${HASKINLIB_REPO_DIR:-}" HASkinLib HASKINLIB_REPO_DIR)"
 YGGDRASIL_DIR="$(resolve_repo "${YGGDRASIL_REPO_DIR:-}" HRPAuth-Yggdrasil-API YGGDRASIL_REPO_DIR)"
 MATCHCOREARENA_DIR="$(resolve_repo "${MATCHCOREARENA_REPO_DIR:-}" MatchCoreArena-Server MATCHCOREARENA_REPO_DIR)"
@@ -118,7 +144,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
   # (layout-agnostic — flat CI checkouts and the nested local workspace both
   # resolve there), so the fixture script points at the same real repos.
   REPO_ENV=(
-    HRPAUTH_REPO_DIR="$HRPAUTH_DIR"
+    ARMORIAL_REPO_DIR="$ARMORIAL_DIR"
     HASKINLIB_REPO_DIR="$HASKINLIB_DIR"
     YGGDRASIL_REPO_DIR="$YGGDRASIL_DIR"
     MATCHCOREARENA_REPO_DIR="$MATCHCOREARENA_DIR"
@@ -286,8 +312,8 @@ check_set() {
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
-# --- HRPAuth core ---
-extract_gin_routes "$HRPAUTH_DIR/main.go" > "$tmpdir/hrpauth-routes.txt"
+# --- Armorial core ---
+extract_gin_routes "$ARMORIAL_DIR/main.go" > "$tmpdir/hrpauth-routes.txt"
 extract_openapi_routes "$HRPAUTH_YAML" > "$tmpdir/hrpauth-openapi.txt"
 
 # Tombstone entries kept in the contract as migration references (removed
@@ -296,8 +322,8 @@ cat > "$tmpdir/hrpauth-tombstones.txt" <<'EOF'
 POST /user/declare-email
 EOF
 
-check_set "HRPAuth" "$tmpdir/hrpauth-routes.txt" "$tmpdir/hrpauth-openapi.txt" impl-vs-contract
-check_set "HRPAuth" "$tmpdir/hrpauth-routes.txt" "$tmpdir/hrpauth-openapi.txt" contract-vs-impl "$tmpdir/hrpauth-tombstones.txt"
+check_set "Armorial" "$tmpdir/hrpauth-routes.txt" "$tmpdir/hrpauth-openapi.txt" impl-vs-contract
+check_set "Armorial" "$tmpdir/hrpauth-routes.txt" "$tmpdir/hrpauth-openapi.txt" contract-vs-impl "$tmpdir/hrpauth-tombstones.txt"
 
 # --- HASkinLib ---
 extract_gin_routes "$HASKINLIB_DIR/main.go" > "$tmpdir/haskinlib-routes.txt"

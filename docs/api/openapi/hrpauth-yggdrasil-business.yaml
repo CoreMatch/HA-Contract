@@ -32,7 +32,7 @@ paths:
   /player/profile:
     get:
       summary: Get the authenticated user's game profile
-      description: Uses the HRPAuth Core access token; returns null without creating a local account or profile when none exists.
+      description: Uses the Armorial Core access token; returns null without creating a local account or profile when none exists.
       security:
         - BearerAuth: []
       responses:
@@ -42,7 +42,7 @@ paths:
     post:
       summary: Manually create the authenticated user's game profile
       description: >
-        Validates the HRPAuth Core access token and, only on this explicit
+        Validates the Armorial Core access token and, only on this explicit
         request, creates a missing local account mapping and profile atomically.
         Creates at most one profile for the caller. The profile UUID may be
         randomly generated, supplied by the caller, or looked up from a Mojang
@@ -252,7 +252,7 @@ paths:
     get:
       summary: Get the game account summary for the authenticated user
       description: >
-        Resolves the HRPAuth Core Bearer token to the local game account and
+        Resolves the Armorial Core Bearer token to the local game account and
         returns its summary fields.
       security:
         - BearerAuth: []
@@ -682,7 +682,7 @@ components:
       required: true
       schema:
         type: string
-      description: Temporary internal key issued by HRPAuth Core (`POST /services/auth-key`)
+      description: Temporary internal key issued by Armorial Core (`POST /services/auth-key`)
   securitySchemes:
     BearerAuth:
       type: http

@@ -365,7 +365,7 @@ paths:
       summary: Send friend request
       description: >
         Sends a friend request to the target user, identified by their HA
-        username (resolved to a UID through the HRPAuth core lookup, with a
+        username (resolved to a UID through the Armorial core lookup, with a
         Redis-cached resolution).
       tags: [Friends]
       security:

@@ -1,6 +1,6 @@
 # Error Codes
 
-The following error codes are the stable registry for current HA business APIs. New error codes should be added here first, then implemented in the code and OpenAPI specs.
+The following error codes are the stable registry for current Armorial business APIs. New error codes should be added here first, then implemented in the code and OpenAPI specs.
 
 | Code | Meaning |
 |---|---|
@@ -9,7 +9,7 @@ The following error codes are the stable registry for current HA business APIs. 
 | `invalid_email` | Invalid email format or email parameter |
 | `invalid_credentials` | Invalid login credentials |
 | `invalid_auth_type_or_token` | Legacy invalid combination of `auth_type` and token |
-| `invalid_manage_token` | Legacy invalid Manage Token. Defined in this registry only; no current implementation returns it — the HRPAuth core keeps the constant as part of the legacy Manage Token mechanism but has no code path that emits it, and the Yggdrasil-API force-bind `manage_token` check was retired on 2026-11-05 in favor of service-token scopes |
+| `invalid_manage_token` | Legacy invalid Manage Token. Defined in this registry only; no current implementation returns it — the Armorial core keeps the constant as part of the legacy Manage Token mechanism but has no code path that emits it, and the Yggdrasil-API force-bind `manage_token` check was retired on 2026-11-05 in favor of service-token scopes |
 | `remember_token_required` | Legacy Remember Token missing |
 | `invalid_remember_token` | Legacy invalid Remember Token |
 | `manage_target_required` | Missing target user identifier for delegated/service operation |
@@ -81,15 +81,15 @@ The following error codes are the stable registry for current HA business APIs. 
 | `oauth_invalid_code_challenge` | Invalid or missing PKCE code challenge |
 | `oauth_insufficient_scope` | Token does not carry the required scope |
 | `oauth_access_denied` | Access denied by OAuth2 authorization policy |
-| `invalid_client_metadata` | Self-service client registration metadata is invalid (HRPAuth core `POST /oauth/register`; the RFC 7591 §3.2.2 error code): the service name is not presence-registered, a requested scope lies outside the service's `oauth2.service_scope_allowlist` entry (or is a super/`db.*` scope), `client_name` is missing, the body is malformed, or the requested `client_name` collides with a legacy client row carrying the super client secret — such a row is refused, never returned (HTTP 400) |
+| `invalid_client_metadata` | Self-service client registration metadata is invalid (Armorial core `POST /oauth/register`; the RFC 7591 §3.2.2 error code): the service name is not presence-registered, a requested scope lies outside the service's `oauth2.service_scope_allowlist` entry (or is a super/`db.*` scope), `client_name` is missing, the body is malformed, or the requested `client_name` collides with a legacy client row carrying the super client secret — such a row is refused, never returned (HTTP 400) |
 | `oauth_login_required` | Missing Bearer access token |
 | `login_ticket_required` | Missing login ticket |
 | `invalid_login_ticket` | Login ticket is invalid or expired |
-| `endpoint_deprecated` | Endpoint has been removed from active auth flow (constant defined in HRPAuth core; no endpoint currently returns it) |
-| `hook_denied` | A registered webhook hook vetoed the request (HRPAuth core OAuth2 flow) |
-| `hook_failed` | A required webhook hook failed and the fail policy closed the request (HRPAuth core OAuth2 flow) |
-| `database_not_ready` | Database middleware rejected the request before the schema was ready (HRPAuth core; returned without the unified `error` alias and `meta` fields) |
-| `route_not_found` | No registered route matched the request (HRPAuth core NoRoute handler) |
+| `endpoint_deprecated` | Endpoint has been removed from active auth flow (constant defined in Armorial core; no endpoint currently returns it) |
+| `hook_denied` | A registered webhook hook vetoed the request (Armorial core OAuth2 flow) |
+| `hook_failed` | A required webhook hook failed and the fail policy closed the request (Armorial core OAuth2 flow) |
+| `database_not_ready` | Database middleware rejected the request before the schema was ready (Armorial core; returned without the unified `error` alias and `meta` fields) |
+| `route_not_found` | No registered route matched the request (Armorial core NoRoute handler) |
 | `service_not_registered` | Service not registered; send `/services/presence` first |
 | `relay_failed` | Relay forwarding to microservice failed |
 | `relay_not_found` | Relay rule not found for deletion |
@@ -99,13 +99,13 @@ The following error codes are the stable registry for current HA business APIs. 
 | `sdk_package_invalid_manifest` | SDK package `manifest.json` is missing or fails validation (HTTP 422) |
 | `sdk_package_invalid_path` | SDK package archive contains an illegal path (traversal / absolute / symlink) (HTTP 400) |
 | `sdk_package_too_large` | SDK package exceeds the configured size limit (HTTP 413) |
-| `sdk_not_found` | SDK package lookup failed. Defined in the HRPAuth core and Yggdrasil-API constant tables; no handler currently returns it (the sdk-package endpoints use `sdk_package_not_found`) |
+| `sdk_not_found` | SDK package lookup failed. Defined in the Armorial core and Yggdrasil-API constant tables; no handler currently returns it (the sdk-package endpoints use `sdk_package_not_found`) |
 | `insufficient_auth_level` | Credential present but below the required auth level |
 | `internal_error` | Unclassified internal error |
-| `oauth_state_mismatch` | OAuth2 state parameter mismatch (CSRF / replay protection). Defined in the HRPAuth core and MatchCoreArena registries; no current implementation returns it. |
-| `oauth_token_expired` | OAuth2 access token expired. Returned by MatchCoreArena's auth middleware (`401`); in the HRPAuth core expired tokens surface as `oauth_invalid_grant`. |
-| `oauth_refresh_failed` | OAuth2 refresh token is invalid, expired, or revoked. Returned by MatchCoreArena `POST /api/auth/refresh`; in the HRPAuth core refresh failures surface as `oauth_invalid_grant`. |
-| `oauth_revoke_failed` | OAuth2 token revocation request failed. Returned by MatchCoreArena `POST /api/auth/logout`. Defined in the HRPAuth core registry only; no core endpoint returns it. |
+| `oauth_state_mismatch` | OAuth2 state parameter mismatch (CSRF / replay protection). Defined in the Armorial core and MatchCoreArena registries; no current implementation returns it. |
+| `oauth_token_expired` | OAuth2 access token expired. Returned by MatchCoreArena's auth middleware (`401`); in the Armorial core expired tokens surface as `oauth_invalid_grant`. |
+| `oauth_refresh_failed` | OAuth2 refresh token is invalid, expired, or revoked. Returned by MatchCoreArena `POST /api/auth/refresh`; in the Armorial core refresh failures surface as `oauth_invalid_grant`. |
+| `oauth_revoke_failed` | OAuth2 token revocation request failed. Returned by MatchCoreArena `POST /api/auth/logout`. Defined in the Armorial core registry only; no core endpoint returns it. |
 | `oauth_rate_limited` | Too many auth requests; retry later (MatchCoreArena login-ticket flow). |
 | `oauth_hrpauth_down` | HRPAuth upstream unavailable during an auth flow or a service-to-service call (MatchCoreArena; since 2026-11-05 also the settlement identity-resolution failure: service credentials unavailable or HRPAuth outage, HTTP 502). The code string was misspelled `oauth_hrpaauth_down` until the spelling fix; no external consumer ever used the old form. |
 | `mca_invalid_request` | MatchCoreArena: general parameter error |
@@ -135,7 +135,7 @@ The following error codes are the stable registry for current HA business APIs. 
 | `mca_season_exists` | MatchCoreArena: a manual season rollover (`POST /api/seasons/roll`, contract 1.12.0) targeted a season that already exists (target <= current). Safe retry semantics: re-sending a succeeded rollover answers this instead of advancing again (HTTP 409). |
 | `cascade_room_conflict` | Cascade management API: a room code is claimed by more than one backend and cannot be routed |
 | `cascade_backend_unavailable` | Cascade management API: the owning backend is unhealthy or unreachable, so the request cannot be forwarded |
-| `cascade_invalid_internal_key` | Cascade management API: the `X-Internal-Key` header is missing or does not match the key issued by HRPAuth Core |
+| `cascade_invalid_internal_key` | Cascade management API: the `X-Internal-Key` header is missing or does not match the key issued by Armorial Core |
 | `cascade_database_not_configured` | Cascade management API: the endpoint needs the player-binding database, which is not available |
 | `cascade_binding_not_found` | Cascade management API: no player binding exists for the given game UUID, or (on the claim path) no unclaimed binding exists (HTTP 404) |
 

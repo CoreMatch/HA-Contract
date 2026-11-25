@@ -1,12 +1,12 @@
 <div align="center">
-  <h1>HA-Contract</h1>
+  <h1>Armorial Contract</h1>
   <p><strong>One contract. Fewer integration guesses.</strong></p>
   <p><a href="./README.zh-CN.md">简体中文</a></p>
 </div>
 
-HA-Contract gives HA service integrators versioned API schemas, OpenAPI definitions, and shared response and error conventions. It replaces reverse-engineering with explicit agreements that implementations and consumers can reference.
+Armorial Contract gives Armorial service integrators versioned API schemas, OpenAPI definitions, and shared response and error conventions. It replaces reverse-engineering with explicit agreements that implementations and consumers can reference.
 
-## Why HA-Contract
+## Why Armorial Contract
 
 - **Integrate from evidence.** OpenAPI definitions describe service surfaces without requiring a tour of each implementation.
 - **Keep responses predictable.** Shared response and error conventions reduce special cases across services.
@@ -15,14 +15,14 @@ HA-Contract gives HA service integrators versioned API schemas, OpenAPI definiti
 
 ## Learn more
 
-- [HA-Contract on GitHub](https://github.com/CoreMatch/HA-Contract) — canonical repository
+- [Armorial Contract on GitHub](https://github.com/CoreMatch/HA-Contract) — canonical repository
 - [OpenAPI definitions](docs/api/openapi/) — versioned service contracts
 - [Business API drift check](scripts/check-business-api-drift.sh) — route-to-contract comparison
-- [HA Wiki](https://wiki.mcnb.dev/) — deployment and development documentation
+- [Armorial Wiki](https://wiki.mcnb.dev/) — deployment and development documentation
 
 ## Boundary
 
-HA-Contract is not a runtime authentication layer or the authority for all HA documentation.
+Armorial Contract is not a runtime authentication layer or the authority for all Armorial documentation.
 
 ## License
 
