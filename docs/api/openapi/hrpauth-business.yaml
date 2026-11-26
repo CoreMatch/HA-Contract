@@ -1989,7 +1989,8 @@ components:
           type: integer
         uuid:
           type: string
-          format: uuid
+          pattern: '^[0-9a-fA-F]{32}$'
+          description: Core user UUID in Armorial's canonical 32-character hexadecimal representation
         email:
           type: string
           format: email
