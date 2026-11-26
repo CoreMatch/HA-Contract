@@ -112,7 +112,7 @@ The following error codes are the stable registry for current Armorial business 
 | `migration_commit_failed` | The migration could not be committed and verified; reconcile/rollback must run before retrying |
 | `migration_reconcile_failed` | The migration journal could not be reconciled against actual Core/Yggdrasil resources |
 | `migration_rollback_failed` | Compensation could not remove all resources owned by an incomplete migration; fail closed and alert |
-| `migration_rollback_not_allowed` | Rollback is forbidden because the migration is committed, the Core user pre-existed, or resource ownership is missing/ambiguous |
+| `migration_rollback_not_allowed` | Rollback is forbidden because the migration is committed, required Core compensation is unavailable, or resource ownership is missing/ambiguous; pre-existing Core users are preserved while eligible local resources may still be rolled back |
 | `insufficient_auth_level` | Credential present but below the required auth level |
 | `internal_error` | Unclassified internal error |
 | `oauth_state_mismatch` | OAuth2 state parameter mismatch (CSRF / replay protection). Defined in the Armorial core and MatchCoreArena registries; no current implementation returns it. |
