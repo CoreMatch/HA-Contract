@@ -317,9 +317,13 @@ extract_gin_routes "$ARMORIAL_DIR/main.go" > "$tmpdir/hrpauth-routes.txt"
 extract_openapi_routes "$HRPAUTH_YAML" > "$tmpdir/hrpauth-openapi.txt"
 
 # Tombstone entries kept in the contract as migration references (removed
-# endpoints that no longer have a registered route).
+# endpoints that no longer have a registered route), plus contract-first lazy
+# migration routes. Remove each planned entry in the same change that lands
+# its implementation; exemptions must never become permanent bypasses.
 cat > "$tmpdir/hrpauth-tombstones.txt" <<'EOF'
 POST /user/declare-email
+GET /internal/migrations/{migration_id}
+POST /internal/migrations/{migration_id}/rollback
 EOF
 
 check_set "Armorial" "$tmpdir/hrpauth-routes.txt" "$tmpdir/hrpauth-openapi.txt" impl-vs-contract
@@ -356,8 +360,16 @@ EOF
 extract_gin_routes "$YGGDRASIL_DIR/main.go" > "$tmpdir/yggdrasil-routes.txt"
 extract_openapi_routes "$YGGDRASIL_YAML" > "$tmpdir/yggdrasil-openapi.txt"
 
+# Contract-first Scribe lazy-migration routes (2026-11-26). Remove these
+# exemptions in the same change that registers the handlers.
+cat > "$tmpdir/yggdrasil-planned.txt" <<'EOF'
+POST /internal/migrations/commit
+POST /internal/migrations/{migration_id}/reconcile
+POST /internal/migrations/{migration_id}/rollback
+EOF
+
 check_set "HRPAuth-Yggdrasil-API" "$tmpdir/yggdrasil-routes.txt" "$tmpdir/yggdrasil-openapi.txt" impl-vs-contract "$tmpdir/yggdrasil-protocol-paths.txt"
-check_set "HRPAuth-Yggdrasil-API" "$tmpdir/yggdrasil-routes.txt" "$tmpdir/yggdrasil-openapi.txt" contract-vs-impl
+check_set "HRPAuth-Yggdrasil-API" "$tmpdir/yggdrasil-routes.txt" "$tmpdir/yggdrasil-openapi.txt" contract-vs-impl "$tmpdir/yggdrasil-planned.txt"
 
 # --- MatchCoreArena-Server ---
 extract_gin_routes "$MATCHCOREARENA_DIR/api/router.go" > "$tmpdir/mca-routes.txt"

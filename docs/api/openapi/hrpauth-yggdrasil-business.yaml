@@ -1,8 +1,13 @@
 openapi: 3.1.0
 info:
   title: HRPAuth Yggdrasil Business API
-  version: 1.2.0
-  description: Unified specification for HRPAuth-Yggdrasil-API business interfaces (textures, game accounts, Mojang proxy, Microsoft-login mapping).
+  version: 1.3.0
+  description: >
+    Unified specification for HRPAuth-Yggdrasil-API business interfaces
+    (textures, game accounts, Mojang proxy, Microsoft-login mapping, and
+    contract-first lazy migration). Version 1.3.0 adds the migration commit,
+    reconcile, and rollback surface consumed by Scribe. The migration routes
+    are planned until their implementations land.
 servers:
   - url: /
 paths:
@@ -674,8 +679,154 @@ paths:
           description: '`user_not_found` (no proxy account for that profile name)'
         '409':
           description: '`mojang_uuid_already_bound` (target account already bound to a different Mojang UUID)'
+  /internal/migrations/commit:
+    post:
+      summary: Commit one lazy migration from a legacy Yggdrasil profile
+      description: >
+        Contract-first endpoint consumed by Scribe. Requires an OAuth2 service
+        token carrying `migration.commit.as-service`. Scribe never calls
+        Armorial Core directly; this endpoint coordinates all Core and local
+        Yggdrasil writes.
+
+        The request carries one JSON metadata part and optional normalized PNG
+        skin/cape parts. The complete package is staged in Redis before any
+        database row is created. The plaintext password is used only in request
+        memory and must never be written to Redis, logs, traces, or persistent
+        storage; Core stores only its normal credential hash.
+
+        Commit is synchronous: `200` is returned only after the migration is
+        `COMMITTED` and a fresh Armorial authenticate session has been verified
+        to contain the same selected profile and assets. Failure triggers
+        reconcile/rollback and never returns a success session.
+
+        Idempotency is keyed by `migration_id` plus the SHA-256 digest of the
+        normalized metadata and asset pixels. Same key and digest returns the
+        existing result; same key with a different digest returns
+        `409 migration_conflict`. Only the submitted selected profile is
+        migrated. `skin_sync` must be `false` so registration-time official
+        skin sync cannot overwrite imported assets. `metadata.username` must
+        equal `metadata.profile_name`; a conflict fails closed.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MigrationIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [metadata]
+              properties:
+                metadata:
+                  $ref: '#/components/schemas/MigrationCommitMetadata'
+                skin:
+                  type: string
+                  format: binary
+                  description: Optional normalized RGBA PNG skin
+                cape:
+                  type: string
+                  format: binary
+                  description: Optional normalized RGBA PNG cape
+            encoding:
+              metadata:
+                contentType: application/json
+      responses:
+        '200':
+          description: Committed and verified; `data` contains the migration result and fresh session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationCommitResponse'
+        '400':
+          description: '`invalid_request` / `invalid_email` / `invalid_texture_file` / `invalid_texture_model`'
+        '401': { $ref: '#/components/responses/Error' }
+        '403':
+          description: Missing `migration.commit.as-service` scope
+        '409':
+          description: '`migration_conflict` / `migration_credential_conflict` / `migration_profile_conflict` / `migration_asset_conflict` / `migration_target_not_empty`'
+        '413': { $ref: '#/components/responses/Error' }
+        '500':
+          description: '`migration_commit_failed` / `internal_error`'
+  /internal/migrations/{migration_id}/reconcile:
+    post:
+      summary: Reconcile a migration against actual resources
+      description: >
+        Requires an OAuth2 service token carrying
+        `migration.reconcile.as-service`. Compares the migration journal with
+        actual Core and Yggdrasil resources and returns the authoritative
+        status. It may update journal bookkeeping but performs no business
+        resource creation or deletion. Safe to retry. A committed migration
+        remains committed and cannot be rolled back.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MigrationIdPath'
+      responses:
+        '200':
+          description: Reconciled migration status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationStatusResponse'
+        '401': { $ref: '#/components/responses/Error' }
+        '403':
+          description: Missing `migration.reconcile.as-service` scope
+        '404':
+          description: '`migration_not_found`'
+        '500':
+          description: '`migration_reconcile_failed` / `internal_error`'
+  /internal/migrations/{migration_id}/rollback:
+    post:
+      summary: Roll back an incomplete migration
+      description: >
+        Requires an OAuth2 service token carrying
+        `migration.rollback.as-service`. Deletes only resources whose journal
+        ownership is explicitly this `migration_id`. Pre-existing Core users
+        are never deleted. If ownership is missing, ambiguous, or a resource
+        was modified after creation, the operation fails closed with
+        `migration_rollback_not_allowed` or `migration_rollback_failed`.
+
+        Already rolled-back migrations return `200` with `rolled_back` status.
+        Committed migrations return `409 migration_rollback_not_allowed` and
+        are never modified. Safe to retry.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MigrationIdPath'
+      responses:
+        '200':
+          description: Rollback completed or previously completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationStatusResponse'
+        '401': { $ref: '#/components/responses/Error' }
+        '403':
+          description: Missing `migration.rollback.as-service` scope
+        '404':
+          description: '`migration_not_found`'
+        '409':
+          description: '`migration_invalid_state` / `migration_rollback_not_allowed`'
+        '500':
+          description: '`migration_rollback_failed` / `internal_error`'
 components:
   parameters:
+    MigrationIdPath:
+      name: migration_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MigrationIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Must equal `metadata.migration_id`
     InternalKeyHeader:
       name: X-Internal-Key
       in: header
@@ -740,5 +891,252 @@ components:
           type: string
         error:
           type: string
+        meta:
+          $ref: '#/components/schemas/Meta'
+    MigrationCommitMetadata:
+      type: object
+      additionalProperties: false
+      required:
+        - migration_id
+        - identifier
+        - password
+        - username
+        - profile_uuid
+        - profile_name
+        - profile_model
+        - skin_sync
+      properties:
+        migration_id:
+          type: string
+          format: uuid
+          description: Random ID for this migration and its compensation journal
+        identifier:
+          type: string
+          minLength: 1
+          description: Login identifier used with the legacy service; email or profile name
+        password:
+          type: string
+          minLength: 6
+          writeOnly: true
+          description: Plaintext request-memory-only password; never persisted or logged (Core stores only its credential hash)
+        username:
+          type: string
+          minLength: 3
+          description: Core username; must equal `profile_name`
+        email:
+          type: string
+          format: email
+          description: >
+            Required when the login identifier is an email. Omit for a
+            username identifier; Core then generates a unique
+            `migration-{migration_id}@placeholder.invalid` address.
+        legacy_user_id:
+          type: string
+          description: Optional legacy `user.id` for audit correlation
+        legacy_user_properties:
+          type: object
+          additionalProperties:
+            type: string
+          description: Optional standard Yggdrasil user properties safe to migrate
+        profile_uuid:
+          type: string
+          pattern: '^[0-9a-fA-F]{32}$'
+          description: Legacy selectedProfile.id; preserved exactly
+        profile_name:
+          type: string
+          minLength: 3
+        profile_model:
+          type: string
+          enum: [default, slim]
+        skin_sha256:
+          type: string
+          pattern: '^[0-9a-fA-F]{64}$'
+          description: Required when the skin part is present; digest of normalized RGBA pixels
+        cape_sha256:
+          type: string
+          pattern: '^[0-9a-fA-F]{64}$'
+          description: Required when the cape part is present; digest of normalized RGBA pixels
+        skin_sync:
+          type: boolean
+          const: false
+          description: Official skin sync must remain disabled for imported assets
+    MigrationSelectedProfile:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9a-fA-F]{32}$'
+        name:
+          type: string
+    MigrationSession:
+      type: object
+      required: [accessToken, clientToken, selectedProfile]
+      properties:
+        accessToken:
+          type: string
+        clientToken:
+          type: string
+        selectedProfile:
+          $ref: '#/components/schemas/MigrationSelectedProfile'
+        availableProfiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/MigrationSelectedProfile'
+    MigrationAssetResult:
+      type: object
+      required: [skin, cape]
+      properties:
+        skin:
+          type: object
+          required: [status]
+          properties:
+            status:
+              type: string
+              enum: [uploaded, unchanged, absent]
+            sha256:
+              type: string
+              pattern: '^[0-9a-fA-F]{64}$'
+        cape:
+          type: object
+          required: [status]
+          properties:
+            status:
+              type: string
+              enum: [uploaded, unchanged, absent]
+            sha256:
+              type: string
+              pattern: '^[0-9a-fA-F]{64}$'
+    MigrationUser:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9a-fA-F]{32}$'
+          description: Authoritative Armorial user ID; must equal the committed profile_id
+        properties:
+          type: array
+          items:
+            type: object
+            required: [name, value]
+            additionalProperties: false
+            properties:
+              name:
+                type: string
+                minLength: 1
+              value:
+                type: string
+    MigrationCommitResult:
+      type: object
+      required:
+        - migration_id
+        - status
+        - core_uid
+        - account_id
+        - profile_id
+        - created_core_user
+        - reused_core_user
+        - session
+        - user
+        - assets
+        - committed_at
+      properties:
+        migration_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: committed
+        core_uid:
+          type: string
+        account_id:
+          type: integer
+        profile_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{32}$'
+        created_core_user:
+          type: boolean
+        reused_core_user:
+          type: boolean
+        session:
+          $ref: '#/components/schemas/MigrationSession'
+        user:
+          $ref: '#/components/schemas/MigrationUser'
+        assets:
+          $ref: '#/components/schemas/MigrationAssetResult'
+        committed_at:
+          type: string
+          format: date-time
+    MigrationResource:
+      type: object
+      required: [kind, resource_id, ownership, present]
+      properties:
+        kind:
+          type: string
+          enum: [core_user, game_account, profile, skin, cape]
+        resource_id:
+          type: string
+        ownership:
+          type: string
+          enum: [created_by_migration, preexisting]
+        present:
+          type: boolean
+    MigrationError:
+      type: object
+      required: [code, message, stage]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        stage:
+          type: string
+          enum: [received, staged_in_redis, core_provision, profile_create, asset_apply, verify, commit, reconcile, rollback]
+    MigrationStatus:
+      type: object
+      required: [migration_id, status, updated_at, resources]
+      properties:
+        migration_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [received, staged_in_redis, applying, committed, rolled_back, failed, unknown]
+        updated_at:
+          type: string
+          format: date-time
+        resources:
+          type: array
+          items:
+            $ref: '#/components/schemas/MigrationResource'
+        result:
+          $ref: '#/components/schemas/MigrationCommitResult'
+        last_error:
+          $ref: '#/components/schemas/MigrationError'
+    MigrationCommitResponse:
+      type: object
+      required: [success, message, data, meta]
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/MigrationCommitResult'
+        meta:
+          $ref: '#/components/schemas/Meta'
+    MigrationStatusResponse:
+      type: object
+      required: [success, message, data, meta]
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/MigrationStatus'
         meta:
           $ref: '#/components/schemas/Meta'

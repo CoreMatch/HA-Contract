@@ -100,6 +100,19 @@ The following error codes are the stable registry for current Armorial business 
 | `sdk_package_invalid_path` | SDK package archive contains an illegal path (traversal / absolute / symlink) (HTTP 400) |
 | `sdk_package_too_large` | SDK package exceeds the configured size limit (HTTP 413) |
 | `sdk_not_found` | SDK package lookup failed. Defined in the Armorial core and Yggdrasil-API constant tables; no handler currently returns it (the sdk-package endpoints use `sdk_package_not_found`) |
+| `migration_in_progress` | Scribe: the user's first authentication has started a migration that is not committed; all other requests remain blocked |
+| `migration_not_found` | No migration journal exists for the supplied `migration_id` |
+| `migration_conflict` | The same `migration_id` was reused with a different normalized payload, username/email mapping, or ownership claim |
+| `migration_invalid_state` | The requested migration transition is not valid from the current state |
+| `migration_target_not_empty` | The Armorial target unexpectedly contains a playable profile or assets that prevent an import; fail closed and require operator review |
+| `migration_upstream_unavailable` | Scribe cannot determine the authentication winner because an upstream timed out, returned 5xx, or returned a malformed response; target state is unknown and no write is attempted |
+| `migration_credential_conflict` | Legacy credentials succeeded but cannot be provisioned on Armorial without overwriting or changing an existing credential; fail closed |
+| `migration_profile_conflict` | The legacy selected profile UUID or name conflicts with an existing Armorial profile or Core username; fail closed |
+| `migration_asset_conflict` | Legacy and Armorial assets differ, or one side has an asset while the other does not; normalized RGBA comparison is authoritative |
+| `migration_commit_failed` | The migration could not be committed and verified; reconcile/rollback must run before retrying |
+| `migration_reconcile_failed` | The migration journal could not be reconciled against actual Core/Yggdrasil resources |
+| `migration_rollback_failed` | Compensation could not remove all resources owned by an incomplete migration; fail closed and alert |
+| `migration_rollback_not_allowed` | Rollback is forbidden because the migration is committed, the Core user pre-existed, or resource ownership is missing/ambiguous |
 | `insufficient_auth_level` | Credential present but below the required auth level |
 | `internal_error` | Unclassified internal error |
 | `oauth_state_mismatch` | OAuth2 state parameter mismatch (CSRF / replay protection). Defined in the Armorial core and MatchCoreArena registries; no current implementation returns it. |
