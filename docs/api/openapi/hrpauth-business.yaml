@@ -8,8 +8,7 @@ info:
 
     1.2.0 (2026-11-26): adds migration-owned Core user provisioning and
     compensation semantics used by the HRPAuth-Yggdrasil-API lazy-migration
-    coordinator. The migration status and rollback routes are planned until
-    their implementations land.
+    coordinator, including the implemented migration status and rollback routes.
 
     1.1.0 (2026-11-12): added `POST /internal/user-exists` (ops-level,
     service-to-service) so satellite services can gate outbound mail on real

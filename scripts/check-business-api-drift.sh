@@ -317,13 +317,10 @@ extract_gin_routes "$ARMORIAL_DIR/main.go" > "$tmpdir/hrpauth-routes.txt"
 extract_openapi_routes "$HRPAUTH_YAML" > "$tmpdir/hrpauth-openapi.txt"
 
 # Tombstone entries kept in the contract as migration references (removed
-# endpoints that no longer have a registered route), plus contract-first lazy
-# migration routes. Remove each planned entry in the same change that lands
-# its implementation; exemptions must never become permanent bypasses.
+# endpoints that no longer have a registered route). Planned-route exemptions
+# must be removed in the same change that lands the implementation.
 cat > "$tmpdir/hrpauth-tombstones.txt" <<'EOF'
 POST /user/declare-email
-GET /internal/migrations/{migration_id}
-POST /internal/migrations/{migration_id}/rollback
 EOF
 
 check_set "Armorial" "$tmpdir/hrpauth-routes.txt" "$tmpdir/hrpauth-openapi.txt" impl-vs-contract

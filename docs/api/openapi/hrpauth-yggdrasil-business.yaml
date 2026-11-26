@@ -5,9 +5,8 @@ info:
   description: >
     Unified specification for HRPAuth-Yggdrasil-API business interfaces
     (textures, game accounts, Mojang proxy, Microsoft-login mapping, and
-    contract-first lazy migration). Version 1.3.0 adds the migration commit,
-    reconcile, and rollback surface consumed by Scribe. The migration routes
-    are planned until their implementations land.
+    contract-first lazy migration). Version 1.3.0 adds the implemented migration
+    commit, reconcile, and rollback surface consumed by Scribe.
 servers:
   - url: /
 paths:

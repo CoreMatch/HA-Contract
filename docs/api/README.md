@@ -102,13 +102,7 @@ consumer-side on 2026-11-11 and the bypass removed). Contract-first endpoints
 registered before implementation may be carried as "planned" in
 `check-business-api-drift.sh` (exempt from contract-vs-impl while
 unimplemented, but the contract MUST keep declaring them — removing one turns
-the check red). The current planned endpoints are the Scribe lazy-migration
-surface registered on 2026-11-26:
-
-- HRPAuth-Yggdrasil-API: `POST /internal/migrations/commit`
-- HRPAuth-Yggdrasil-API: `POST /internal/migrations/{migration_id}/reconcile`
-- HRPAuth-Yggdrasil-API: `POST /internal/migrations/{migration_id}/rollback`
-- Armorial Core: `GET /internal/migrations/{migration_id}`
-- Armorial Core: `POST /internal/migrations/{migration_id}/rollback`
-
-Each exemption must be removed in the same change that registers the route.
+the check red). Each exemption must be removed in the same change that registers
+the route. The Scribe lazy-migration surface registered on 2026-11-26 is now
+implemented in both HRPAuth-Yggdrasil-API and Armorial Core, so its planned-route
+exemptions have been removed.
