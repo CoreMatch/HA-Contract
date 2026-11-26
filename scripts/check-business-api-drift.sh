@@ -360,16 +360,8 @@ EOF
 extract_gin_routes "$YGGDRASIL_DIR/main.go" > "$tmpdir/yggdrasil-routes.txt"
 extract_openapi_routes "$YGGDRASIL_YAML" > "$tmpdir/yggdrasil-openapi.txt"
 
-# Contract-first Scribe lazy-migration routes (2026-11-26). Remove these
-# exemptions in the same change that registers the handlers.
-cat > "$tmpdir/yggdrasil-planned.txt" <<'EOF'
-POST /internal/migrations/commit
-POST /internal/migrations/{migration_id}/reconcile
-POST /internal/migrations/{migration_id}/rollback
-EOF
-
 check_set "HRPAuth-Yggdrasil-API" "$tmpdir/yggdrasil-routes.txt" "$tmpdir/yggdrasil-openapi.txt" impl-vs-contract "$tmpdir/yggdrasil-protocol-paths.txt"
-check_set "HRPAuth-Yggdrasil-API" "$tmpdir/yggdrasil-routes.txt" "$tmpdir/yggdrasil-openapi.txt" contract-vs-impl "$tmpdir/yggdrasil-planned.txt"
+check_set "HRPAuth-Yggdrasil-API" "$tmpdir/yggdrasil-routes.txt" "$tmpdir/yggdrasil-openapi.txt" contract-vs-impl
 
 # --- MatchCoreArena-Server ---
 extract_gin_routes "$MATCHCOREARENA_DIR/api/router.go" > "$tmpdir/mca-routes.txt"
