@@ -1495,15 +1495,18 @@ paths:
       description: >
         Contract-first endpoint used only by the
         HRPAuth-Yggdrasil-API migration coordinator. Requires ops (level 2)
-        auth. Deletes the Core user only when `created_by_migration_id` exactly
-        matches this migration and the user has not been committed as a
-        completed migration. Sessions and tokens belonging to the removed user
-        are revoked. Pre-existing users and users with ambiguous ownership are
-        never deleted.
+        auth. The coordinator is the sole authority for migration commit
+        status and must call this endpoint only after authoritative
+        reconciliation proves the migration is uncommitted. Core does not
+        maintain an independent committed flag. It deletes the Core user only
+        when `created_by_migration_id` exactly matches this migration and the
+        ownership record is not already rolled back. Sessions and tokens
+        belonging to the removed user are revoked. Pre-existing users and
+        users with ambiguous ownership are never deleted.
 
         Already compensated migrations return `200` with `rolled_back` status.
-        Missing ownership, a pre-existing user, or a committed migration
-        returns `409 migration_rollback_not_allowed`. Safe to retry.
+        Missing ownership or a pre-existing user returns
+        `409 migration_rollback_not_allowed`. Safe to retry.
       security:
         - BearerAuth: []
       parameters:

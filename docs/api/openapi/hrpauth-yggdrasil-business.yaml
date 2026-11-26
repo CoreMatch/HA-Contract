@@ -781,11 +781,14 @@ paths:
       summary: Roll back an incomplete migration
       description: >
         Requires an OAuth2 service token carrying
-        `migration.rollback.as-service`. Deletes only resources whose journal
-        ownership is explicitly this `migration_id`. Pre-existing Core users
-        are never deleted. If ownership is missing, ambiguous, or a resource
-        was modified after creation, the operation fails closed with
-        `migration_rollback_not_allowed` or `migration_rollback_failed`.
+        `migration.rollback.as-service`. The coordinator is the sole authority
+        for commit status and must reconcile before rollback. It deletes only
+        resources whose journal ownership is explicitly this `migration_id`.
+        Migration-owned Core users are compensated through the Core rollback
+        endpoint; pre-existing Core users are never deleted. If ownership is
+        missing, ambiguous, or a resource was modified after creation, the
+        operation fails closed with `migration_rollback_not_allowed` or
+        `migration_rollback_failed`.
 
         Already rolled-back migrations return `200` with `rolled_back` status.
         Committed migrations return `409 migration_rollback_not_allowed` and
