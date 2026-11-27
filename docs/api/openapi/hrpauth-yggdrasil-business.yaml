@@ -999,6 +999,9 @@ components:
             sha256:
               type: string
               pattern: '^[0-9a-fA-F]{64}$'
+              description: >-
+                SHA-256 of big-endian uint32 width, big-endian uint32 height, then
+                row-major straight-alpha NRGBA pixels; RGB must be zero when alpha is zero.
         cape:
           type: object
           required: [status]
@@ -1009,6 +1012,9 @@ components:
             sha256:
               type: string
               pattern: '^[0-9a-fA-F]{64}$'
+              description: >-
+                SHA-256 of big-endian uint32 width, big-endian uint32 height, then
+                row-major straight-alpha NRGBA pixels; RGB must be zero when alpha is zero.
     MigrationUser:
       type: object
       required: [id]
@@ -1079,6 +1085,9 @@ components:
           enum: [core_user, game_account, profile, skin, cape]
         resource_id:
           type: string
+          description: >-
+            Core UUID for core_user, decimal account ID for game_account,
+            profile UUID for profile, or canonical pixel SHA-256 for skin and cape.
         ownership:
           type: string
           enum: [created_by_migration, preexisting]
